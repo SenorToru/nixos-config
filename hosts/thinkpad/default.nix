@@ -7,6 +7,8 @@
     ../../modules/desktop-gnome.nix
     ../../modules/localization.nix
     ../../modules/development.nix
+    ../../modules/flatpak.nix
+    ../../modules/apps.nix
   ];
 
   # ThinkPad 主机名
