@@ -24,12 +24,19 @@
 
   # 桌面应用与扩展管理
   environment.systemPackages = with pkgs; [
-    gnome-extension-manager
     # 覆盖并隐藏 GNOME 原生拼图 Extensions 图标
     (makeDesktopItem {
       name = "org.gnome.Extensions";
       desktopName = "Extensions";
       noDisplay = true;
     })
+    gnome-extension-manager
+    gnomeExtensions.applications-menu # Add a category-based menu for apps.
+    gnomeExtensions.dash-to-panel # An icon taskbar for Gnome.
+    gnomeExtensions.burn-my-windows # Window Open/Close effect.
+    gnomeExtensions.gtile # Super + Return to quickly setting Windows on grid.
+    gnomeExtensions.draw-on-gnome # Free drawing tool on screen.
+    gnomeExtensions.vitals-widget # System status monitor on desktop
+    gnomeExtensions.kimpanel # Input Method Panel using KDE's kimpanel protocol for Gnome-Shell
   ];
 }
