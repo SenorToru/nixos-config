@@ -20,7 +20,42 @@
   services.printing.enable = true;
 
   # 浏览器
-  programs.firefox.enable = true;
+  programs.firefox = {
+    enable = true;
+    policies = {
+      ExtensionUpdate = true;
+      ExtensionSettings = {
+        "*" = {
+          installation_mode = "allowed";
+        };
+        # uBlock Origin
+        "uBlock0@raymondhill.net" = {
+          install_url = "https://addons.mozilla.org/firefox/downloads/latest/ublock-origin/latest.xpi";
+          installation_mode = "force_installed"; # 强制安装且防止用户误删
+        };
+        # Proton Pass
+        "78272b6fa58f4a1abaac99321d503a20@proton.me" = {
+          install_url = "https://addons.mozilla.org/firefox/downloads/file/4885390/latest.xpi";
+          installation_mode = "force_installed";
+        };
+        # Dark Reader
+        "addon@darkreader.org" = {
+          install_url = "https://addons.mozilla.org/firefox/downloads/latest/darkreader/latest.xpi";
+          installation_mode = "force_installed";
+        };
+        # SponsorBlock
+        "sponsorBlocker@ajay.app" = {
+          install_url = "https://addons.mozilla.org/firefox/downloads/latest/sponsorblock/latest.xpi";
+          installation_mode = "force_installed";
+        };
+        # Easy Youtube Video Downloader Express
+        "{b9acf540-acba-11e1-8ccb-001fd0e08bd4}" = {
+          install_url = "https://addons.mozilla.org/firefox/downloads/file/4997872/latest.xpi";
+          installation_mode = "force_installed";
+        };
+      };
+    };
+  };
 
   # 桌面应用与扩展管理
   environment.systemPackages = with pkgs; [
