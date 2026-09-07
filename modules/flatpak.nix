@@ -18,6 +18,6 @@
     "app.zen_browser.zen"
     "com.tencent.WeChat"
     "eu.betterbird.Betterbird"
-    "com.baidubce.BaiduNetdisk"
+    "com.baidu.NetDisk"
   ];
 }
