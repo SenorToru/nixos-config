@@ -15,7 +15,6 @@
   # 自动安装
   services.flatpak.packages = [
     "com.github.tchx84.Flatseal"
-    "app.zen_browser.zen"
     "com.tencent.WeChat"
     "eu.betterbird.Betterbird"
     "com.baidu.NetDisk"

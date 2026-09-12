@@ -3,14 +3,18 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
-    nix-flatpak.url = "github:gmodena/nix-flatpak"; # 为了试用services.flatpak.packages，引入第三方模块
+    nix-flatpak.url = "github:gmodena/nix-flatpak";
+
+    # 原生 Zen Browser Flake 源
+    zen-browser.url = "github:0xc000022070/zen-browser-flake";
   };
 
   outputs =
     {
       self,
       nixpkgs,
-      nix-flatpak, # [A]必须先在函数列表中结构nix-flatpak
+      nix-flatpak,
+      zen-browser,
       ...
     }@inputs:
     {
@@ -18,8 +22,10 @@
         # ThinkPad X1 Yoga 入口
         thinkpad = nixpkgs.lib.nixosSystem {
           system = "x86_64-linux";
+          # 将 inputs 透传进所有模块，以便在 desktop-gnome.nix 中直接取用
+          specialArgs = { inherit inputs; };
           modules = [
-            nix-flatpak.nixosModules.nix-flatpak # [A]才能够在这里成功启用模块扩展
+            nix-flatpak.nixosModules.nix-flatpak
             ./hosts/thinkpad/default.nix
           ];
         };
