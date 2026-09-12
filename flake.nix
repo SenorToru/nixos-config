@@ -6,7 +6,11 @@
     nix-flatpak.url = "github:gmodena/nix-flatpak";
 
     # 原生 Zen Browser Flake 源
-    zen-browser.url = "github:0xc000022070/zen-browser-flake";
+    zen-browser.url = "github:youwen5/zen-browser-flake";
+    # optional, but recommended if you closely follow NixOS unstable so it shares
+    # system libraries, and improves startup time
+    # NOTE: if you experience a build failure with Zen, the first thing to check is to remove this line!
+    zen-browser.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs =
