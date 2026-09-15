@@ -5,6 +5,7 @@
     vscode
       nil
       nixfmt
+      neovide
   ];
 
   programs.neovim = {
@@ -12,19 +13,26 @@
     defaultEditor = true;
     viAlias = true;
     vimAlias = true;
-
     configure = {
-      # Set NeoVim indent rules.
       customRC = ''
-        lua << EOF
-        vim.opt.tabstop = 2
-        vim.opt.softtabstop = 2
-        vim.opt.shiftwidth = 2
-        vim.opt.expandtab = true
-        vim.opt.autoindent = true
-        vim.opt.smartindent = true
-        EOF
-        '';
+        " 通用缩进设置（命令行与 GUI 均生效）
+        set tabstop=2
+        set softtabstop=2
+        set shiftwidth=2
+        set expandtab
+        set autoindent
+        set smartindent
+
+        " 专属于 Neovide GUI 的特定渲染配置（终端不会读取）
+        if exists('g:neovide')
+          " 设置字体（请确保系统已安装相应字体）
+            " set guifont=JetBrainsMono\ Nerd\ Font:h12
+
+            " 启用流畅平滑光标动画
+            let g:neovide_cursor_animation_length = 0.13
+            let g:neovide_cursor_trail_size = 0.8
+            endif
+            '';
     };
   };
 }
