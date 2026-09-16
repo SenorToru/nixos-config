@@ -97,7 +97,8 @@ in
 
         -- Neovide 特定配置
         if vim.g.neovide then
-          vim.opt.guifont = "JetBrainsMono Nerd Font:h12"
+          -- 使用 Sarasa Mono (编程字体) + CJK 备用字体支持中文/日文
+          vim.opt.guifont = "Sarasa Mono:h12,Noto Sans Mono CJK SC:h12"
           vim.g.neovide_cursor_animation_length = 0.13
           vim.g.neovide_cursor_trail_size = 0.8
         end

@@ -48,9 +48,27 @@
     tree
   ];
 
-  # Neovim 作为系统备用轻量编辑器
-  programs.neovim = {
-    enable = true;
-    defaultEditor = true;
+  # 字体配置 (支持中日韩文字)
+  fonts = {
+    packages = with pkgs; [
+      sarasa-gothic
+      noto-fonts
+      noto-fonts-cjk-serif
+    ];
+
+    fontconfig.enable = true;
+    fontconfig.defaultFonts = {
+      monospace = [
+        "Sarasa Mono"
+        "Noto Sans Mono CJK"
+      ];
+      sansSerif = [
+        "Sarasa Gothic"
+        "Noto Sans CJK"
+      ];
+      serif = [
+        "Noto Serif CJK"
+      ];
+    };
   };
 }
