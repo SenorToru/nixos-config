@@ -7,3 +7,9 @@ result-*
 
 # Ignore NixOS interactive test driver history
 **/.nixos-test-history
+
+# Ignore the NixOS interactive test driver log files
+build.log
+
+# Ignore Git Commit Message file
+GIT_COMMIT_MESSAGE.txt
