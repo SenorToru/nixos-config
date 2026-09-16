@@ -4,8 +4,8 @@
 > 本文第 3 节「依赖插件加载时序问题」关于 copilot-cmp 的结论已于 2026-09-17 作废。
 > copilot-cmp 已被整体移除，它不是加载时序问题，而是与 copilot.lua 的 suggestion/panel 模块根本冲突，并且在 Neovim 0.11+ 上使用已废弃的 client.is_stopped()。
 >
-> 请以根目录的 [COMMIT_NOTES.md](../COMMIT_NOTES.md) 和
-> [NEOVIM_GUIDE.md](NEOVIM_GUIDE.md) 为准。本文仅作排查过程的历史记录保留。
+> 请以 [0009_COPILOT_GHOST_TEXT_MIGRATION.md](0009_COPILOT_GHOST_TEXT_MIGRATION.md) 和
+> [0000_NEOVIM_GUIDE.md](0000_NEOVIM_GUIDE.md) 为准。本文仅作排查过程的历史记录保留。
 
 ## 问题症状
 

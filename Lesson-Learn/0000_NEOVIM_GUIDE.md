@@ -158,7 +158,7 @@ p   # 粘贴
 
 > **重要变更（2026-09-17）**
 > Copilot 现在**只走行内建议（ghost text）**这一条路，不再出现在 `nvim-cmp` 的补全菜单里。
-> 原因见根目录的 [COMMIT_NOTES.md](../COMMIT_NOTES.md)：负责把 Copilot 塞进补全菜单的
+> 原因见 [0009_COPILOT_GHOST_TEXT_MIGRATION.md](0009_COPILOT_GHOST_TEXT_MIGRATION.md)：负责把 Copilot 塞进补全菜单的
 > `copilot-cmp` 插件已停止维护，且与行内建议互相冲突，已被移除。
 >
 > 同时，打开面板的 `Alt+Enter` 全局映射**已被禁用**（它会把光标锁进一个只读 buffer，

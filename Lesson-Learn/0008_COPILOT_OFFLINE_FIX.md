@@ -4,8 +4,8 @@
 > 本文记录的修复方案（vim.g.copilot_node_command / COPILOT_DEBUG / copilot.command.auth_setup() / server_opts_overrides.trace / :CopilotStatus / :CopilotStart / :CopilotReauth / copilot-cmp）已于 2026-09-17 全部撤销。
 > 其中多个 API 在新版 copilot.lua 中已不存在，调用只会静默失败；copilot-cmp 则是 Copilot 真正故障的根源。
 >
-> 请以根目录的 [COMMIT_NOTES.md](../COMMIT_NOTES.md) 和
-> [NEOVIM_GUIDE.md](NEOVIM_GUIDE.md) 为准。本文仅作排查过程的历史记录保留。
+> 请以 [0009_COPILOT_GHOST_TEXT_MIGRATION.md](0009_COPILOT_GHOST_TEXT_MIGRATION.md) 和
+> [0000_NEOVIM_GUIDE.md](0000_NEOVIM_GUIDE.md) 为准。本文仅作排查过程的历史记录保留。
 
 ## 问题症状
 
@@ -372,7 +372,7 @@ rm -rf ~/.local/share/nvim/copilot.lua/
 
 ## 相关文档参考
 
-- [COPILOT_UNZIP_DEPENDENCY.md](COPILOT_UNZIP_DEPENDENCY.md) - Copilot 的 unzip 依赖
-- [COPILOT_STARTUP_ISSUES.md](COPILOT_STARTUP_ISSUES.md) - Copilot 启动问题
-- [NEOVIM_GUIDE.md](NEOVIM_GUIDE.md) - Neovim 使用指南
-- [LAZY_NVIM_DASHBOARD.md](LAZY_NVIM_DASHBOARD.md) - Lazy.nvim 仪表板使用
+- [0005_COPILOT_UNZIP_DEPENDENCY.md](0005_COPILOT_UNZIP_DEPENDENCY.md) - Copilot 的 unzip 依赖
+- [0006_COPILOT_STARTUP_ISSUES.md](0006_COPILOT_STARTUP_ISSUES.md) - Copilot 启动问题
+- [0000_NEOVIM_GUIDE.md](0000_NEOVIM_GUIDE.md) - Neovim 使用指南
+- [0007_LAZY_NVIM_DASHBOARD.md](0007_LAZY_NVIM_DASHBOARD.md) - Lazy.nvim 仪表板使用
