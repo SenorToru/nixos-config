@@ -1,7 +1,5 @@
 {
-  config,
   pkgs,
-  inputs,
   ...
 }:
 
@@ -41,18 +39,51 @@ in
   home.homeDirectory = "/home/toru";
   home.stateVersion = "26.05";
 
+  # ============================================
+  # Firefox（系统默认浏览器）
+  # ============================================
   programs.firefox = {
     enable = true;
     policies = baseExtensionPolicies;
   };
 
+  # 把 Firefox 设为默认浏览器。
+  # 之前没有任何模块声明过默认浏览器，GNOME 便自行选了 Epiphany
+  # （`xdg-settings get default-web-browser` 会返回 org.gnome.Epiphany.desktop），
+  # 于是从终端 / 其它应用打开链接都会跳到 GNOME Web。
+  #
+  # xdg.mimeApps 会接管 ~/.config/mimeapps.list。
+  # BROWSER 变量给不读 mimeapps.list 的 CLI 程序（如部分 TUI）用。
+  xdg.mimeApps = {
+    enable = true;
+    defaultApplications = {
+      "text/html" = [ "firefox.desktop" ];
+      "application/xhtml+xml" = [ "firefox.desktop" ];
+      "x-scheme-handler/http" = [ "firefox.desktop" ];
+      "x-scheme-handler/https" = [ "firefox.desktop" ];
+      "x-scheme-handler/about" = [ "firefox.desktop" ];
+      "x-scheme-handler/unknown" = [ "firefox.desktop" ];
+    };
+  };
+
+  home.sessionVariables.BROWSER = "firefox";
+
   # ============================================
   # Neovim 配置 (HomeManager)
-  # 注：插件由 lazy.nvim 独立管理，不通过 HomeManager
   # ============================================
+  # 注 1：插件由 lazy.nvim 独立管理，不通过 HomeManager。
+  # 注 2：这是全系统**唯一**的 neovim 声明处。modules/development.nix 里
+  #       曾经还有一份系统级 programs.neovim，导致 vim / vi 指向另一个不带
+  #       extraPackages 的 neovim，Copilot 在那个 neovim 下必然离线。
+  #       别再把 programs.neovim 加回 development.nix。
   programs.neovim = {
     enable = true;
-    defaultEditor = false;
+
+    # 以下三项从 development.nix 迁移过来，确保 nvim / vim / vi / $EDITOR
+    # 全部指向这一个带 extraPackages 的 neovim。
+    defaultEditor = true;
+    viAlias = true;
+    vimAlias = true;
 
     extraPackages = with pkgs; [
       # 格式化和 linting
@@ -135,7 +166,8 @@ in
           spec = {
             { import = "plugins" },
           },
-          checker = { enabled = true },
+          -- 禁用启动时的更新检查提示，避免交互式提示
+          checker = { enabled = false },
         })
       '';
     };
@@ -145,17 +177,29 @@ in
         -- ============================================
         -- GitHub Copilot 配置 (copilot.lua)
         -- ============================================
+        -- 注意：不要再加 copilot-cmp。
+        --   1. copilot-cmp 已停止维护（最后提交 2024-12），内部使用
+        --      client.is_stopped()，在 Neovim 0.11+ 已废弃，启动时会报
+        --      "client.is_stopped is deprecated"。
+        --   2. copilot-cmp 要求关闭 suggestion / panel 模块，与下面的
+        --      行内建议（ghost text）冲突。
+        -- 现在统一使用 copilot.lua 自带的 suggestion 模块。
 
         return {
           {
             "zbirenbaum/copilot.lua",
-            cmd = "Copilot",
-            event = "InsertEnter",
+            lazy = false,
             config = function()
               require("copilot").setup({
+                -- Node.js 路径（由 home.nix 的 extraPackages 提供）
+                copilot_node_command = "node",
+
+                -- 行内建议（ghost text）
                 suggestion = {
                   enabled = true,
                   auto_trigger = true,
+                  -- nvim-cmp 菜单打开时自动隐藏 ghost text，避免两者重叠
+                  hide_during_completion = true,
                   debounce = 75,
                   keymap = {
                     accept = "<M-l>",
@@ -166,6 +210,15 @@ in
                     dismiss = "<C-]>",
                   },
                 },
+
+                -- 面板配置
+                -- 关键修复：copilot.lua 默认会注册一个**全局 insert 模式**映射
+                -- <M-CR> (Alt+Enter) 来打开面板。面板 buffer 是 modifiable=false
+                -- 且会抢走焦点，所以在 Neovide 里一旦误触，之后每次输入都会得到
+                -- "E21: Cannot make changes, 'modifiable' is off"。
+                -- 在终端里 Alt+Enter 通常被拆成 <Esc><CR> 所以不会触发，
+                -- GUI（Neovide）里才是真正的 <M-CR>，这就是只在 Neovide 复现的原因。
+                -- 设为 false 关掉该全局映射；仍可用 :Copilot panel open 手动打开。
                 panel = {
                   enabled = true,
                   auto_refresh = false,
@@ -174,9 +227,11 @@ in
                     jump_next = "]]",
                     accept = "<CR>",
                     refresh = "gr",
-                    open = "<M-CR>",
+                    open = false,
                   },
                 },
+
+                -- 文件类型配置
                 filetypes = {
                   yaml = true,
                   markdown = true,
@@ -189,14 +244,7 @@ in
                   ["."] = false,
                   nix = true,
                 },
-                server_opts_overrides = {},
               })
-            end,
-          },
-          {
-            "zbirenbaum/copilot-cmp",
-            config = function()
-              require("copilot_cmp").setup()
             end,
           },
         }
@@ -297,7 +345,6 @@ in
                   ["<CR>"] = cmp.mapping.confirm({ select = true }),
                 },
                 sources = cmp.config.sources({
-                  { name = "copilot", priority = 10 },
                   { name = "nvim_lsp", priority = 9 },
                   { name = "buffer", priority = 5 },
                   { name = "path", priority = 3 },
@@ -318,7 +365,6 @@ in
               "hrsh7th/cmp-buffer",
               "hrsh7th/cmp-path",
               "hrsh7th/cmp-cmdline",
-              "zbirenbaum/copilot-cmp",
             },
           },
         }

@@ -156,105 +156,175 @@ p   # 粘贴
 
 ## 第六步：唤出和使用 Copilot
 
+> **重要变更（2026-09-17）**
+> Copilot 现在**只走行内建议（ghost text）**这一条路，不再出现在 `nvim-cmp` 的补全菜单里。
+> 原因见根目录的 [COMMIT_NOTES.md](../COMMIT_NOTES.md)：负责把 Copilot 塞进补全菜单的
+> `copilot-cmp` 插件已停止维护，且与行内建议互相冲突，已被移除。
+>
+> 同时，打开面板的 `Alt+Enter` 全局映射**已被禁用**（它会把光标锁进一个只读 buffer，
+> 导致之后每次输入都报 `E21`）。面板改为用 `:Copilot panel open` 手动打开。
+
 ### 触发 Copilot 建议
 
-**自动建议**（在 Insert 模式）
+Copilot 在 Insert 模式下自动触发（`auto_trigger = true`），无需按任何键：
+
 ```
-# 进入 Insert 模式
+# 1. 进入 Insert 模式
 i
 
-# 开始输入
-let config =
+# 2. 开始输入
+environment.systemPackages = with pkgs; [
 
-# Copilot 会自动显示建议（灰色文字）
+# 3. 停顿约 1 秒，Copilot 的建议会以**灰色文字**直接显示在光标后面
 ```
+
+灰色文字就是建议本身，它不是已经输入的内容——不按接受键它不会进入文件。
 
 ### 接受/拒绝 Copilot 建议
 
 | 快捷键 | 功能 |
 |--------|------|
-| `Alt+l` | 接受建议 |
+| `Alt+l` | 接受整条建议 |
 | `Alt+]` | 下一个建议 |
 | `Alt+[` | 上一个建议 |
-| `Ctrl+]` | 拒绝建议 |
-| `Alt+Return` | 打开 Copilot 面板 |
+| `Ctrl+]` | 拒绝/隐藏当前建议 |
 
-### 打开 Copilot 面板（完整建议菜单）
+这些键只在 Insert 模式、且当前有灰色建议时才生效；没有建议时按下去就是普通按键。
+
+### 打开 Copilot 面板（一次看多条建议）
+
+面板会在下方开一个窗口，一次列出多条候选：
 
 ```vim
-<在 Insert 模式>
-Alt+Return
+:Copilot panel open
 ```
 
-面板打开后：
-```
-[[  - 上一个建议
-]]  - 下一个建议
-<CR> (Enter) - 接受当前建议
-gr  - 刷新建议
+面板里的按键（**仅在面板窗口内生效**）：
+
+| 按键 | 功能 |
+|------|------|
+| `[[` | 上一条建议 |
+| `]]` | 下一条建议 |
+| `Enter` | 接受当前建议 |
+| `gr` | 重新请求建议 |
+
+关闭面板：
+
+```vim
+:Copilot panel close
 ```
 
-### 在补全菜单中使用 Copilot
+或者在面板窗口里按 `Ctrl+w c` / `:q`。
 
-如果你打开了补全菜单（自动或 `Ctrl+Space`），Copilot 建议会出现在列表顶部：
+> ⚠️ **面板 buffer 是只读的（`modifiable=false`）。**
+> 如果你发现自己突然一按 `i` 就报
+> `E21: Cannot make changes, 'modifiable' is off`，
+> 几乎一定是光标还在面板窗口里。按 `Ctrl+w w` 切回代码窗口，或 `:q` 关掉面板即可。
+
+### 补全菜单（nvim-cmp）里有什么
+
+`Ctrl+Space` 唤出的补全菜单现在只包含 **LSP（nil）/ buffer / path** 三类来源，**没有 Copilot**：
 
 ```
 Ctrl+Space  - 触发补全菜单
 Ctrl+n      - 下一个选项
 Ctrl+p      - 上一个选项
 <CR>        - 选择当前选项
+Ctrl+e      - 关掉菜单
 ```
+
+补全菜单和 Copilot 的灰色建议**不会互相遮挡**：配置里开了
+`hide_during_completion = true`，菜单一弹出，ghost text 自动隐藏；菜单关掉后又出现。
+
+### 常用 Copilot 命令
+
+| 命令 | 作用 |
+|------|------|
+| `:Copilot status` | 查看当前状态（最常用的排查入口） |
+| `:Copilot auth info` | 查看已登录的 GitHub 账号 |
+| `:Copilot auth signin` | 重新登录 |
+| `:Copilot auth signout` | 登出 |
+| `:Copilot panel open` | 打开建议面板 |
+| `:Copilot toggle` | 临时开关当前 buffer 的 Copilot |
+| `:Copilot version` | 查看 copilot.lua 与 LSP server 版本 |
+| `:Copilot model` | 查看/切换使用的模型 |
+
+状态正常时 `:Copilot status` 的输出形如：
+
+```
+[Copilot.lua] Authenticated as GitHub user: SenorToru (status: OK)
+```
+
+> ⚠️ 旧文档里提到的 `:CopilotStatus` / `:CopilotStart` / `:CopilotReauth` **已被删除**。
+> 那三个自定义命令依赖 `copilot.command.auth_setup()` 和 `copilot.api.get_status()`，
+> 这两个 API 在新版 copilot.lua 里已经不存在了，调用只会静默失败。
+> 请改用上表中的官方 `:Copilot ...` 子命令。
 
 ---
 
 ## 第七步：与 Copilot 互动的完整工作流
 
-### 场景 1：让 Copilot 完成一行代码
+### 场景 1：让 Copilot 补完一行代码
 
 ```
 1. 进入 Insert 模式: i
-2. 输入一部分: environment.systemPackages = with pkgs; [
-3. 等待 Copilot 的灰色建议出现
-4. 审阅建议（不接受还继续看）
-5. 按 Alt+l 接受
-6. 继续编辑或按 Esc 回到 Normal 模式
+2. 输入一部分:     environment.systemPackages = with pkgs; [
+3. 停顿 1 秒，等灰色建议出现
+4. 审阅建议内容（此时还没写进文件）
+5. 满意 -> 按 Alt+l 接受
+   不满意 -> 按 Alt+] 换下一个，或 Ctrl+] 直接丢掉
+6. 继续输入，或按 Esc 回 Normal 模式
 ```
 
-### 场景 2：查看多个建议
+### 场景 2：一次比较多条建议
 
 ```
-1. 进入 Insert 模式: i
-2. 输入一行: programs.neovim = {
-3. 按 Alt+Return 打开 Copilot 面板
-4. 用 [[ 和 ]] 浏览不同建议
-5. 用 Enter 选择一个
+1. 进入 Insert 模式并输入开头: programs.neovim = {
+2. 按 Esc 回 Normal 模式
+3. :Copilot panel open
+4. 用 ]] / [[ 在候选之间浏览
+5. 在中意的那条上按 Enter 接受
+6. 面板自动关闭，光标回到代码窗口
 ```
 
-### 场景 3：快速补全函数调用
+### 场景 3：用注释引导 Copilot
 
+Copilot 对注释非常敏感，写清注释比写一半代码更有效：
+
+```nix
+# 添加 Python 开发环境需要的包
+environment.systemPackages = with pkgs; [
 ```
-1. 在 Insert 模式输入: let result = 
-2. Copilot 会建议可能的函数
-3. 按 Alt+] 查看下一个建议
-4. Alt+l 接受喜欢的建议
-```
+
+停在这里，Copilot 通常会直接给出 `python3`、`python3Packages.pip` 之类的建议。
 
 ### 与 Copilot 的最佳实践
 
-1. **写清晰的注释** - Copilot 根据注释生成代码
+1. **写清晰的注释** —— 注释是最强的上下文信号
    ```nix
    # 配置 Nix 语言服务器
    programs.neovim = {
    ```
 
-2. **提供上下文** - 写足够的代码让 Copilot 理解
+2. **提供足够上下文** —— 让 Copilot 看到周围代码的风格
    ```nix
    environment.systemPackages = with pkgs; [
      nodejs_24
-     # Copilot 现在知道应该添加什么类型的包
+     # Copilot 现在知道这里该放什么类型的包
    ```
 
-3. **审阅建议** - 不要盲目接受，检查是否正确
+3. **审阅后再接受** —— Copilot 会编造不存在的 nixpkgs 属性名。
+   接受后建议用 `nix build` 或 `nix-instantiate --parse` 验证一次。
+
+4. **用 `nvim` 或 `vim` 打开都可以** —— 两者现在指向同一个 neovim
+   （详见下面的说明），Copilot 行为一致。
+
+> 📌 **为什么强调这一点**
+> 以前 `nvim` 和 `vim` 是两个**不同的** neovim 派生：`nvim` 来自 home-manager
+> （wrapper 里带 `node` 和 `unzip`），`vim` 来自系统级 `programs.neovim`（什么都不带）。
+> 结果用 `vim` 打开时 Copilot 的 language server 找不到 `node`，直接显示
+> `Status: Offline`，而用 `nvim` 打开却完全正常。
+> 现在系统级的那份声明已被删除，`nvim` / `vim` / `vi` / `$EDITOR` 全部统一。
 
 ---
 
@@ -392,8 +462,10 @@ K           - 显示悬停文档
 
 **Copilot**
 - `Alt+l` - 接受建议
-- `Alt+]` - 下一个建议
-- `Alt+Return` - 打开面板
+- `Alt+]` / `Alt+[` - 下/上一个建议
+- `Ctrl+]` - 拒绝建议
+- `:Copilot panel open` - 打开建议面板（Alt+Enter 已禁用）
+- `:Copilot status` - 查看状态
 
 **导航**
 - `/` - 搜索
@@ -418,16 +490,201 @@ K           - 显示悬停文档
 
 ---
 
+## 第十一步：Lazy.nvim 插件管理器仪表板
+
+### 什么是 Lazy.nvim？
+
+Lazy.nvim 是 Neovim 的现代插件管理器。当你启动 Neovide 时，如果启用了 Lazy.nvim，
+它可能会自动打开一个管理界面，显示所有已安装的插件及其状态。
+
+### 如何打开 Lazy.nvim 仪表板
+
+```vim
+:Lazy
+```
+
+按 Enter 或在 Normal 模式下执行上述命令，就会看到插件管理界面。
+
+### 仪表板界面说明
+
+**顶部导航菜单：**
+```
+Home (H) | Install (I) | Update (U) | Sync (S) | Clean (X) | Check (C) | Log (L) | Restore (R) | Profile (P) | Debug (D) | Help (?)
+```
+
+按括号内的快捷键可以在不同的视图间切换：
+- `H` - 主界面（Home）- 显示概览和统计
+- `I` - Install 视图 - 已安装的插件列表
+- `U` - Update 视图 - 可用的更新
+- `S` - Sync 视图 - 同步状态
+- `X` - Clean 视图 - 清理未使用的插件
+- `C` - Check 视图 - 检查插件完整性
+- `L` - Log 视图 - 操作日志
+- `P` - Profile 视图 - 性能分析
+- `D` - Debug 视图 - 调试信息
+- `?` - Help 视图 - 帮助文档
+
+### 插件列表中的信息
+
+**插件名称和状态指示：**
+
+| 符号 | 含义 |
+|------|------|
+| `●` (橙色实心圆) | 插件已加载 |
+| `○` (空心圆) | 插件未加载或延迟加载 |
+| `⊘` | 已禁用的插件 |
+
+**加载时间信息：**
+```
+copilot.lua 23.92ms ▶ start
+```
+- `23.92ms` - 插件加载耗时
+- `▶ start` - 标记 (start = 启动时加载, 其他表示按需加载条件)
+
+**依赖关系：**
+```
+cmp-nvim-lsp ⊘ nvim-lspconfig ⊘ nvim-cmp
+```
+显示这个插件依赖的其他插件
+
+**更新状态：**
+```
+■ already up to date      # 已是最新版本
+■ updates available       # 有更新可用（橙色）
+■ needs install           # 需要安装
+```
+
+### 常用操作
+
+**在仪表板中的操作：**
+
+```
+q         - 退出仪表板，返回编辑器
+Enter     - 进入所选插件的详情页面（显示来源、配置等）
+d         - 进入所选插件所在的目录
+<Tab>     - 折叠/展开插件的依赖信息
+y         - 复制所选插件的信息
+r         - 刷新/重新加载所选插件
+x         - 删除所选插件
+i         - 安装所选插件
+u         - 更新所选插件
+s         - 同步所选插件
+```
+
+**全局操作：**
+
+```
+:Lazy install    # 安装缺失的插件
+:Lazy update     # 更新所有插件
+:Lazy sync       # 同步所有插件（删除、安装、更新）
+:Lazy clean      # 清理未使用的插件
+:Lazy check      # 检查插件完整性
+:Lazy clear      # 清空缓存
+```
+
+### 截图界面详细解析
+
+根据启动时显示的那个窗口，这些指标表示：
+
+| 项目 | 含义 | 你的情况 |
+|------|------|--------|
+| **Total** | 总插件数 | 13 个 |
+| **Installed** | 已安装插件 | 11 个（✅ 正常） |
+| **Updates** | 有更新的插件 | 1 个（lazy.nvim 有更新） |
+| **Not Loaded** | 未加载的插件 | 1 个（cmp-path，这通常正常） |
+
+**问题诊断：**
+- ✅ 没有"broken"标签 - 说明没有损坏的插件
+- ✅ 没有"missing"标签 - 说明所有依赖都存在
+- ⚠️ 1 个插件有更新 - 这不是问题，只是提示有新版本可用
+- ℹ️ 1 个插件未加载 - 这通常是按需加载的插件，不是问题
+
+### 常见问题和解决方法
+
+**问题 1: 大量插件显示 "broken" 标签**
+```vim
+:Lazy clean    # 清理所有坏的插件
+:Lazy install  # 重新安装缺失的插件
+```
+
+**问题 2: 某个插件显示红色错误**
+```vim
+# 进入该插件的详情页面（按 Enter）
+# 查看错误信息
+# 按 L 查看日志
+```
+
+**问题 3: 启动时总是出现 Lazy 窗口**
+
+这是 `checker = { enabled = true }` 的表现。我们已经改为：
+```lua
+checker = { enabled = false }  # 禁用启动检查提示
+```
+
+部署后启动就不会再自动出现了。
+
+**问题 4: 更新插件后 Copilot 不工作**
+```bash
+# 清理缓存
+rm -rf ~/.local/share/nvim/copilot.lua/
+
+# 重启 Neovim
+# 在 Neovim 中重新认证（注意：不是 auth login，新版子命令是 signin）
+:Copilot auth signin
+```
+
+### 什么时候应该使用 Lazy
+
+**安装新插件后：**
+```vim
+:Lazy install
+```
+
+**定期检查更新：**
+```vim
+:Lazy check    # 检查有没有更新
+:Lazy update   # 更新所有插件
+```
+
+**调试问题：**
+```vim
+:Lazy debug    # 显示诊断信息
+:Lazy log      # 查看操作日志
+```
+
+### 访问技巧
+
+- 按 `j/k` 在列表中上下移动
+- 按 `/` 搜索插件名
+- 按 `?` 显示这个界面的帮助信息
+- 按 `q` 随时返回编辑器
+
+---
+
 ## 常见问题
 
-### Q: 如何看懂那些菜单（HOME, INSTALL, UPDATE, SYNC）？
+### Q: 我看到 Lazy 窗口显示"updates available"是什么意思？
 
-**A:** 这是 Lazy.nvim 的插件管理器界面，你可以：
-- 按 `Home` 键查看仪表板
-- 按 `q` 关闭
-- 按 `i` 查看安装状态
-- 按 `u` 更新插件
-- 按 `s` 同步插件
+**A:** 这意味着某些插件有新版本可用。你可以：
+1. 按 `u` 更新所有插件
+2. 或按 `U` 切换到 Update 视图查看详情
+3. 不更新也可以正常使用（可选）
+
+### Q: 什么是"Not Loaded"插件？
+
+**A:** 这些是按需加载的插件，只在满足特定条件时才加载（例如编辑特定文件类型时）。
+这是正常的，不是问题。常见的按需加载插件：
+- `cmp-path` - 编辑文件路径时加载
+- `cmp-cmdline` - 在命令行模式时加载
+- `cmp-buffer` - 需要时加载
+
+### Q: 我可以从 Lazy 窗口中删除插件吗？
+
+**A:** 可以，但不推荐。更好的方法是：
+1. 从 Neovim 配置中删除该插件的定义
+2. 运行 `:Lazy clean` 来清理未使用的插件
+
+这样下次启动时插件就不会加载了。
 - 通常你不需要手动操作，插件会自动管理
 
 ### Q: 我不小心进入了 Visual 模式怎么办？
@@ -436,11 +693,34 @@ K           - 显示悬停文档
 
 ### Q: Copilot 建议没有出现？
 
-**A:** 
+**A:** 按顺序排查：
 1. 确认在 Insert 模式（左下角显示 `-- INSERT --`）
-2. 输入足够的代码上下文
-3. 等待 1-2 秒
-4. 检查 `:Copilot status`
+2. 输入足够的代码上下文，然后停顿 1-2 秒
+3. 确认当前文件类型没被禁用（配置里 `help` / `gitcommit` / `gitrebase` 等是关闭的）
+4. `:Copilot status` —— 正常应显示 `Authenticated as GitHub user: ...  (status: OK)`
+5. 显示未认证就 `:Copilot auth signin`
+6. 还是不行就 `:checkhealth copilot`，它会把认证、node、LSP server 全查一遍
+
+注意：建议是**灰色行内文字**，不会出现在 `Ctrl+Space` 的补全菜单里。
+如果你是在补全菜单里找 Copilot，那是找不到的——见第六步的说明。
+
+### Q: 一按 `i` 就报 `E21: Cannot make changes, 'modifiable' is off`？
+
+**A:** 你的光标在一个只读 buffer 里，最常见的就是 **Copilot 面板**。
+
+```vim
+Ctrl+w w    " 切到下一个窗口（切回代码窗口）
+:q          " 或者直接关掉当前这个只读窗口
+```
+
+以前这个问题非常容易触发：copilot.lua 默认注册了一个**全局** Insert 模式映射
+`Alt+Enter` 用来打开面板，而面板 buffer 是只读且会抢焦点的。在终端里 `Alt+Enter`
+通常被拆成 `<Esc><CR>` 所以碰不到，但在 **Neovide 这类 GUI 里它是真正的 `<M-CR>`**，
+一不小心就按到，然后就再也打不了字了。
+
+现在该映射已在配置里设为 `open = false` 关闭，面板只能用 `:Copilot panel open`
+主动打开，所以不该再遇到。如果还是遇到了，先用上面的办法脱身，再 `:ls` 看看
+是哪个 buffer。
 
 ### Q: 如何保存并退出？
 
@@ -482,7 +762,9 @@ ZZ      # Normal 模式中保存并退出
 :help insert-mode       # Insert 模式帮助
 :help keybindings       # 快捷键帮助
 :help nvim-lspconfig    # LSP 配置帮助
-:help copilot          # Copilot 帮助（如果有）
+:help copilot           # Copilot 帮助
+:checkhealth copilot    # Copilot 自检（认证/依赖/LSP 全查一遍）
+:checkhealth vim.deprecated  # 查有哪些插件在用已废弃的 API
 ```
 
 祝你使用愉快！
