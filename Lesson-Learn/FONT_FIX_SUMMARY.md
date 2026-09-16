@@ -1,178 +1,178 @@
-Font and Plugin Configuration Fix Summary
+字体和插件配置修复总结
 
-PROBLEMS FIXED
+已修复的问题
 
-1. Neovim Plugin Loading Error
-   Error: Invalid spec module: `plugins` - Expected a `table` of specs, but a `nil` was returned
-   Cause: /home/toru/.config/nvim/lua/plugins/init.lua had no return statement
-   Fix: Added return {} to properly initialize plugin spec table
+1. Neovim 插件加载错误
+   错误：Invalid spec module: `plugins` - Expected a `table` of specs, but a `nil` was returned
+   原因：/home/toru/.config/nvim/lua/plugins/init.lua 缺少 return 语句
+   修复：添加 return {} 来正确初始化插件规范表
 
-2. Neovide Font Rendering Error
-   Error: Font can't be updated to: JetBrainsMono Nerd Font variants not found
-   Cause: System didn't have complete JetBrainsMono font family (missing Bold/Italic)
-   Fix: Replaced with Sarasa Mono + Noto Sans Mono CJK for better CJK support
+2. Neovide 字体渲染错误
+   错误：Font can't be updated to: JetBrainsMono Nerd Font variants not found
+   原因：系统缺少完整的 JetBrainsMono 字体族（缺少粗体/斜体变种）
+   修复：替换为 Sarasa Mono + Noto Sans Mono CJK，支持更好的 CJK 字符
 
-SOLUTION DETAILS
+解决方案详情
 
-Local Configuration Updates
-  File: /home/toru/.config/nvim/lua/plugins/init.lua
-  - Added: return {}
-  - Effect: Immediate fix for plugin loading error
+本地配置更新
+  文件：/home/toru/.config/nvim/lua/plugins/init.lua
+  - 添加：return {}
+  - 效果：立即修复插件加载错误
 
-  File: /home/toru/.config/nvim/init.lua
-  - Old: vim.opt.guifont = "JetBrainsMono Nerd Font:h12"
-  - New: vim.opt.guifont = "Sarasa Mono:h12,Noto Sans Mono CJK SC:h12"
-  - Effect: Font changes apply immediately (no rebuild needed)
+  文件：/home/toru/.config/nvim/init.lua
+  - 旧设置：vim.opt.guifont = "JetBrainsMono Nerd Font:h12"
+  - 新设置：vim.opt.guifont = "Sarasa Mono:h12,Noto Sans Mono CJK SC:h12"
+  - 效果：字体立即更改（无需重新构建）
 
-System Font Configuration
-  File: /home/toru/nixos-config/modules/common.nix
-  - Added fonts.packages:
-    * sarasa-gothic: Complete CJK font family
-    * noto-fonts: Basic font support
-    * noto-fonts-cjk-serif: Serif variant for CJK
-  - Configured fontconfig defaults for CJK language support
-  - Will be installed on next nixos-rebuild switch
+系统字体配置
+  文件：/home/toru/nixos-config/modules/common.nix
+  - 添加：fonts.packages 包含：
+    * sarasa-gothic：完整的 CJK 字体族
+    * noto-fonts：基础字体支持
+    * noto-fonts-cjk-serif：CJK 衬线体变种
+  - 配置：fontconfig 默认设置以支持 CJK 语言
+  - 安装时间：下次 nixos-rebuild switch 时安装
 
-NixOS HomeManager Configuration
-  File: /home/toru/nixos-config/home/toru.nix
-  - Updated Neovim init.lua generation to match local config
-  - Ensures consistency after system rebuild
-  - Font configuration propagates to all new Neovim sessions
+NixOS HomeManager 配置
+  文件：/home/toru/nixos-config/home/toru.nix
+  - 更新：Neovim init.lua 生成配置以匹配本地配置
+  - 确保：系统重建后的一致性
+  - 传播：字体配置到所有新 Neovim 会话
 
-FONT SELECTION RATIONALE
+字体选择理由
 
-Why Sarasa Gothic?
-- Sarasa is based on Source Han Sans (思源黑体)
-- Comprehensive coverage: Chinese, Japanese, Korean
-- Sarasa Mono: Optimized for programming (monospace, fixed width)
-- Open-source and actively maintained
-- Better spacing and rendering than JetBrainsMono for CJK
+为什么选择 Sarasa Gothic？
+- Sarasa 基于 Source Han Sans（思源黑体）
+- 完整覆盖：中文、日文、韩文
+- Sarasa Mono：为编程优化（等宽、固定宽度）
+- 开源且积极维护
+- 比 JetBrainsMono 对 CJK 的间距和渲染更好
 
-Font Stack: Sarasa Mono + Noto Sans Mono CJK
-- Primary: Sarasa Mono (excellent for code, supports CJK)
-- Fallback: Noto Sans Mono CJK (comprehensive character coverage)
-- Monospace formatting ensures proper alignment
-- Both fonts are production-ready and widely used
+字体堆栈：Sarasa Mono + Noto Sans Mono CJK
+- 主字体：Sarasa Mono（代码优化，支持 CJK）
+- 备用字体：Noto Sans Mono CJK（全面字符覆盖）
+- 等宽格式确保对齐正确
+- 两种字体都经过生产验证且广泛使用
 
-VERIFICATION RESULTS
+验证结果
 
-Neovim Local Configuration:
-  - Plugin loading: SUCCESS (no nil error)
-  - Font configuration: SUCCESS (no font errors)
-  - Startup: SUCCESS (clean without errors)
+Neovim 本地配置：
+  - 插件加载：成功 ✅ (无 nil 错误)
+  - 字体配置：成功 ✅ (无字体错误)
+  - 启动：成功 ✅ (无错误输出)
 
-NixOS Configuration:
-  - nix flake check: SUCCESS (all checks passed)
-  - Font package resolution: SUCCESS
-  - Configuration syntax: VALID
+NixOS 配置：
+  - nix flake check：成功 ✅ (所有检查通过)
+  - 字体包解析：成功 ✅
+  - 配置语法：有效 ✅
 
-IMMEDIATE USAGE
+立即可用
 
-The following are immediately available WITHOUT system rebuild:
-1. Neovim plugin loading (fixed init.lua)
-2. Neovide font rendering (new font configuration)
-3. No more font errors when opening .nix files
+以下功能无需系统重建即可立即使用：
+1. Neovim 插件加载（修复后的 init.lua）
+2. Neovide 字体渲染（新的字体配置）
+3. 打开 .nix 文件时不再出现字体错误
 
-To Use Right Now:
+现在立即使用：
 ```bash
-# Test fixed plugin loading
+# 测试修复后的插件加载
 nvim ~/.config/nvim/init.lua
-# Should load without "Invalid spec module" error
+# 应该加载时不出现 "Invalid spec module" 错误
 
-# Test in Neovide
+# 在 Neovide 中测试
 neovide /home/toru/nixos-config
-# Should load with Sarasa Mono font, no font errors
+# 应该用 Sarasa Mono 字体加载，无字体错误
 ```
 
-SYSTEM-WIDE DEPLOYMENT
+系统级部署
 
-To install fonts system-wide and make changes permanent:
+安装字体到系统并使更改永久化：
 
-1. Build and apply NixOS configuration:
+1. 构建并应用 NixOS 配置：
    ```bash
    cd /home/toru/nixos-config
    sudo nixos-rebuild switch --flake .#thinkpad
    ```
-   This will:
-   - Install Sarasa Gothic fonts
-   - Install Noto CJK fonts
-   - Configure fontconfig defaults
-   - Regenerate Neovim config from HomeManager
+   这将：
+   - 安装 Sarasa Gothic 字体
+   - 安装 Noto CJK 字体
+   - 配置 fontconfig 默认设置
+   - 从 HomeManager 重新生成 Neovim 配置
 
-2. Verify font installation:
+2. 验证字体安装：
    ```bash
    fc-list | grep Sarasa
    fc-list | grep "Noto Sans Mono CJK"
    ```
 
-3. Commit changes:
+3. 提交更改：
    ```bash
    git add modules/common.nix home/toru.nix
    git commit -F GIT_COMMIT_MESSAGE.txt
    ```
 
-FONT INFORMATION
+字体信息
 
-Sarasa Gothic Package Contents
-- Sarasa Mono: Main programming font
-- Sarasa Mono Slab: Serif variant
-- Sarasa Gothic: Sans-serif (UI font)
-- Sarasa Term: Terminal-optimized
+Sarasa Gothic 包含内容
+- Sarasa Mono：主编程字体
+- Sarasa Mono Slab：衬线变种
+- Sarasa Gothic：无衬线（UI 字体）
+- Sarasa Term：终端优化版本
 
-All variants available through single nixpkgs package: sarasa-gothic
+所有变种都可通过单个 nixpkgs 包获得：sarasa-gothic
 
-Common Commands for Font Management
+字体管理常用命令
 
-List all fonts:
+列出所有字体：
   fc-list
 
-Find specific font family:
+查找特定字体族：
   fc-list | grep Sarasa
   fc-list | grep "Noto Sans"
 
-Check monospace fonts only:
+仅检查等宽字体：
   fc-list :spacing=100
 
-Edit font configuration:
+编辑字体配置：
   vim ~/.config/fontconfig/fonts.conf
 
-Rebuild font cache (rarely needed):
+重新构建字体缓存（很少需要）：
   fc-cache -fv
 
-FILE CHANGES SUMMARY
+文件修改总结
 
-Modified Files:
+已修改的文件：
 1. /home/toru/.config/nvim/lua/plugins/init.lua
-   - Added return statement
+   - 添加 return 语句
 
 2. /home/toru/.config/nvim/init.lua
-   - Updated font configuration
+   - 更新字体配置
 
 3. /home/toru/nixos-config/modules/common.nix
-   - Added complete font section with Sarasa + Noto fonts
-   - Configured fontconfig defaults
+   - 添加完整的字体部分，包含 Sarasa + Noto 字体
+   - 配置 fontconfig 默认设置
 
 4. /home/toru/nixos-config/home/toru.nix
-   - Updated generated init.lua with new font settings
+   - 用新字体设置更新生成的 init.lua
 
 5. /home/toru/nixos-config/GIT_COMMIT_MESSAGE.txt
-   - New comprehensive commit message
+   - 新的综合提交消息
 
-All changes are properly formatted with nixfmt and validated.
+所有更改已用 nixfmt 正确格式化并验证。
 
-NEXT STEPS
+下一步
 
-Priority 1 (Do Now):
-- Test Neovim: nvim ~/.config/nvim/init.lua
-- Test Neovide: neovide /home/toru/nixos-config
-- Verify no errors appear
+优先级 1（现在做）：
+- 测试 Neovim：nvim ~/.config/nvim/init.lua
+- 测试 Neovide：neovide /home/toru/nixos-config
+- 验证不出现错误
 
-Priority 2 (When Convenient):
-- Run: sudo nixos-rebuild switch --flake .#thinkpad
-- Verify font installation: fc-list | grep Sarasa
-- Test again to confirm system-wide configuration
+优先级 2（方便时）：
+- 运行：sudo nixos-rebuild switch --flake .#thinkpad
+- 验证字体安装：fc-list | grep Sarasa
+- 再次测试以确认系统级配置
 
-Priority 3 (Version Control):
+优先级 3（版本控制）：
 - git add modules/common.nix home/toru.nix
 - git commit -F GIT_COMMIT_MESSAGE.txt
-- Push to repository when ready
+- 准备好时推送到仓库
