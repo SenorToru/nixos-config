@@ -212,11 +212,19 @@ in
               local capabilities = vim.lsp.protocol.make_client_capabilities()
               capabilities = require("cmp_nvim_lsp").default_capabilities(capabilities)
 
-              -- 配置 Nix Language Server (nil)
-              -- 在 nvim 0.11+ 中使用新的配置 API
-              local config_ok, lspconfig = pcall(require, "lspconfig")
-              if config_ok and lspconfig.nil_ls then
-                lspconfig.nil_ls.setup({
+              -- Nix Language Server (nil) - 使用新的 vim.lsp API
+              local nil_cmd = { "nil" }
+              
+              -- 启动 nil_ls 服务器
+              local function setup_nil()
+                local root_dir = vim.fs.dirname(
+                  vim.fs.find({ "flake.nix", ".git" }, { upward = true })[1]
+                )
+                
+                local client_id = vim.lsp.start({
+                  name = "nil",
+                  cmd = nil_cmd,
+                  root_dir = root_dir,
                   capabilities = capabilities,
                   settings = {
                     ["nil"] = {
@@ -227,6 +235,12 @@ in
                   },
                 })
               end
+
+              -- 为 nix 文件设置 LSP
+              vim.api.nvim_create_autocmd("FileType", {
+                pattern = "nix",
+                callback = setup_nil,
+              })
 
               -- 设置 LSP 快捷键和格式化
               vim.api.nvim_create_autocmd("LspAttach", {
