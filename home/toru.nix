@@ -97,9 +97,9 @@ in
 
         -- Neovide 特定配置
         if vim.g.neovide then
-          -- 使用 Sarasa Mono (编程字体，支持中日韩)
-          -- 格式: 字体名:大小(不能有空格在大小前)
-          vim.opt.guifont = "SarasaMono:h12"
+          -- 使用 Sarasa Mono J (日文编程字体，支持中日韩)
+          -- 字体名必须与系统安装的字体名完全匹配
+          vim.opt.guifont = "Sarasa Mono J:h12"
           vim.g.neovide_cursor_animation_length = 0.13
           vim.g.neovide_cursor_trail_size = 0.8
         end
