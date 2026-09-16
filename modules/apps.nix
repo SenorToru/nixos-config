@@ -3,7 +3,6 @@
 {
   environment.systemPackages = with pkgs; [
     # 常用网络与知识管理
-    brave
     obsidian
 
     # 办公与生产力

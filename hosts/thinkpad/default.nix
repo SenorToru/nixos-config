@@ -1,14 +1,23 @@
-{ config, pkgs, ... }:
+{
+  config,
+  pkgs,
+  inputs,
+  ...
+}:
 
 {
   imports = [
     ./hardware-configuration.nix
     ../../modules/common.nix
+    ../../modules/desktop.nix
     ../../modules/desktop-gnome.nix
     ../../modules/localization.nix
     ../../modules/development.nix
     ../../modules/flatpak.nix
     ../../modules/apps.nix
+    ../../modules/browsers.nix
+
+    inputs.home-manager.nixosModules.home-manager
   ];
 
   # ThinkPad 主机名
@@ -35,6 +44,11 @@
       "wheel"
     ];
   };
+
+  home-manager.useGlobalPkgs = true;
+  home-manager.useUserPackages = true;
+  home-manager.extraSpecialArgs = { inherit inputs; };
+  home-manager.users.toru = import ../../home/toru.nix;
 
   system.stateVersion = "26.05";
 }
