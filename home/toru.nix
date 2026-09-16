@@ -66,6 +66,9 @@ in
       # 如果仅使用 VSCode 认证，可注释掉此行
       github-cli
 
+      # Copilot 语言服务器需要 unzip
+      unzip
+
       # 其他 LSP 依赖
       lua-language-server
     ];
