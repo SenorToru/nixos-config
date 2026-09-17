@@ -13,6 +13,10 @@
     # GitHub CLI 用于 Copilot 认证
     # 如果希望仅使用 VSCode 认证而不使用 GitHub CLI，可注释掉此行
     github-cli
+
+    # Claude Code CLI（unfree，已由 common.nix 的 allowUnfree 放行）
+    # nixpkgs 版本经过 auto-patchelf 处理，不依赖 nix-ld
+    claude-code
   ];
 
   # ============================================

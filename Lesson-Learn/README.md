@@ -8,7 +8,7 @@
   想知道某个配置是怎么演变成现在这样的，从小到大读一遍即可。
 - **编号是 4 位大写十六进制**：`0000` → `0009` → `000A` → `000F` → `0010` → …
   一直到 `FFFF`。注意 `0009` 的下一个是 `000A` 而不是 `0010`。
-- **新增文档接着当前最大编号加一**。当前最大是 `000B`，**下一个是 `000C`**。
+- **新增文档接着当前最大编号加一**。当前最大是 `000E`，**下一个是 `000F`**。
   不要插空、不要复用编号。
 - 编号一旦分配就不再变动。文档作废时**加废弃横幅并指向新文档**，不删除、不重排 ——
   历史记录本身有价值，而且重排会让已有的交叉引用全部失效。
@@ -31,12 +31,16 @@
 | `0009` | [COPILOT_GHOST_TEXT_MIGRATION](0009_COPILOT_GHOST_TEXT_MIGRATION.md) | 移除 copilot-cmp 改用行内建议；E21 只读 buffer 问题 | ✅ 有效 |
 | `000A` | [NIXOS_CONFIG_AUDIT](000A_NIXOS_CONFIG_AUDIT.md) | `nvim`/`vim` 双派生、5 个无效字体名、默认浏览器 | ✅ 有效 |
 | `000B` | [HOME_MANAGER_ACTIVATION_CONFLICT](000B_HOME_MANAGER_ACTIVATION_CONFLICT.md) | `Existing file would be clobbered` 与「半成功」状态 | ✅ 有效 |
+| `000C` | [NIX_LD_PREBUILT_BINARIES](000C_NIX_LD_PREBUILT_BINARIES.md) | 预编译二进制的 ELF 解释器写死 `/lib64/...`，靠 nix-ld 转接 | ✅ 有效 |
+| `000D` | [CLAUDE_CODE_IN_NEOVIM](000D_CLAUDE_CODE_IN_NEOVIM.md) | 用 claudecode.nvim 在 Neovide 里接入 Claude Code | ✅ 有效 |
+| `000E` | [LAZY_NVIM_SLOW_NETWORK_CLONE](000E_LAZY_NVIM_SLOW_NETWORK_CLONE.md) | 慢网下部分克隆装不上插件；`.cloning` 残留标记导致反复重装 | ✅ 有效 |
 
 ## 按主题快速定位
 
-- **Neovim / Copilot** —— `0000`（用法）、`0001`、`0002`、`0003`、`0005`、`0006`、`0007`、`0009`
+- **Neovim / Copilot** —— `0000`（用法）、`0001`、`0002`、`0003`、`0005`、`0006`、`0007`、`0009`、`000E`
+- **Claude Code** —— `000C`、`000D`
 - **字体** —— `0002`、`0004`、`000A`
-- **NixOS / home-manager 机制** —— `0003`、`000A`、`000B`
+- **NixOS / home-manager 机制** —— `0003`、`000A`、`000B`、`000C`
 
 ## 反复出现的坑
 
@@ -50,3 +54,9 @@
    Nix 不会报冲突，但会装出两份，行为不一致且极难排查。
 4. **`nixos-rebuild switch` 报错不等于没生效**（`000B`）——
    系统层和 home 层是两个阶段，可能出现半成功。
+5. **外来的预编译二进制在 NixOS 上起不来**（`000C`）——
+   ELF 解释器写死了 `/lib64/ld-linux-x86-64.so.2`，靠 `programs.nix-ld.enable` 转接。
+   报的错常常是误导性的 "No such file or directory"。
+
+> 补充：本机网络很慢（实测 ~80 KiB/s），凡是涉及下载的环节都要先怀疑超时，
+> 别急着怀疑配置写错了 —— 见 `000E`。

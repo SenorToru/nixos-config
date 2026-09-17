@@ -102,6 +102,11 @@ in
 
       # 其他 LSP 依赖
       lua-language-server
+
+      # Claude Code CLI
+      # claudecode.nvim 是从 Neovim 内部 spawn `claude` 的，所以必须放进
+      # extraPackages（nvim 的 wrapper PATH），只装进 systemPackages 不够。
+      claude-code
     ];
   };
 
@@ -168,6 +173,21 @@ in
           },
           -- 禁用启动时的更新检查提示，避免交互式提示
           checker = { enabled = false },
+
+          git = {
+            -- 默认 120 秒。本机上行/下行都很慢（实测 ~80 KiB/s），
+            -- snacks.nvim 这种 1.3 万对象的仓库根本装不完就被杀。
+            timeout = 600,
+
+            -- 默认 true，即用 `git clone --filter=blob:none` 做**部分克隆**：
+            -- 初次只拉 commit 和 tree，blob 留到 checkout 时按需从网络取。
+            -- 正常网速下这是优化，慢网下却是灾难 —— checkout 变成第二次
+            -- 网络往返，一旦中断就留下「clone 成功但工作区是空的」目录，
+            -- 报错写作 "Clone succeeded, but checkout failed"。
+            -- 关掉它改为完整克隆：一次把所有对象拉全，checkout 纯本地操作，
+            -- 代价是初次下载量变大，换来的是可靠。
+            filter = false,
+          },
         })
       '';
     };
@@ -434,6 +454,82 @@ in
           {
             "LnL7/vim-nix",
             ft = { "nix" },
+          },
+        }
+      '';
+    };
+
+    "nvim/lua/plugins/claudecode.lua" = {
+      text = ''
+        -- ============================================
+        -- Claude Code 集成 (claudecode.nvim)
+        -- ============================================
+        -- coder/claudecode.nvim 是纯 Lua 实现的 Claude Code IDE 协议客户端，
+        -- 和 VSCode 扩展走的是同一套 WebSocket 协议，所以能拿到同样的能力：
+        -- 选区上下文、@ 引用文件、编辑以 diff 形式送回 Neovim 供审阅。
+        --
+        -- 它是从 Neovim 内部 spawn `claude` 可执行文件的，因此 `claude` 必须在
+        -- nvim 的 wrapper PATH 里 —— 见上面 programs.neovim.extraPackages。
+        -- 不需要设 terminal_cmd，默认值 "claude" 正好能从 PATH 找到。
+
+        return {
+          {
+            "coder/claudecode.nvim",
+            dependencies = { "folke/snacks.nvim" },
+            cmd = {
+              "ClaudeCode",
+              "ClaudeCodeFocus",
+              "ClaudeCodeSelectModel",
+              "ClaudeCodeAdd",
+              "ClaudeCodeSend",
+              "ClaudeCodeTreeAdd",
+              "ClaudeCodeStatus",
+              "ClaudeCodeStart",
+              "ClaudeCodeStop",
+              "ClaudeCodeOpen",
+              "ClaudeCodeClose",
+              "ClaudeCodeDiffAccept",
+              "ClaudeCodeDiffDeny",
+              "ClaudeCodeCloseAllDiffs",
+            },
+            opts = {
+              -- 终端界面
+              terminal = {
+                split_side = "right",
+                split_width_percentage = 0.35,
+                provider = "snacks",
+                auto_close = true,
+                auto_insert = true,
+              },
+              -- Claude 提出的修改以 diff 形式打开，审阅后再决定收不收
+              diff_opts = {
+                layout = "vertical",
+                open_in_new_tab = false,
+              },
+            },
+            keys = {
+              { "<leader>a", nil, desc = "AI / Claude Code" },
+              { "<leader>ac", "<cmd>ClaudeCode<cr>", desc = "开关 Claude 面板" },
+              { "<leader>af", "<cmd>ClaudeCodeFocus<cr>", desc = "聚焦 Claude 面板" },
+              { "<leader>ar", "<cmd>ClaudeCode --resume<cr>", desc = "恢复历史会话" },
+              { "<leader>aC", "<cmd>ClaudeCode --continue<cr>", desc = "继续上一次会话" },
+              { "<leader>am", "<cmd>ClaudeCodeSelectModel<cr>", desc = "选择模型" },
+              { "<leader>ab", "<cmd>ClaudeCodeAdd %<cr>", desc = "把当前文件加入上下文" },
+              { "<leader>as", "<cmd>ClaudeCodeSend<cr>", mode = "v", desc = "把选区发给 Claude" },
+              { "<leader>aa", "<cmd>ClaudeCodeDiffAccept<cr>", desc = "接受 diff" },
+              { "<leader>ad", "<cmd>ClaudeCodeDiffDeny<cr>", desc = "拒绝 diff" },
+              { "<leader>aS", "<cmd>ClaudeCodeStatus<cr>", desc = "查看连接状态" },
+            },
+          },
+          {
+            -- claudecode.nvim 的终端后端，同时提供 diff 用的浮窗
+            "folke/snacks.nvim",
+            priority = 1000,
+            lazy = false,
+            opts = {
+              input = { enabled = true },
+              picker = { enabled = true },
+            },
           },
         }
       '';
