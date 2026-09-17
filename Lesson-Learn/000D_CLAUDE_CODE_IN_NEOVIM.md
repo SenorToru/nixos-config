@@ -109,8 +109,9 @@ leader 是空格。
 |------|------|------|
 | `<Space>ac` | `:ClaudeCode` | 开关 Claude 面板 |
 | `<Space>af` | `:ClaudeCodeFocus` | 聚焦面板 |
-| `<Space>ar` | `:ClaudeCode --resume` | 恢复历史会话 |
-| `<Space>aC` | `:ClaudeCode --continue` | 继续上一次会话 |
+| `<Space>ar` | `:ClaudeCode --resume` | 列出本目录的历史会话，交互选择 |
+| `<Space>aR` | `:ClaudeCode --resume --fork-session` | 从某个历史会话岔出一条新会话 |
+| `<Space>aC` | `:ClaudeCode --continue` | 直接进最近一次会话，不问 |
 | `<Space>am` | `:ClaudeCodeSelectModel` | 选模型 |
 | `<Space>ab` | `:ClaudeCodeAdd %` | 把当前文件加入上下文 |
 | `<Space>as`（**可视模式**） | `:ClaudeCodeSend` | 把选中的代码发给 Claude |
@@ -120,6 +121,39 @@ leader 是空格。
 
 和已有映射不冲突：LSP 占的是 `<Space>rn` / `<Space>ca` / `<Space>f`，
 Copilot 用的是 `Alt` 系列。
+
+## 选择历史会话
+
+Claude Code 的会话是**按目录**存的，路径按 cwd 编码：
+
+```
+~/.claude/projects/-home-toru-nixos-config/
+├── 2806d414-0e05-47e0-82c6-a834bed546c2.jsonl
+├── 43f5aaee-89d5-4026-951c-20bc6f138f12.jsonl
+└── 8adcc5b4-3528-4f42-b968-038d1e9ec9c1.jsonl
+```
+
+四个入口：
+
+| 方式 | 行为 |
+|------|------|
+| `<Space>ar` | 列出**本目录**的历史会话，交互选择 |
+| `<Space>aR` | 同上，但选中后岔出一条新会话，不续写原记录 |
+| `<Space>aC` | 直接进最近一次，不弹选择器 |
+| 会话内输入 `/resume` | CLI 自带的斜杠命令，同样弹选择器 |
+
+CLI 侧的对应选项：
+
+```
+-r, --resume [value]   Resume a conversation by session ID, or
+                       open interactive picker with optional search term
+-c, --continue         Continue the most recent conversation in the current directory
+--fork-session         When resuming, create a new session ID instead of
+                       reusing the original (use with --resume or --continue)
+```
+
+`--fork-session` 的用处：想从某个历史会话岔出一条新线去试别的方向，
+又不希望把新的往来写进原会话的记录里。原会话保持原样，可以再回去接着聊。
 
 ## 典型工作流
 
@@ -179,6 +213,33 @@ claude --version          # 应输出 2.1.223 (Claude Code)
 5. **Copilot 和 Claude Code 可以共存。** Copilot 负责行内的即时补全（`Alt+l`），
    Claude Code 负责需要对话和大范围改动的任务（`<Space>a` 系列），
    两者不抢按键也不抢补全菜单。
+
+6. **面板里已有活会话时，`<Space>ar` 的 `--resume` 会被静默丢弃。**
+   这个很容易误判成「按键没绑上」。实际是插件的 toggle 逻辑：
+
+   ```lua
+   -- claudecode.nvim/lua/claudecode/terminal/snacks.lua:447
+   if terminal and terminal:buf_valid() then
+     -- 只是 hide / show 已有终端，cmd_string 根本没用上
+   else
+     -- 只有这条分支才真正带参数启动 claude
+   ```
+
+   也就是说 `--resume` / `--continue` / `--fork-session` **只在新起进程时生效**。
+   已经有会话在跑的时候按 `<Space>ar`，表现是面板闪一下（显示/隐藏），
+   没有任何选择器。
+
+   两个办法：
+   - 在已有会话里直接打 `/resume`（推荐，不用重启进程）
+   - 或者先 `:ClaudeCodeClose` 真正关掉，再按 `<Space>ar`
+
+7. **会话按目录隔离，从错的目录启动就看不到想要的会话。**
+   `--continue` 的官方说明里明确写着 *in the current directory*。
+   存储路径是按 cwd 编码的（见「选择历史会话」一节）。
+
+   所以要 `neovide ~/nixos-config`，而不是从家目录开了 neovide 再去编辑文件 ——
+   后者的 cwd 是 `~`，选择器里会是空的，或者列出一堆不相干的会话。
+   已经开错了的话，在 Neovim 里 `:cd ~/nixos-config` 再开面板。
 
 ## 相关文档
 

@@ -511,7 +511,12 @@ in
               { "<leader>a", nil, desc = "AI / Claude Code" },
               { "<leader>ac", "<cmd>ClaudeCode<cr>", desc = "开关 Claude 面板" },
               { "<leader>af", "<cmd>ClaudeCodeFocus<cr>", desc = "聚焦 Claude 面板" },
-              { "<leader>ar", "<cmd>ClaudeCode --resume<cr>", desc = "恢复历史会话" },
+              { "<leader>ar", "<cmd>ClaudeCode --resume<cr>", desc = "恢复历史会话（选择器）" },
+              {
+                "<leader>aR",
+                "<cmd>ClaudeCode --resume --fork-session<cr>",
+                desc = "从历史会话岔出新会话",
+              },
               { "<leader>aC", "<cmd>ClaudeCode --continue<cr>", desc = "继续上一次会话" },
               { "<leader>am", "<cmd>ClaudeCodeSelectModel<cr>", desc = "选择模型" },
               { "<leader>ab", "<cmd>ClaudeCodeAdd %<cr>", desc = "把当前文件加入上下文" },
