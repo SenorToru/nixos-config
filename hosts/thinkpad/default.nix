@@ -6,7 +6,11 @@
 
 {
   imports = [
+    # 本机专属（跟着这台硬件走）
     ./hardware-configuration.nix
+    ./tuning.nix
+
+    # 共用模块（任何机器都能直接 import）
     ../../modules/common.nix
     ../../modules/desktop.nix
     ../../modules/desktop-gnome.nix
@@ -15,6 +19,7 @@
     ../../modules/flatpak.nix
     ../../modules/apps.nix
     ../../modules/browsers.nix
+    ../../modules/shell.nix
 
     inputs.home-manager.nixosModules.home-manager
   ];
@@ -38,6 +43,9 @@
   users.users."toru" = {
     isNormalUser = true;
     description = "Toru Sugihara";
+    # 登录 shell。zsh 本体由 modules/shell.nix 在系统层 enable（那是通用的），
+    # 这里只做「哪个用户用它」的指派 —— 用户名是本机的事，不该写进共用模块。
+    shell = pkgs.zsh;
     extraGroups = [
       "networkmanager"
       "wheel"

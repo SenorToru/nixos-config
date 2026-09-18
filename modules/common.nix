@@ -36,6 +36,11 @@
   # 启用 nix-ld (用于运行非 NixOS 应用和二进制文件)
   programs.nix-ld.enable = true;
 
+  # 固件更新（LVFS）。任何带 UEFI 的机器都该开，不绑具体硬件，
+  # 所以放在 common 而不是 hosts/*/tuning.nix。
+  # 用法：`fwupdmgr refresh && fwupdmgr get-updates`。
+  services.fwupd.enable = true;
+
   # 基础网络与常用 CLI 工具
   networking.networkmanager.enable = true;
   environment.systemPackages = with pkgs; [

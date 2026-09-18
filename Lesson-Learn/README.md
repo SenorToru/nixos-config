@@ -8,7 +8,7 @@
   想知道某个配置是怎么演变成现在这样的，从小到大读一遍即可。
 - **编号是 4 位大写十六进制**：`0000` → `0009` → `000A` → `000F` → `0010` → …
   一直到 `FFFF`。注意 `0009` 的下一个是 `000A` 而不是 `0010`。
-- **新增文档接着当前最大编号加一**。当前最大是 `000E`，**下一个是 `000F`**。
+- **新增文档接着当前最大编号加一**。当前最大是 `0010`，**下一个是 `0011`**。
   不要插空、不要复用编号。
 - 编号一旦分配就不再变动。文档作废时**加废弃横幅并指向新文档**，不删除、不重排 ——
   历史记录本身有价值，而且重排会让已有的交叉引用全部失效。
@@ -34,13 +34,18 @@
 | `000C` | [NIX_LD_PREBUILT_BINARIES](000C_NIX_LD_PREBUILT_BINARIES.md) | 预编译二进制的 ELF 解释器写死 `/lib64/...`，靠 nix-ld 转接 | ✅ 有效 |
 | `000D` | [CLAUDE_CODE_IN_NEOVIM](000D_CLAUDE_CODE_IN_NEOVIM.md) | 用 claudecode.nvim 在 Neovide 里接入 Claude Code | ✅ 有效 |
 | `000E` | [LAZY_NVIM_SLOW_NETWORK_CLONE](000E_LAZY_NVIM_SLOW_NETWORK_CLONE.md) | 慢网下部分克隆装不上插件；`.cloning` 残留标记导致反复重装 | ✅ 有效 |
+| `000F` | [LAPTOP_TUNING_AND_AI_FRIENDLY_SHELL](000F_LAPTOP_TUNING_AND_AI_FRIENDLY_SHELL.md) | zram / thermald / VAAPI；zsh + atuin 环境与「不遮蔽标准命令」的 AI 友好约定；`modules/` 与 `hosts/` 的分界 | ✅ 有效 |
+| `0010` | [CLAUDE_CODE_VERSION_PINNING](0010_CLAUDE_CODE_VERSION_PINNING.md) | 发布分支冻结在旧版，`nix flake update` 空操作；覆写 manifest 升级 claude-code | ✅ 有效 |
 
 ## 按主题快速定位
 
 - **Neovim / Copilot** —— `0000`（用法）、`0001`、`0002`、`0003`、`0005`、`0006`、`0007`、`0009`、`000E`
-- **Claude Code** —— `000C`、`000D`
+- **Claude Code** —— `000C`、`000D`、`0010`
 - **字体** —— `0002`、`0004`、`000A`
-- **NixOS / home-manager 机制** —— `0003`、`000A`、`000B`、`000C`
+- **NixOS / home-manager 机制** —— `0003`、`000A`、`000B`、`000C`、`000F`
+- **Shell / CLI 环境** —— `000F`
+- **仓库分层（modules 与 hosts）** —— `000F`
+- **笔电硬件（zram / 温控 / 显卡 / 指纹）** —— `000F`
 
 ## 反复出现的坑
 
@@ -57,6 +62,15 @@
 5. **外来的预编译二进制在 NixOS 上起不来**（`000C`）——
    ELF 解释器写死了 `/lib64/ld-linux-x86-64.so.2`，靠 `programs.nix-ld.enable` 转接。
    报的错常常是误导性的 "No such file or directory"。
+6. **加服务前先 `nix eval` 查当前值**（`000F`）——
+   GNOME 之类的高层模块已经替你开了不少东西（`power-profiles-daemon`、
+   `systemd.oomd`、`fstrim`），重复声明不报错，只留下看不出真假的噪音。
+7. **绑硬件的配置写进了 `modules/`**（`000F`）—— 这是多机仓库，
+   显卡驱动、内存 sysctl、CPU 厂商专属服务、用户名都只对某一台成立，
+   必须放 `hosts/<主机>/`。判据：换一台机器还成立吗？
+8. **`nix flake update` 没让某个包动，不等于它已是最新**（`0010`）——
+   `nixos-26.05` 是发布分支，不跟上游滚。先去查该包在发布分支上的版本，
+   而不是怀疑 flake 没更新成功。
 
 > 补充：本机网络很慢（实测 ~80 KiB/s），凡是涉及下载的环节都要先怀疑超时，
 > 别急着怀疑配置写错了 —— 见 `000E`。

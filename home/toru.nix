@@ -1,4 +1,5 @@
 {
+  config,
   pkgs,
   ...
 }:
@@ -33,6 +34,30 @@ let
     };
   };
 
+  # ============================================
+  # 别名（bash / zsh 共用同一份）
+  # ============================================
+  # 硬规则：**不遮蔽任何标准命令**。没有 ls=eza、cat=bat、grep=rg 这种写法。
+  # 理由见下面「Shell 环境」一节第 2 条 —— 人看到的输出和 AI 看到的输出
+  # 必须是同一个东西。
+  commonAliases = {
+    # 目录列表：一律另起名字，ls 保持 coreutils 原样
+    ll = "eza -l --group-directories-first --git";
+    la = "eza -la --group-directories-first --git";
+    lt = "eza --tree --level=2";
+
+    # 本仓库的高频操作（命令本体见 CLAUDE.md「验证流程」）
+    nrb = "sudo nixos-rebuild switch --flake /home/toru/nixos-config#thinkpad";
+    nrt = "sudo nixos-rebuild test --flake /home/toru/nixos-config#thinkpad";
+    ncheck = "nix build /home/toru/nixos-config#nixosConfigurations.thinkpad.config.system.build.toplevel --out-link /tmp/res";
+    nhm = "nix build /home/toru/nixos-config#nixosConfigurations.thinkpad.config.home-manager.users.toru.home.activationPackage --out-link /tmp/hm";
+    ngen = "nix-env --list-generations --profile /nix/var/nix/profiles/system";
+
+    # git
+    gs = "git status -sb";
+    gd = "git diff";
+    gl = "git log --oneline --graph --decorate -20";
+  };
 in
 {
   home.username = "toru";
@@ -67,6 +92,210 @@ in
   };
 
   home.sessionVariables.BROWSER = "firefox";
+
+  # ============================================
+  # Shell 环境（zsh 为主，bash 保持对等）
+  # ============================================
+  # 设计前提：这台机器上的 shell 不只给人用，也经常被 AI 编码助手
+  # （Claude Code / Copilot CLI 之类）拿去跑命令。它们跑的是**非交互** shell，
+  # `.zshrc` 根本不会被 source。由此有三条硬规则：
+  #
+  #   1. 工具必须是 PATH 上的真二进制，不能靠 alias。
+  #      alias 只存在于交互 shell，`zsh -c 'll'` 会直接 command not found。
+  #      下面所有工具都通过 programs.* 落到 /etc/profiles/per-user/toru/bin
+  #      （home-manager.useUserPackages = true 的效果），任何 shell、
+  #      任何模式下都能直接调用。
+  #
+  #   2. 绝不用 alias 遮蔽 ls / cat / grep / find 这类标准命令。
+  #      否则终端里看到的是 eza 的彩色分栏，AI 看到的是 coreutils ls 的
+  #      原始输出，同一条命令两份结果，排查问题时会互相误导；更糟的是
+  #      一旦 alias 漏进脚本，输出格式变了，解析就全错。
+  #      home-manager 的 programs.eza 默认就会写 `ls = "eza"`，
+  #      所以下面显式关掉它的 shell integration，另起不冲突的名字。
+  #
+  #   3. bash 和 zsh 配成同一套基线（PATH、direnv、starship、别名都双边启用）。
+  #      AI 用哪个 shell 结果都一样，不会出现「我这边好好的，它那边不行」。
+  #
+  # 注：启用 programs.bash 后，home-manager 要接管 ~/.bashrc。
+  #     已存在的那份会被改名成 ~/.bashrc.hm-bak，不会中断激活 ——
+  #     靠的是 hosts/thinkpad/default.nix 里的 backupFileExtension，见 000B。
+
+  programs.zsh = {
+    enable = true;
+
+    # 系统层 programs.zsh.enable 已经在 /etc/zshrc 里跑过 compinit。
+    # 这里再来一次的话，每开一个终端都要多花几百毫秒重建补全缓存。
+    enableCompletion = false;
+
+    # home.stateVersion 是 "26.05"，新版 home-manager 的 dotDir 默认值
+    # 已经变成 ~/.config/zsh。这里显式按回家目录：~/.zshrc 是所有外部工具
+    # （包括 AI 助手）默认会去找的位置，换成 XDG 路径要靠 ZDOTDIR 转接，
+    # 多一层可能出错的环节，不值得。
+    dotDir = config.home.homeDirectory;
+
+    autosuggestion.enable = true;
+    syntaxHighlighting.enable = true;
+    # 这里刻意**没有** historySubstringSearch.enable。
+    # 它会 bindkey ↑/↓ 到 zsh-history-substring-search，和 atuin 抢同两个键，
+    # 而且功能是 atuin 的真子集：它只对 ~/.zsh_history 做子串匹配，
+    # 而 atuin 查的是 sqlite 库，带目录、退出码、耗时、时间戳。
+    # 见下面 programs.atuin 一节。
+
+    history = {
+      size = 100000;
+      save = 100000;
+      extended = true; # 历史里带时间戳
+      ignoreSpace = true; # 空格开头的命令不入历史（临时粘 token 时用得上）
+      expireDuplicatesFirst = true;
+    };
+
+    shellAliases = commonAliases;
+  };
+
+  # bash 不再是登录 shell，但仍然要能用，而且行为要和 zsh 一致。
+  programs.bash = {
+    enable = true;
+    historyControl = [
+      "ignoredups"
+      "ignorespace"
+    ];
+    historySize = 100000;
+    historyFileSize = 100000;
+    shellAliases = commonAliases;
+  };
+
+  # ============================================
+  # atuin —— 命令历史（取代 zsh 自带的历史检索）
+  # ============================================
+  # 把历史记进一个 sqlite 库，每条带上：执行目录、退出码、耗时、时间戳、
+  # 会话 id。所以能做到 zsh 原生历史做不到的事，比如「只看我在这个目录里
+  # 跑过什么」「只看成功过的命令」。
+  #
+  # 按键分工（重叠的部分已经在别处关掉了，不重复安装同类功能）：
+  #   Ctrl+R  atuin 的全库搜索。fzf 也会绑这个键，但 atuin 在 .zshrc 里
+  #           加载更晚，最终由 atuin 接管 —— 已核对生成的 .zshrc 确认。
+  #   ↑       atuin 的历史检索。原先的 zsh-history-substring-search 已移除，
+  #           它绑同样的键而功能是 atuin 的子集。
+  #   Ctrl+T / Alt+C  仍归 fzf（文件 / 目录），和 atuin 不重叠，保留。
+  #
+  # 没有关掉 programs.zsh.history：zsh 仍然照常写 ~/.zsh_history。
+  # 这是刻意的 —— 它是 atuin 的导入源，也是 atuin 万一出问题时的兜底。
+  # 两者不冲突：atuin 换掉的只是**检索界面**，不是记录本身。
+  programs.atuin = {
+    enable = true;
+    enableZshIntegration = true;
+    enableBashIntegration = true;
+
+    settings = {
+      # 不联网。没有 atuin 账号时本来也不会同步，但显式关掉更稳 ——
+      # 本机上行下行都很慢（实测 ~80 KiB/s），不需要后台再去抢带宽。
+      auto_sync = false;
+
+      # 版本由 nixpkgs 管，不需要 atuin 自己去查有没有新版。
+      # 开着的话每次启动都要发一次网络请求，还会提示一个你没法用
+      # `atuin update` 装的升级。
+      update_check = false;
+    };
+  };
+
+  programs.starship = {
+    enable = true;
+    enableZshIntegration = true;
+    enableBashIntegration = true;
+    settings = {
+      add_newline = false;
+      # 默认 500 ms。这台机器上大仓库的 git status 偶尔会超，
+      # 超时的表现是提示符里的 git 段直接消失，容易误以为不在仓库里。
+      command_timeout = 1000;
+    };
+  };
+
+  # direnv：进项目目录自动加载 devShell。
+  # nix-direnv 会为每个 .envrc 建立 GC root，否则 common.nix 里那个
+  # 「每周 --delete-older-than 7d」的自动 GC 会把 devShell 清掉，
+  # 下次进目录又要重新求值一遍。
+  #
+  # 两个 shell 的 hook 都挂上，别关任何一个：AI 助手用 bash 还是 zsh
+  # 取决于它自己的实现，两边都挂才不会出现「只有我这边能进 devShell」。
+  #
+  # 注意：hook 只对**交互** shell 生效。非交互场景（`bash -c ...`）里
+  # 要拿到 devShell 环境，得显式用 `direnv exec . <命令>`。
+  # 这条已经写进 CLAUDE.md，供以后的 AI 会话参考。
+  programs.direnv = {
+    enable = true;
+    nix-direnv.enable = true;
+    enableZshIntegration = true;
+    enableBashIntegration = true;
+  };
+
+  programs.fzf = {
+    enable = true;
+    enableZshIntegration = true;
+    enableBashIntegration = true;
+    # 注意：`fzf --zsh` 会绑 Ctrl+R（历史）、Ctrl+T（文件）、Alt+C（目录）三个键。
+    # 其中 Ctrl+R 和 atuin 重叠，最终由后加载的 atuin 接管（已在生成的
+    # .zshrc 里核对过顺序）。Ctrl+T / Alt+C 和 atuin 不重叠，保留。
+    # home-manager 的 fzf 模块没有单独关掉某一个键位的选项，所以靠加载顺序解决。
+    #
+    # fd 由 modules/common.nix 提供
+    defaultCommand = "fd --type f --hidden --exclude .git";
+    defaultOptions = [
+      "--height=40%"
+      "--layout=reverse"
+      "--border"
+    ];
+  };
+
+  programs.zoxide = {
+    enable = true;
+    enableZshIntegration = true;
+    enableBashIntegration = true;
+    # 刻意**不**加 options = [ "--cmd cd" ]。
+    # 那会把 cd 换成 zoxide 的模糊跳转，人用着舒服，
+    # 但脚本和 AI 写的 `cd ../foo` 就不再是标准 cd 语义了。
+    # 模糊跳转用 z / zi，cd 保持原样。
+  };
+
+  programs.eza = {
+    enable = true;
+    # 见本节开头第 2 条：默认的 integration 会写 `ls = "eza"`，遮蔽标准 ls。
+    # 需要的别名已经在 commonAliases 里用 ll / la / lt 另起了名字。
+    enableZshIntegration = false;
+    enableBashIntegration = false;
+    # 不开 icons：本机装的是 Sarasa Mono J，不是 Nerd Font，
+    # 开了只会得到一片豆腐块。要图标得先补一个 Nerd Font。
+  };
+
+  programs.bat = {
+    enable = true;
+    config = {
+      theme = "gruvbox-dark"; # 和 Neovim 的 gruvbox 主题对齐
+      style = "numbers,changes";
+    };
+  };
+
+  programs.btop.enable = true;
+  programs.lazygit.enable = true;
+
+  programs.tmux = {
+    enable = true;
+    baseIndex = 1;
+    escapeTime = 10; # 默认 500 ms，会让 tmux 里的 vim 按 Esc 有明显延迟
+    historyLimit = 50000;
+    keyMode = "vi";
+    mouse = true;
+    terminal = "tmux-256color";
+  };
+
+  # 没有对应 programs.* 模块、直接装二进制的那几个。
+  # 注意：git / ripgrep / fd / jq / htop / tree 已经在 modules/common.nix 的
+  # systemPackages 里了，不要在这里再装一份 —— 见 CLAUDE.md 的坑 3。
+  # 尤其是 git：root 跑 `nixos-rebuild --flake` 时需要它，
+  # 必须留在系统层，所以这里也不能启用 programs.git。
+  home.packages = with pkgs; [
+    dua # 交互式磁盘占用分析（Omarchy 4 的默认选择）
+    duf # 挂载点/剩余空间一览
+  ];
 
   # ============================================
   # Neovim 配置 (HomeManager)

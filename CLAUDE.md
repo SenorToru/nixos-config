@@ -2,6 +2,36 @@
 
 Toru 的 NixOS 多机配置仓库（flake，home-manager 作为 NixOS 模块）。
 
+## 仓库结构：什么放 `modules/`，什么放 `hosts/`
+
+这是个**多机**仓库，将来还要加更强的笔记本和台式机。
+所以新增配置前先问一句：**换一台机器，这条还成立吗？**
+
+| 位置 | 放什么 | 判据 |
+|------|--------|------|
+| `modules/*.nix` | 任何机器都能直接 `import` 的共用配置 | 换台机器还成立 |
+| `hosts/<主机>/tuning.nix` | 绑死在这台硬件上的调优 | 只对这台成立 |
+| `hosts/<主机>/default.nix` | 主机名、引导、键盘布局、用户账户、模块拼装 | 本机身份 |
+| `hosts/<主机>/hardware-configuration.nix` | `nixos-generate-config` 自动生成，别手改 | — |
+
+典型的**必须**放 `hosts/` 的东西：
+
+- **显卡驱动**（`hardware.graphics.extraPackages`）—— Intel 的 `intel-media-driver`
+  装到 AMD / NVIDIA 机器上是纯浪费，还可能选错驱动。
+- **内存相关的 sysctl**（`vm.swappiness` 等）—— 数值是按这台机器的内存大小和
+  swap 布局算出来的，换台内存大得多的机器就是错的。
+- **CPU 厂商专属服务**（`services.thermald` 是 Intel 专用）。
+- **用户名**。共用模块里不要出现 `users.users.toru.xxx` ——
+  那会把模块钉死在一个具体用户上。`programs.zsh.enable` 放 `modules/shell.nix`
+  （通用），`users.users.toru.shell = pkgs.zsh` 放 `hosts/thinkpad/default.nix`
+  （本机的事）。
+
+反过来，像 `services.fwupd.enable` 这种「任何带 UEFI 的机器都该开」的，
+就该放 `modules/common.nix`，别让下一台机器再抄一遍。
+
+`hosts/thinkpad/default.nix` 的 `imports` 按「本机专属在前、共用模块在后」
+分两组写，加新机器时照抄这个骨架即可。
+
 ## Git 提交注释
 
 **固定写在仓库根目录的 `GIT_COMMIT_MESSAGE.txt`**，然后用：
@@ -19,6 +49,8 @@ git commit -F GIT_COMMIT_MESSAGE.txt
   直接带上 `#`（提交 `8fef4d0` 就是这么坏掉的）。
 - **不使用任何表情符号 / emoji**，包括 ✅ ⚠️ ⛔ 📌 这类。
 - 结构靠缩进和空行表达，第一行是不超过 72 字的标题，空一行再写正文。
+- **不写 `Co-Authored-By:` 尾注**，也不写任何其它署名或生成工具标记。
+  提交信息里只放这次改动本身的内容。
 
 ## Lesson-Learn 知识库
 
@@ -60,6 +92,33 @@ nix 文件保持 `nixfmt` 干净（`hardware-configuration.nix` 是自动生成�
 ```bash
 nixfmt --check $(git ls-files '*.nix' | grep -v hardware-config)
 ```
+
+## Shell 环境
+
+登录 shell 是 **zsh**（`modules/shell.nix` 定系统层，`home/toru.nix` 定交互体验）。
+bash 保持完全可用，两者配的是同一套基线。
+
+**在这台机器上跑命令（人或 AI）都按下面几条来：**
+
+- **只用 PATH 上的真二进制，不要依赖 alias。**
+  `ll`、`gs`、`nrb`、`ncheck` 这些只存在于交互 shell，
+  `zsh -c 'll'` / `bash -c 'll'` 一律 command not found。
+  `eza` `bat` `fzf` `zoxide` `atuin` `btop` `lazygit` `tmux` `dua` `duf` `direnv` `starship`
+  都是真二进制（在 `/etc/profiles/per-user/toru/bin`），可以直接调用。
+- **`ls` / `cat` / `grep` / `find` 没有被 alias 遮蔽**，输出就是 coreutils 的
+  原始格式，可以放心解析。要彩色分栏请显式写 `eza` / `bat`。
+  这是硬约定：人看到的输出和 AI 看到的输出必须是同一个东西。
+- **`bat` 默认会分页**，脚本里请用 `bat -pp`，或者直接用 `cat`。
+- **`PAGER` 已经是 `less -FRX`**（写在 `/etc/pam/environment`，任何进程都继承），
+  不足一屏不会进分页器，所以不会卡住等输入。
+- **direnv 的 hook 只在交互 shell 里生效。**
+  在有 `.envrc` 的项目目录里跑命令，非交互场景要显式写
+  `direnv exec . <命令>`，否则拿不到 devShell 的环境。
+- **命令历史由 atuin 接管**（sqlite 库，带目录/退出码/耗时）。`Ctrl+R` 和 `↑` 都归它，
+  `Ctrl+T` / `Alt+C` 仍归 fzf。`~/.zsh_history` 照常在写，作为导入源和兜底。
+  非交互场景查历史用 `atuin search --cmd-only <关键词>`，不要去 grep `~/.zsh_history`。
+- zsh 这边 `/etc/zshenv` 对**所有** zsh（含 `zsh -c`）都会 source 一次
+  `set-environment`，所以非交互 zsh 也有完整的系统 PATH。
 
 ## 不要自动提交
 

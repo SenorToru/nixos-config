@@ -121,9 +121,66 @@ environment.sessionVariables = {           # 注意是 sessionVariables 不是 v
 
 ### `home/toru.nix`（新增「Shell 环境」一节）
 
-zsh（autosuggestion / syntaxHighlighting / historySubstringSearch / 10 万条历史）、
+zsh（autosuggestion / syntaxHighlighting / 10 万条历史）、
 bash（配成同一套基线）、starship、direnv + nix-direnv、fzf、zoxide、
-eza、bat、btop、lazygit、tmux，外加 `dua` / `duf`。
+eza、bat、btop、lazygit、tmux、atuin，外加 `dua` / `duf`。
+
+历史检索交给 atuin，因此**没有**启用 `historySubstringSearch` —— 见下一节。
+
+### atuin：接管命令历史，并清掉重叠的那两个
+
+Toru 平时习惯 atuin，它比 zsh 原生历史强在**记的东西多**：
+每条命令连同执行目录、退出码、耗时、时间戳、会话 id 一起进 sqlite 库，
+于是能问出「我在这个目录里跑过什么」「只看成功过的」这类问题。
+
+加它的时候必须同时**拆掉重叠的功能**，否则就是两套东西抢同几个键：
+
+| 键 | 加 atuin 之前 | 之后 |
+|----|---------------|------|
+| `Ctrl+R` | fzf 的历史 widget | **atuin** |
+| `↑` / `↓` | zsh-history-substring-search | **atuin** |
+| `Ctrl+T` | fzf 文件 widget | 不变（不重叠） |
+| `Alt+C` | fzf 目录 widget | 不变（不重叠） |
+
+处理方式分两种，因为两个冲突的性质不一样：
+
+- **`historySubstringSearch` 直接删掉。**
+  它的功能是 atuin 的真子集 —— 只对 `~/.zsh_history` 做子串匹配，
+  没有目录、退出码、耗时。留着纯属重复安装。
+
+- **fzf 的 `Ctrl+R` 靠加载顺序让出。**
+  home-manager 的 fzf 模块只有一个总的 `enableZshIntegration`，
+  没有「只关掉某一个键位」的选项，而 `fzf --zsh` 是三个 widget 一起绑的。
+  好在 atuin 的 `initContent` 在生成的 `.zshrc` 里排在 fzf 之后
+  （fzf 第 23 行，atuin 第 53 行），后绑的覆盖先绑的。
+  Ctrl+T / Alt+C 和 atuin 不重叠，保留下来正好。
+
+**这种「谁绑到了键」的结论不能靠读配置猜，要实测：**
+
+```bash
+d=$(mktemp -d); cp ~/.zshrc "$d/.zshrc"
+ZDOTDIR=$d zsh -i -c 'bindkey "^R"; bindkey "^[[A"; bindkey "^T"'
+```
+
+应当分别看到 `atuin-search`、`atuin-up-search`、`fzf-file-widget`。
+
+### 为什么不关掉 zsh 自己的历史
+
+`programs.zsh.history` 全部保留，`~/.zsh_history` 照常在写。
+atuin 换掉的只是**检索界面**，不是记录本身。保留它有两个用处：
+它是 `atuin import auto` 的导入源，也是 atuin 哪天出问题时的兜底。
+两者不冲突。
+
+### atuin 的两项设置
+
+```nix
+auto_sync = false;     # 不联网。本机上下行都很慢（~80 KiB/s），不让它抢带宽
+update_check = false;  # 版本由 nixpkgs 管，不需要它自己查新版
+```
+
+`update_check` 尤其值得关：开着的话每次启动发一次网络请求，
+而且会提示一个你根本没法用 `atuin update` 装的升级 —— 在 NixOS 上
+版本是 flake 锁定的，那个提示只会是噪音。
 
 ## 为什么这样解决
 
@@ -183,6 +240,20 @@ home 层再跑一次的话，每开一个终端都要多花几百毫秒重建补
 
 ## 后续注意事项
 
+- **atuin 第一次用要手动导入一次旧历史**，home-manager 不会替你做：
+  ```bash
+  atuin import auto        # 自动识别 ~/.zsh_history / ~/.bash_history
+  atuin stats              # 确认条数
+  ```
+  不导入的话库是空的，`Ctrl+R` 什么都搜不到，很容易误判成「没生效」。
+  没有 `atuin login`，所以纯本地，不会往任何服务器发东西。
+- **zsh 默认进的是 vi keymap，不是 bash 那套 emacs keymap。**
+  原因是 `programs.neovim.defaultEditor = true` 让 `EDITOR=nvim`，
+  zsh 见到 `EDITOR` 里带 `vi` 就自动选 viins。
+  实测 `bindkey "^R"` 返回的是 `atuin-search-viins` 而不是 `-emacs`。
+  表现是 `Ctrl+A` / `Ctrl+E` / `Ctrl+U` 这些 bash 习惯的键行为不同。
+  想要 bash 那套，在 `programs.zsh` 里加 `defaultKeymap = "emacs";`。
+  这一条不是这次改动引入的，但换到 zsh 之后才会被感知到。
 - **首次 `nixos-rebuild switch` 之后要重新登录**，登录 shell 才会变成 zsh。
   当前那个终端还是 bash，`echo $SHELL` 看到的也还是旧值。
 - home-manager 要接管 `~/.bashrc`。已存在的那份会被改名成 `~/.bashrc.hm-bak`，
