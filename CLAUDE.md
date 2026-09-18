@@ -32,6 +32,23 @@ Toru 的 NixOS 多机配置仓库（flake，home-manager 作为 NixOS 模块）�
 `hosts/thinkpad/default.nix` 的 `imports` 按「本机专属在前、共用模块在后」
 分两组写，加新机器时照抄这个骨架即可。
 
+## README.md 要保持同步
+
+根目录的 [README.md](README.md) 是**给人看的操作手册**，
+本文件是**给 AI 的协作约定**。两者有意重叠。
+
+**改动下列任何一项时，必须同步更新 README.md：**
+
+- 新增、删除、重命名 `modules/` 下的模块
+- 新增主机（`hosts/<新主机>/`）或调整 `hosts/` 的文件划分
+- 改变 `modules/` 与 `hosts/` 的分界判据
+- 改变重建命令、别名，或六步流程中的任何一步
+- 改变「什么时候需要重启」的结论
+
+**两边描述同一件事时，改了一边就要改另一边**，不要让它们漂移。
+漂移之后最糟的情况不是信息缺失，而是两份文档给出互相矛盾的指示 ——
+人照 README 做、AI 照 CLAUDE.md 做，结果对不上。
+
 ## Git 提交注释
 
 **固定写在仓库根目录的 `GIT_COMMIT_MESSAGE.txt`**，然后用：
