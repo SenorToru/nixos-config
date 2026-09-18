@@ -8,7 +8,7 @@
   想知道某个配置是怎么演变成现在这样的，从小到大读一遍即可。
 - **编号是 4 位大写十六进制**：`0000` → `0009` → `000A` → `000F` → `0010` → …
   一直到 `FFFF`。注意 `0009` 的下一个是 `000A` 而不是 `0010`。
-- **新增文档接着当前最大编号加一**。当前最大是 `0010`，**下一个是 `0011`**。
+- **新增文档接着当前最大编号加一**。当前最大是 `0011`，**下一个是 `0012`**。
   不要插空、不要复用编号。
 - 编号一旦分配就不再变动。文档作废时**加废弃横幅并指向新文档**，不删除、不重排 ——
   历史记录本身有价值，而且重排会让已有的交叉引用全部失效。
@@ -36,6 +36,7 @@
 | `000E` | [LAZY_NVIM_SLOW_NETWORK_CLONE](000E_LAZY_NVIM_SLOW_NETWORK_CLONE.md) | 慢网下部分克隆装不上插件；`.cloning` 残留标记导致反复重装 | ✅ 有效 |
 | `000F` | [LAPTOP_TUNING_AND_AI_FRIENDLY_SHELL](000F_LAPTOP_TUNING_AND_AI_FRIENDLY_SHELL.md) | zram / thermald / VAAPI；zsh + atuin 环境与「不遮蔽标准命令」的 AI 友好约定；`modules/` 与 `hosts/` 的分界 | ✅ 有效 |
 | `0010` | [CLAUDE_CODE_VERSION_PINNING](0010_CLAUDE_CODE_VERSION_PINNING.md) | 发布分支冻结在旧版，`nix flake update` 空操作；覆写 manifest 升级 claude-code | ✅ 有效 |
+| `0011` | [ROOT_OWNED_FILES_IN_REPO](0011_ROOT_OWNED_FILES_IN_REPO.md) | `sudo nixos-rebuild` 把 `flake.lock` 和 `.git/objects` 写成 root；git 只对哈希前缀撞上的那个文件报错 | ✅ 有效 |
 
 ## 按主题快速定位
 
@@ -43,6 +44,7 @@
 - **Claude Code** —— `000C`、`000D`、`0010`
 - **字体** —— `0002`、`0004`、`000A`
 - **NixOS / home-manager 机制** —— `0003`、`000A`、`000B`、`000C`、`000F`
+- **git 与仓库状态** —— `0011`
 - **Shell / CLI 环境** —— `000F`
 - **仓库分层（modules 与 hosts）** —— `000F`
 - **笔电硬件（zram / 温控 / 显卡 / 指纹）** —— `000F`
@@ -71,6 +73,14 @@
 8. **`nix flake update` 没让某个包动，不等于它已是最新**（`0010`）——
    `nixos-26.05` 是发布分支，不跟上游滚。先去查该包在发布分支上的版本，
    而不是怀疑 flake 没更新成功。
+9. **仓库里混进 root 拥有的文件**（`0011`）—— `sudo nixos-rebuild --flake .`
+   会以 root 身份写 `flake.lock`，读 dirty 工作树时还可能写 `.git/objects`。
+   症状极具迷惑性：`git add` 只对**某一个**文件报
+   `insufficient permission for adding an object to repository database`，
+   点名谁纯看该文件 blob 哈希的前两位撞上了哪个 `.git/objects/XX/`。
+   自查 `find . ! -user toru`，修复 `sudo chown -R toru:users .`。
 
-> 补充：本机网络很慢（实测 ~80 KiB/s），凡是涉及下载的环节都要先怀疑超时，
+> 补充：**从 GitHub clone 很慢**（实测 ~80 KiB/s），涉及 git clone 的环节要先怀疑超时，
 > 别急着怀疑配置写错了 —— 见 `000E`。
+> 但这**不是全局网速**：`downloads.claude.ai` 实测 6.4 MB/s（见 `0010`），
+> 别拿 GitHub 的数字去否决其它下载。
