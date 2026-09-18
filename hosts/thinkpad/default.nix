@@ -30,6 +30,21 @@
   # UEFI 引导配置
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
+
+  # 引导菜单最多保留 20 个条目。
+  #
+  # 默认是 null（不限制）。本机 rebuild 很频繁，generation 攒得快：
+  # 写这条时有 36 个。菜单太长不好选，而且每换一次内核，/boot 就要多存
+  # 一份约 50-60 MiB 的 kernel + initrd，1 GiB 的 ESP 撑不住几轮。
+  #
+  # 注意这**只限制引导菜单条目**，不删 store 里的东西。
+  # 控制磁盘占用是 modules/common.nix 里 nix.gc 的事，两者互不替代。
+  #
+  # 副作用：下次 switch 时，超出 20 个的旧条目会从引导菜单里移除。
+  # 那些 generation 本身还在（GC 才管删），
+  # `nixos-rebuild switch --rollback` 仍然可用，
+  # 只是没法再从开机菜单里直接选中它们了。
+  boot.loader.systemd-boot.configurationLimit = 20;
   boot.kernelPackages = pkgs.linuxPackages_latest;
 
   # ThinkPad 本地物理键盘 (JIS 106)

@@ -230,6 +230,9 @@ nixos-rebuild list-generations         # 看所有 generation 和当前是哪个
 
 **开不了机**：在 systemd-boot 菜单里直接选上一个 generation 条目。
 这是 NixOS 最大的安全网 —— 每次 `switch` 都会留下一个可回退的条目。
+菜单里保留**最近 20 个**（见
+[引导菜单条目数上限](#引导菜单条目数上限)）；更早的 generation 仍然存在，
+只是要在能开机的情况下用 `--rollback` 回退。
 
 ### 权限自查
 
@@ -341,19 +344,28 @@ sudo nix store optimise
 新写入的路径会自动去重，所以平时不需要手动跑，
 只在关掉过该选项、或想确认一下的时候用。
 
-### 从源头限制引导菜单条目数
+### 引导菜单条目数上限
+
+`hosts/thinkpad/default.nix` 里已经设了：
 
 ```nix
-# hosts/thinkpad/default.nix
 boot.loader.systemd-boot.configurationLimit = 20;
 ```
 
-当前是 `null`（不限制）。设成 N 之后菜单最多显示 N 个条目，
+**当前值是 20**（NixOS 默认是 `null`，即不限制）。
+超出 20 个之后，最旧的条目会在下次 `switch` 时从引导菜单里移除，
 `/boot` 就不会被历代内核塞满。
 
 > 注意它**只限制引导菜单**，不删 store 里的东西。
 > 控制磁盘占用靠 `nix.gc`，控制 `/boot` 靠 `configurationLimit`，
-> 是两件独立的事。
+> 是两件独立的事，互不替代。
+
+> **被移出菜单 ≠ 被删除。** 那些 generation 本身还在
+> （只有 GC 才会真正删掉它们），`nixos-rebuild switch --rollback`
+> 和 `nixos-rebuild list-generations` 照常能看到和用到，
+> 只是**没法再从开机菜单里直接选中**。
+> 也就是说：系统还能开机时回退不受影响，
+> 真开不了机时可选的救援点只剩最近 20 个。
 
 ### `/boot` 什么时候才会紧张
 
