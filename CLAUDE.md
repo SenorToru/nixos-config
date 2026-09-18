@@ -72,26 +72,110 @@ git commit -F GIT_COMMIT_MESSAGE.txt
 为什么这样解决 / 后续注意事项 / 相关文档」。知识库文档里可以用 Markdown 和表情符号，
 **这条限制只针对提交注释**。
 
-## 验证流程
+## 改完 nix 文件后的重建顺序
 
-改完配置后用 `nix build` 自证，**不需要 sudo，不改系统状态**：
+**顺序本身就是内容**，别跳步——每一步都在防一个具体的坑。
+
+### 1. 新增的文件先让 git 看见（只有新文件需要）
 
 ```bash
-# 系统层
-nix build .#nixosConfigurations.thinkpad.config.system.build.toplevel --out-link /tmp/res
-ls /tmp/res/sw/bin/
-
-# home 层
-nix build .#nixosConfigurations.thinkpad.config.home-manager.users.toru.home.activationPackage \
-  --out-link /tmp/hm
-cat /tmp/hm/home-files/.config/mimeapps.list
+git add modules/新文件.nix
 ```
 
-nix 文件保持 `nixfmt` 干净（`hardware-configuration.nix` 是自动生成的，例外）：
+**flake 看不见未跟踪的文件**，不 add 就会
+`Path 'modules/xxx.nix' ... is not tracked by Git`，构建直接失败。
+
+精确规则：**每个新文件只需 add 一次**。之后再怎么改它，dirty 工作区的内容
+都会被直接读取，不用反复 `git add`。
+
+### 2. 格式化
 
 ```bash
+nixfmt $(git ls-files '*.nix' | grep -v hardware-config)
 nixfmt --check $(git ls-files '*.nix' | grep -v hardware-config)
 ```
+
+`hardware-configuration.nix` 是自动生成的，例外。
+
+### 3. 用户态构建两层——**不用 sudo，不改系统状态**
+
+```bash
+nix build .#nixosConfigurations.thinkpad.config.system.build.toplevel --out-link /tmp/res
+nix build .#nixosConfigurations.thinkpad.config.home-manager.users.toru.home.activationPackage \
+  --out-link /tmp/hm
+```
+
+交互 shell 里有别名：`ncheck`（系统层）、`nhm`（home 层）。
+**非交互 / 脚本 / AI 用完整命令**——别名只存在于交互 shell。
+
+**这一步不能跳，两个理由：**
+
+1. 求值错误、选项名写错、缺依赖在这里就暴露，不用等到 root 阶段。
+2. **它顺带把 `flake.lock` 以 toru 的身份写好。** 轮到 root 时它没东西可写——
+   这是 `flake.lock` 被写成 root 所有的根本预防，见坑 5。
+
+改完之后可以顺手查产物，比如
+`ls /tmp/res/sw/bin/`、`cat /tmp/hm/home-files/.config/mimeapps.list`。
+
+> 只改了 `home/toru.nix` 也要走完整流程。home-manager 是**作为 NixOS 模块**
+> 接入的，机器上没有独立的 `home-manager` CLI，只能靠 `nixos-rebuild`。
+
+### 4. 切换
+
+```bash
+sudo nixos-rebuild switch --flake /home/toru/nixos-config#thinkpad   # 别名 nrb
+```
+
+| 动作 | 行为 | 用在 |
+|------|------|------|
+| `switch`（`nrb`） | 激活 + 写引导菜单 | 日常 |
+| `test`（`nrt`） | 激活但**不写引导**，重启即回到旧的 | 改内核参数、显卡驱动、引导——万一开不了机，重启就救回来 |
+| `boot` | 写引导但**不激活**，下次重启生效 | 改内核本身 |
+
+**注意「半成功」**：系统层和 home 层是两个阶段，home 层失败时系统层已经切过去了。
+`nrb` 的输出要看到底，别只看有没有报错就走（见坑 4）。
+
+### 5. 实机验证——构建通过 ≠ 可用
+
+按改动内容挑：
+
+```bash
+fc-match "Sarasa Mono J"                   # 改了字体：族名写错会静默回退（坑 1）
+echo $SHELL                                # 改了登录 shell（需重新登录）
+swapon --show                              # 改了 zram
+vainfo                                     # 改了显卡驱动：配错只会静默软解
+claude --version                           # 改了 claude-code
+systemctl is-active thermald fwupd         # 改了服务
+nixos-rebuild list-generations | head -3   # 确认真的生成了新 generation（别名 ngen）
+```
+
+### 6. 提交（Toru 验证通过之后）
+
+```bash
+git add -A && git commit -F GIT_COMMIT_MESSAGE.txt
+```
+
+`.gitignore` 已挡掉 `result` / `build.log` / `GIT_COMMIT_MESSAGE.txt`，
+所以 `git add -A` 是安全的。
+
+### 出问题了
+
+```bash
+sudo nixos-rebuild switch --rollback   # 回到上一个 generation
+nixos-rebuild list-generations         # 看所有 generation 和当前是哪个
+```
+
+`--rollback` 和 `--flake` **互斥**——回滚走已有 generation，不需要 flake。
+开不了机就在 systemd-boot 菜单里直接选上一个 generation。
+
+### 权限自查（跑过 sudo 之后偶尔查一下）
+
+```bash
+find . ! -user toru -printf '%u  %p\n'
+```
+
+**应该没有任何输出。** 有输出说明又被 root 写过，
+`sudo chown -R toru:users .` 修掉。见坑 5。
 
 ## Shell 环境
 
@@ -141,3 +225,12 @@ bash 保持完全可用，两者配的是同一套基线。
    但会装出两份（`nvim` 和 `vim` 曾指向两个不同的 neovim 派生）。
 4. **`nixos-rebuild switch` 报错不等于没生效。** 系统层和 home 层是两个阶段，
    可能出现半成功状态。
+5. **仓库里出现 root 拥有的文件，git 和 nix 都会被卡住。**
+   根因是 `sudo nixos-rebuild --flake .` 需要写 `flake.lock` 或读 dirty 的 git 树时，
+   以 root 身份往仓库里写了东西。症状很有迷惑性：
+   `git add` 报 `insufficient permission for adding an object to repository database`，
+   而且**只对某些文件失败**——取决于该文件的 blob 哈希前两位落进了哪个
+   `.git/objects/XX/` 目录，那个目录恰好是 root 的才会失败。
+   预防：重建流程第 3 步（用户态先 `nix build`）先把 `flake.lock` 以 toru 写好；
+   `nix flake update` 永远不加 sudo。
+   自查：`find . ! -user toru`，修复：`sudo chown -R toru:users .`。

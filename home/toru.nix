@@ -51,7 +51,10 @@ let
     nrt = "sudo nixos-rebuild test --flake /home/toru/nixos-config#thinkpad";
     ncheck = "nix build /home/toru/nixos-config#nixosConfigurations.thinkpad.config.system.build.toplevel --out-link /tmp/res";
     nhm = "nix build /home/toru/nixos-config#nixosConfigurations.thinkpad.config.home-manager.users.toru.home.activationPackage --out-link /tmp/hm";
-    ngen = "nix-env --list-generations --profile /nix/var/nix/profiles/system";
+    # 用 nixos-rebuild 而不是 nix-env --list-generations：后者要开
+    # /nix/var/nix/profiles/system.lock，非 root 直接 permission denied。
+    # 前者不用 sudo，而且带构建日期、内核版本和 Current 标记。
+    ngen = "nixos-rebuild list-generations";
 
     # git
     gs = "git status -sb";
