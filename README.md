@@ -249,6 +249,135 @@ sudo chown -R toru:users .
 
 ---
 
+## 清理旧的编译版本
+
+每次 `switch` 都会留下一个 generation。它们是 NixOS 的安全网，
+但攒多了会占硬盘，内核变动频繁时还会塞爆 `/boot`。
+
+### 先看现状
+
+```bash
+nixos-rebuild list-generations        # 有多少个，分别是什么时候
+du -sh /nix/store                     # store 总大小
+df -h / /boot                         # 根分区和引导分区
+nix path-info -Sh /run/current-system  # 当前系统闭包多大
+sudo ls /boot/loader/entries/          # 引导菜单条目（/boot 是 dmask=0077，必须 sudo）
+```
+
+### 自动清理已经开着
+
+`modules/common.nix` 里已经配了：
+
+```nix
+nix.gc = {
+  automatic = true;
+  dates = "weekly";
+  options = "--delete-older-than 7d";
+};
+nix.settings.auto-optimise-store = true;
+```
+
+查定时器状态：
+
+```bash
+systemctl list-timers nix-gc.timer
+```
+
+> **为什么开了自动 GC 还剩几十个 generation？**
+> 因为 `weekly` 的周期加上 `--delete-older-than 7d` 的阈值，
+> 天然会攒下**约两周**的量：定时器每周才跑一次，跑的时候只删 7 天前的，
+> 于是 7 到 14 天之间的全都留着。这是正常的，不是 GC 坏了。
+
+### 手动清理：三步，第 2 步最容易漏
+
+#### 1. 删旧 generation 并回收 store
+
+```bash
+# 先看会删什么，不实际删除
+sudo nix-collect-garbage --delete-older-than 7d --dry-run
+
+# 保守：只删 7 天前的
+sudo nix-collect-garbage --delete-older-than 7d
+
+# 激进：删掉所有旧 generation，只保留当前
+sudo nix-collect-garbage -d
+```
+
+用户自己的 profile 单独清一次，**这条不要加 sudo**：
+
+```bash
+nix-collect-garbage --delete-older-than 7d
+```
+
+> 加了 sudo 会以 root 身份去动本该属于 toru 的东西，
+> 是「仓库被 root 锁住」那类问题的同款成因。见
+> [Lesson-Learn/0011](Lesson-Learn/0011_ROOT_OWNED_FILES_IN_REPO.md)。
+
+#### 2. 同步引导菜单
+
+```bash
+sudo /run/current-system/bin/switch-to-configuration boot
+```
+
+或者等价地：
+
+```bash
+sudo nixos-rebuild boot --flake /home/toru/nixos-config#thinkpad
+```
+
+> **这一步不能省。** `nix-collect-garbage` 删的是
+> `/nix/var/nix/profiles/` 下的 generation 符号链接和 store 里的路径，
+> 它**不碰** `/boot/loader/entries/`。不重新跑一次引导安装器的话，
+> 菜单里会留下一堆指向已删除系统的**死条目** ——
+> 平时看不出问题，真到要救机的时候选中一个死条目，启动直接失败。
+
+#### 3. 去重（可选）
+
+```bash
+sudo nix store optimise
+```
+
+把 store 里内容相同的文件改成硬链接。`auto-optimise-store` 已经开着，
+新写入的路径会自动去重，所以平时不需要手动跑，
+只在关掉过该选项、或想确认一下的时候用。
+
+### 从源头限制引导菜单条目数
+
+```nix
+# hosts/thinkpad/default.nix
+boot.loader.systemd-boot.configurationLimit = 20;
+```
+
+当前是 `null`（不限制）。设成 N 之后菜单最多显示 N 个条目，
+`/boot` 就不会被历代内核塞满。
+
+> 注意它**只限制引导菜单**，不删 store 里的东西。
+> 控制磁盘占用靠 `nix.gc`，控制 `/boot` 靠 `configurationLimit`，
+> 是两件独立的事。
+
+### `/boot` 什么时候才会紧张
+
+当前 36 个 generation，`/boot` 只用了 109 MiB / 1022 MiB。
+原因是这 36 个里有 35 个跑在同一个 nixpkgs revision 上，
+**共用同一份 kernel + initrd**，`/boot` 里只存了两套。
+
+所以 `/boot` 的压力来源不是「rebuild 得频繁」，而是
+**「`nix flake update` 得频繁」** —— 每换一次内核才多一套约 50–60 MiB 的
+kernel + initrd。如果哪天 `df -h /boot` 逼近满，先看
+`nixos-rebuild list-generations` 里有多少个不同的内核版本。
+
+### 清理时的注意事项
+
+- **删掉的 generation 无法恢复。** 回滚只能回到还存在的那些，
+  所以至少留一个**已知能正常开机**的 generation，别无脑 `-d`。
+- **GC 不会删当前系统**，也不会删任何还被引用的路径，
+  所以正常使用下不存在「清着清着把系统清坏」的风险。
+- `nix-collect-garbage` 之后**一定要做第 2 步**，否则引导菜单和实际状态不符。
+- `/boot` 挂载参数是 `dmask=0077`，普通用户 `ls /boot` 会得到**空结果而不是报错**，
+  容易误判成「里面什么都没有」。要看内容得 `sudo ls`。
+
+---
+
 ## 其他注意事项
 
 1. **字体族名写错，fontconfig 完全静默回退。** 写完必须 `fc-match "族名"` 验证。
@@ -285,7 +414,8 @@ sudo chown -R toru:users .
 > - 新增、删除、重命名 `modules/` 下的模块
 > - 新增主机（`hosts/<新主机>/`）或调整 `hosts/` 的文件划分
 > - 改变 `modules/` 与 `hosts/` 的分界判据
-> - 改变重建命令、别名、或六步流程中的任何一步
+> - 改变重建命令、别名，或六步流程中的任何一步
+> - 改变清理 generation 的流程，或 `nix.gc` / `configurationLimit` 的设置
 > - 改变「什么时候需要重启」的结论
 >
 > 本文件与 [CLAUDE.md](CLAUDE.md) 有意重叠：

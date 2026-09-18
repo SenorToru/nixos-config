@@ -43,6 +43,7 @@ Toru 的 NixOS 多机配置仓库（flake，home-manager 作为 NixOS 模块）�
 - 新增主机（`hosts/<新主机>/`）或调整 `hosts/` 的文件划分
 - 改变 `modules/` 与 `hosts/` 的分界判据
 - 改变重建命令、别名，或六步流程中的任何一步
+- 改变清理 generation 的流程，或 `nix.gc` / `configurationLimit` 的设置
 - 改变「什么时候需要重启」的结论
 
 **两边描述同一件事时，改了一边就要改另一边**，不要让它们漂移。
