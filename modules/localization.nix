@@ -38,6 +38,40 @@
   };
 
   # ============================================
+  # 同一套字体再告诉 stylix 一次
+  # ============================================
+  # 为什么要重复一遍：上面的 fontconfig.defaultFonts 是**系统级的兜底**，
+  # 管的是「某个程序说它要 monospace 时，fontconfig 给它哪一个」。
+  # 而 stylix 是把族名**直接写进各程序自己的配置文件**
+  # （比如 ghostty 的 font-family = ...），走的不是 fontconfig 的解析。
+  # 两条路各管各的，不设 stylix.fonts 的话它会用自己的默认值
+  # DejaVu Sans Mono —— 那个字体**没有任何 CJK 覆盖**，
+  # 终端里的日文中文会变豆腐块。
+  #
+  # 放在这个文件而不是 modules/stylix.nix，是为了让 README 里
+  #「字体是全系统唯一的声明处」这句话继续成立。字体名散到两个文件
+  # 才是真正的隐患：改了一处忘了另一处，两边指向不同字体。
+  #
+  # 族名必须和上面完全一致，而且**必须 fc-match 验证**——
+  # 写错 fontconfig 不报错，只会静默回退（见 CLAUDE.md 坑 1）。
+  stylix.fonts = {
+    monospace = {
+      package = pkgs.sarasa-gothic;
+      name = "Sarasa Mono J";
+    };
+    sansSerif = {
+      package = pkgs.sarasa-gothic;
+      name = "Sarasa Gothic J";
+    };
+    serif = {
+      package = pkgs.noto-fonts-cjk-serif;
+      name = "Noto Serif CJK JP";
+    };
+    # emoji 保持 stylix 默认的 noto-fonts-color-emoji，
+    # 本机原本就没有单独指定过 emoji 字体。
+  };
+
+  # ============================================
   # 输入法 (fcitx5)
   # ============================================
   i18n.inputMethod = {

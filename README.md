@@ -66,9 +66,9 @@
 | 文件 | 负责 |
 |------|------|
 | `common.nix` | Nix 设置与自动 GC、`allowUnfree`、时区与 locale、`nix-ld`、NetworkManager、基础 CLI 工具、fwupd |
-| `desktop.nix` | GDM + GNOME、蓝牙、PipeWire、打印 |
+| `desktop.nix` | GDM + GNOME、蓝牙、PipeWire、打印、默认终端（`xdg.terminal-exec` → Ghostty）、`nautilus-python`（让 Ghostty 自带的右键扩展能加载） |
 | `desktop-gnome.nix` | dconf 设置与 GNOME 扩展 |
-| `localization.nix` | 字体（全系统唯一的 `fonts` 声明处）与 fcitx5 输入法 |
+| `localization.nix` | 字体（全系统唯一的 `fonts` 声明处，含 `stylix.fonts`）与 fcitx5 输入法 |
 | `shell.nix` | 系统层 zsh、`PAGER`（**不含**用户名指派） |
 | `development.nix` | 编辑器与工具链、claude-code 版本覆写 overlay |
 | `browsers.nix` | Zen / Brave 与 chromium 扩展策略 |

@@ -325,6 +325,37 @@ in
   };
 
   # ============================================
+  # Ghostty —— 终端模拟器
+  # ============================================
+  # 换掉 GNOME 自带的 Console (kgx)。换的理由不是 kgx 不好用，
+  # 而是**它没法被统一配色**：stylix 的 106 个 target 里没有 kgx、
+  # gnome-console 或 gnome-terminal（那个叫 console 的 target 是
+  # 内核 TTY，不是 GNOME Console）。kgx 只有 auto/night/day/hacker
+  # 四个内置主题，自定义要走没有文档的 custom-liveries 字典。
+  #
+  # 终端的 16 色调色板决定了所有 CLI 工具实际显示成什么颜色，
+  # 所以它是配色统一里最不能将就的一环。
+  #
+  # 配色和字体全部由 stylix 注入（见下面的 targets.ghostty），
+  # 这里不写任何 theme / font-family，否则又是两处各说一遍。
+  #
+  # 桌面的「在终端中打开」指向哪个程序在 modules/desktop.nix，
+  # 那是 NixOS 级的 xdg.terminal-exec，不在这一层。
+  programs.ghostty = {
+    enable = true;
+
+    settings = {
+      # 保留一屏以上的回滚历史。ghostty 默认是 10000，
+      # 和之前 kgx 的 scrollback-lines 对齐，换终端不丢习惯。
+      scrollback-limit = 10000000;
+
+      # 关掉关闭确认弹窗。这台机器上终端开关很频繁，
+      # 每次都要确认一下很碍事。
+      confirm-close-surface = false;
+    };
+  };
+
+  # ============================================
   # Stylix：哪些用户程序交给它着色
   # ============================================
   # 调色板本身（base16 方案、polarity、壁纸）在 modules/stylix.nix，
@@ -343,6 +374,20 @@ in
     btop.enable = true;
     lazygit.enable = true;
     vivid.enable = true;
+
+    # ghostty 这一个和上面几个性质不同，值得单说：
+    # 它注入的是**完整的 16 色 ANSI 调色板**（palette 0-15）。
+    #
+    # 这才是真正让配色统一的那一环。bat / starship / zsh 这些 CLI
+    # 工具输出的都是 ANSI 色号（fg=red 就是 color1），色号最终渲染成
+    # 什么 RGB 由终端的调色板决定。终端调色板不对的话，上面那些
+    # target 就成了「用一个别的调色板去显示 gruvbox 的色号」，
+    # 统一是假的。
+    #
+    # 顺带：这个 target 还会读 stylix.fonts.monospace 去设
+    # ghostty 的 font-family，所以字体也在这一步被连带接管了，
+    # 见 modules/localization.nix。
+    ghostty.enable = true;
   };
 
   # 注：firefox 的 target 刻意**不**在这一阶段开。
