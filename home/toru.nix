@@ -554,6 +554,14 @@ in
     # 配色不受影响：Neovide 渲染的就是 Neovim 的颜色，
     # 上面 neovim.enable 那条已经覆盖，这里丢掉的只有字体和不透明度。
 
+    # vscode：生成一套名为 Stylix 的主题扩展（以
+    # ~/.vscode/extensions/stylix.stylix 的形式链进去），并把
+    # workbench.colorTheme 设成它；同时用 stylix.fonts 设编辑器、
+    # 终端、markdown 预览等一系列字体和字号。
+    #
+    # 前提是上面的 programs.vscode 声明 —— 裸包它管不到。
+    vscode.enable = true;
+
     # qt 刻意**不开**。理由是实测下来性价比为负：
     #
     # platform 这个选项会从 NixOS 层透传过来（它是少数几个在透传清单里的
@@ -652,6 +660,64 @@ in
   # 配色不用在这里管：Neovide 渲染的就是 Neovim 的颜色，
   # 上面 stylix.targets.neovim 已经覆盖。这里 stylix 只注入字体和不透明度。
   programs.neovide.enable = true;
+
+  # ============================================
+  # VSCode
+  # ============================================
+  # 从 modules/development.nix 的 systemPackages 挪过来。必须挪：
+  # stylix 的 vscode target 是往 programs.vscode.profiles.<名字> 写
+  # 主题扩展和 userSettings 的，裸包它管不到（和 neovide 同一个道理）。
+  #
+  # 扩展不会丢，这一点确认过实现再动手的：
+  #   mutableExtensionsDir 的默认值是「只用 default profile 时为 true」，
+  #   而这里只用 default。在这个分支下 home-manager 是把声明的扩展
+  #   **逐个符号链接**进 ~/.vscode/extensions/<id>，不替换整个目录，
+  #   所以手动装的那几个（claude-code / nix-ide / nixfmt-vscode /
+  #   markdown-preview-enhanced）原样保留，stylix 的主题只是多出来一个
+  #   ~/.vscode/extensions/stylix.stylix。
+  #
+  # **需要知道的行为变化：settings.json 从此是指向 store 的只读符号链接。**
+  # VSCode 图形界面里改设置将无法保存，要改就改下面这段再 rebuild。
+  # 这和本仓库其它部分的做法一致，但 VSCode 是唯一一个平时会顺手在 GUI
+  # 里改配置的程序，所以单独点出来。
+  # 原来那份会被备份成 settings.json.hm-bak（backupFileExtension，见 000B）。
+  programs.vscode = {
+    enable = true;
+
+    # 下面这些键是从原来的 ~/.config/Code/User/settings.json 逐条搬过来的，
+    # 值一个没改。原文件里的注释也一并搬成了 Nix 注释 ——
+    # 生成的 JSON 不能带注释，留在这里反而比原来更该待的地方。
+    profiles.default.userSettings = {
+      "[nix]" = {
+        "editor.defaultFormatter" = "jnoortheen.nix-ide";
+        "editor.formatOnSave" = true;
+      };
+
+      "explorer.confirmDelete" = false;
+      "explorer.confirmDragAndDrop" = false;
+
+      "chat.tools.terminal.autoApprove" = {
+        nix = true;
+      };
+
+      "markdown-preview-enhanced.previewTheme" = "newsprint.css";
+      "markdown-preview-enhanced.codeBlockTheme" = "auto.css";
+      "markdown-preview-enhanced.revealjsTheme" = "solarized.css";
+
+      "claudeCode.preferredLocation" = "panel";
+
+      # Claude Code：用 Ctrl+Enter 发送指令，Enter 改为插入换行
+      "claudeCode.useCtrlEnterToSend" = true;
+
+      # 聊天面板正文字号（VSCode 默认 13，范围 6-100）。
+      # 这一个键同时作用于 Claude Code 面板和内置的 GitHub Copilot Chat。
+      #
+      # 注意它和 stylix 注入的字号是两回事，不冲突：
+      # stylix 设的是 editor.fontSize / terminal.integrated.fontSize 等，
+      # 都取自 stylix.fonts.sizes.terminal，没有 chat.fontSize 这一个键。
+      "chat.fontSize" = 16;
+    };
+  };
 
   programs.neovim = {
     enable = true;

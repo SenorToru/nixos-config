@@ -51,7 +51,6 @@
   ];
 
   environment.systemPackages = with pkgs; [
-    vscode
     nil
     nixfmt
     nodejs_24
@@ -79,9 +78,16 @@
   #
   # viAlias / vimAlias / defaultEditor 现已统一在 home/toru.nix 里设置。
   #
-  # **neovide 同理，也已经从上面的 systemPackages 移走。**
-  # 它现在由 home/toru.nix 的 programs.neovide 声明 —— 那是 stylix 的
-  # neovide target 写字体配置的前提。两边各装一份的话同样会得到两个
-  # neovide 派生，只有 home-manager 那份能读到 stylix 生成的
-  # ~/.config/neovide/config.toml。
+  # **neovide 和 vscode 同理，也已经从上面的 systemPackages 移走。**
+  #
+  #   neovide  现由 home/toru.nix 的 programs.neovide 声明。
+  #   vscode   现由 home/toru.nix 的 programs.vscode 声明 —— 那是
+  #            stylix 的 vscode target 写主题扩展和 userSettings 的前提，
+  #            裸包它管不到。
+  #
+  # 两边各装一份的话，Nix 不报冲突但会得到两个派生，
+  # 而只有 home-manager 那份能读到 stylix 生成的配置。
+  #
+  # 判断规则：**凡是要被 stylix（或任何 home-manager 模块）接管配置的
+  # 程序，都必须由 home 层声明，不能留在这里当裸包。**
 }
