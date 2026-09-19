@@ -62,11 +62,203 @@ let
     gd = "git diff";
     gl = "git log --oneline --graph --decorate -20";
   };
+
+  # ============================================
+  # 多主题：home-manager specialisation
+  # ============================================
+  # 目标是 Omarchy 那种「随时换整套配色」。stylix 本身是**构建期**着色，
+  # 没有运行时切换的概念，所以这里用 Nix 原生的等价物：
+  # 每套主题预先构建成一个 home-manager specialisation，
+  # 切换时跑它的 activate 脚本。
+  #
+  # 为什么这条路走得通（是查了实现确认的，不是想当然）：
+  # stylix 的 homeManagerIntegration 把系统层的调色板设置以
+  # **lib.mkDefault** 的优先级灌进 home 层
+  # （stylix/home-manager-integration.nix:18），所以 specialisation 里
+  # 一条普通赋值就能干净地盖掉它。
+  #
+  # 为什么用 home 层而不是 NixOS 层的 specialisation：
+  #   1. 不需要 sudo，不改系统状态。
+  #   2. **不污染引导菜单。** NixOS specialisation 会给每个 generation
+  #      每套主题各生成一个引导项，20 个 generation × N 套主题，
+  #      直接打穿 hosts/thinkpad/default.nix 里 configurationLimit = 20
+  #      那条限制。
+  #   3. 日常看得见的东西全在 home 层：ghostty、bat、starship、
+  #      neovim、gtk、gnome(dconf)、vscode、zsh 配色。
+  #      切不到的只有 console(TTY) / plymouth / grub，
+  #      那三个本来也没开。
+  #
+  # 已知代价：home-manager 官方把 specialisation 标为 experimental，
+  # 原文是 "the activation process may change in backwards incompatible
+  # ways"。升级 home-manager 时要留意这一块。
+
+  # 壁纸按明暗配对。两张都是 NixOS 官方那套雪花几何，同一个图形的
+  # 深浅两版，所以换主题时观感是连续的，不会突然变成另一张图。
+  # 选它们的理由仍然是「近乎单色」—— 要频繁切主题，
+  # 强色调的壁纸会跟一半的主题打架。
+  wallpapers = {
+    dark = "${pkgs.nixos-artwork.wallpapers.nineish-dark-gray}/share/backgrounds/nixos/nix-wallpaper-nineish-dark-gray.png";
+    light = "${pkgs.nixos-artwork.wallpapers.nineish}/share/backgrounds/nixos/nix-wallpaper-nineish.png";
+  };
+
+  # base16Scheme 和 polarity **必须成对**出现，理由见 modules/stylix.nix：
+  # polarity 默认值 "either" 不等于 "dark"，GNOME 会落到亮色界面，
+  # 结果是深色终端配亮色窗口的错配。这里用一个函数生成，
+  # 从结构上保证不会漏掉其中一个。
+  mkTheme =
+    { scheme, polarity }:
+    {
+      configuration = {
+        stylix.base16Scheme = "${pkgs.base16-schemes}/share/themes/${scheme}.yaml";
+        stylix.polarity = polarity;
+        stylix.image = wallpapers.${polarity};
+      };
+    };
+
+  # 主题清单。**基础主题 gruvbox-dark-hard 不在这里** ——
+  # 它是 modules/stylix.nix 里的默认值，切回它用 `theme default`。
+  #
+  # 这是阶段 7a 的试水规模（3 个 specialisation + 基础 = 4 套），
+  # 先拿它实测每次 rebuild 多花多少时间，再决定扩到 10 还是 20 套。
+  # 扩容只需要往这张表里加行，下面的生成逻辑不用动。
+  themes = {
+    gruvbox-light = {
+      scheme = "gruvbox-light-hard";
+      polarity = "light";
+    };
+    catppuccin-mocha = {
+      scheme = "catppuccin-mocha";
+      polarity = "dark";
+    };
+    catppuccin-latte = {
+      scheme = "catppuccin-latte";
+      polarity = "light";
+    };
+  };
+  # theme 命令的实现，见下面 home.packages 处的说明。
+  themeSwitcher = pkgs.writeShellApplication {
+    name = "theme";
+    runtimeInputs = [ pkgs.fzf ];
+    text = ''
+      # ============================================
+      # 基础 generation 从 systemd 单元里取，不从 gcroots 取
+      # ============================================
+      # 这一点踩过坑，不是随便选的来源。
+      #
+      # ~/.local/state/home-manager/gcroots/current-home 指向的是
+      # **当前激活的** generation。切到某套主题之后，它就指向那个
+      # specialisation 自己的 generation —— 而 specialisation **不嵌套**
+      # （home-manager 在 modules/misc/specialisation.nix 里写了
+      # specialisation = lib.mkOverride 0 { } 来防止无限递归），
+      # 那个 generation 底下没有 specialisation 目录。
+      #
+      # 结果就是：切过去之后 theme list 只剩 default，
+      # theme default 跑的是当前主题自己的 activate（切不回去），
+      # 指名切别的主题则报「没有这套主题」—— 一去不复返。
+      #
+      # systemd 单元里记的始终是 nixos-rebuild switch 装上的那个
+      # **基础** generation，跑 activate 不会改它，所以拿它当锚点。
+      unit="/etc/systemd/system/home-manager-$USER.service"
+
+      if [ ! -e "$unit" ]; then
+        echo "找不到 home-manager 的 systemd 单元: $unit" >&2
+        echo "先跑一次 nixos-rebuild switch。" >&2
+        exit 1
+      fi
+
+      base=$(grep -oE '/nix/store/[a-z0-9]+-home-manager-generation' "$unit" | head -1)
+
+      if [ -z "$base" ] || [ ! -d "$base" ]; then
+        echo "从单元里解析不出基础 generation。" >&2
+        exit 1
+      fi
+
+      # 当前激活的是哪一套，用来在列表里打标记
+      current_gen=$(readlink -f "$HOME/.local/state/home-manager/gcroots/current-home" 2>/dev/null || echo "")
+      current_name="?"
+      if [ "$current_gen" = "$(readlink -f "$base")" ]; then
+        current_name="default"
+      elif [ -d "$base/specialisation" ]; then
+        for s in "$base"/specialisation/*; do
+          if [ "$(readlink -f "$s")" = "$current_gen" ]; then
+            current_name=$(basename "$s")
+            break
+          fi
+        done
+      fi
+
+      list_themes() {
+        echo "default"
+        if [ -d "$base/specialisation" ]; then
+          find "$base/specialisation" -maxdepth 1 -mindepth 1 -printf '%f\n' | sort
+        fi
+      }
+
+      case "''${1-}" in
+        list|-l|--list)
+          list_themes | sed "s/^$current_name\$/& (当前)/"
+          exit 0
+          ;;
+        "")
+          target=$(list_themes | sed "s/^$current_name\$/& (当前)/" \
+            | fzf --prompt='主题> ' --height=40% --layout=reverse --border \
+            | sed 's/ (当前)$//') || exit 0
+          ;;
+        *)
+          target="$1"
+          ;;
+      esac
+
+      [ -z "$target" ] && exit 0
+
+      if [ "$target" = "default" ]; then
+        script="$base/activate"
+      else
+        script="$base/specialisation/$target/activate"
+      fi
+
+      if [ ! -x "$script" ]; then
+        echo "没有这套主题: $target" >&2
+        echo "可用的：" >&2
+        list_themes | sed 's/^/  /' >&2
+        exit 1
+      fi
+
+      "$script"
+      echo
+      echo "已切到主题: $target"
+      echo "已经开着的 GTK / GNOME 程序可能要重开才会完全跟上。"
+    '';
+  };
 in
 {
   home.username = "toru";
   home.homeDirectory = "/home/toru";
   home.stateVersion = "26.05";
+
+  # 每套主题生成一个 specialisation，见上面 let 里的说明。
+  specialisation = lib.mapAttrs (_name: mkTheme) themes;
+
+  # ============================================
+  # theme —— 主题切换命令
+  # ============================================
+  # 做成 PATH 上的**真二进制**而不是 shell 函数或别名。
+  # 这是 CLAUDE.md「Shell 环境」那一节的硬规则：别名只存在于交互 shell，
+  # 脚本和 AI 跑 `zsh -c 'theme ...'` 会直接 command not found。
+  #
+  # 切换靠跑 specialisation 自己的 activate 脚本。那个路径是稳定的：
+  #   ~/.local/state/home-manager/gcroots/current-home
+  # 是 home-manager 维护的、指向当前 generation 的符号链接。
+  #
+  # 注意两件事：
+  #   1. 跑 activate 会**新建一个 home-manager generation**，这是
+  #      home-manager 官方文档里就这么说的正常行为，不是副作用。
+  #   2. 下一次 nixos-rebuild switch 会把主题**重置回基础主题**。
+  #      因为 switch 激活的是基础 generation，而 specialisation 是
+  #      挂在它下面的分支。想长期换主题就改 modules/stylix.nix 里的
+  #      base16Scheme，而不是靠这个命令。
+  #
+  # 实现见文件开头 let 里的 themeSwitcher，包在下面的 home.packages 里。
 
   # ============================================
   # Firefox（系统默认浏览器）
@@ -639,6 +831,10 @@ in
   home.packages = with pkgs; [
     dua # 交互式磁盘占用分析（Omarchy 4 的默认选择）
     duf # 挂载点/剩余空间一览
+
+    # 主题切换命令。定义在文件开头的 let 里，
+    # 说明见上面「theme —— 主题切换命令」那一段。
+    themeSwitcher
   ];
 
   # ============================================
