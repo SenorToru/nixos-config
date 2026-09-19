@@ -163,6 +163,100 @@ in
         "brackets"
         "cursor"
       ];
+
+      # ============================================
+      # 配色：手写，因为 stylix 没有这个 target
+      # ============================================
+      # stylix 的 106 个 target 里没有 zsh 也没有 zsh-syntax-highlighting，
+      # 所以这一份要自己写。但这不是绕开 stylix ——
+      # 颜色全部取自 config.lib.stylix.colors，改 base16 方案时
+      # 这里自动跟着变，单一真相仍然成立。
+      #
+      # 顺带说明：stylix 自己那 106 个 target 内部就是这种「把 base16
+      # 色号映射到各程序配置键」的表，比如 fish 那个 target 总共才十行。
+      # 所以手写这一份和 stylix 做的事是同构的，只是写在本仓库里。
+      #
+      # 为什么值得写（终端调色板已经是 gruvbox 了，不写也不会太离谱）：
+      #
+      #   1. comment 的插件默认值是 fg=black,bold，而 gruvbox 的
+      #      color0 正是背景色 #1d2021 本身 —— 注释可能直接看不见。
+      #      改成 base03 才有对比度。这一条是真 bug 级的。
+      #   2. ANSI 只有 16 色，表达不了 base09（橙）和 base0F（棕）。
+      #      写死 hex 才能用满整套 base16。
+      #   3. 从别的机器 ssh 过来、或者掉进 TTY 时，终端调色板不是
+      #      gruvbox，只有写死 hex 才还是这套颜色。
+      #
+      # 本机 COLORTERM=truecolor，fg=#RRGGBB 这种真彩色写法可用。
+      #
+      # 没列出的 key 保持插件默认值，不是遗漏 —— 那些要么很少出现，
+      # 要么默认值本来就合理。
+      styles =
+        let
+          c = config.lib.stylix.colors;
+        in
+        {
+          # --- 出错：最该一眼看见的 ---
+          unknown-token = "fg=#${c.base08},bold"; # 命令不存在
+          bracket-error = "fg=#${c.base08},bold"; # 括号不配对
+
+          # --- 能跑的东西：统一用绿，和「出错的红」成对 ---
+          command = "fg=#${c.base0B}";
+          hashed-command = "fg=#${c.base0B}";
+          alias = "fg=#${c.base0B}";
+          suffix-alias = "fg=#${c.base0B},underline";
+          global-alias = "fg=#${c.base0B}";
+          precommand = "fg=#${c.base0B},underline"; # sudo / command / nohup
+          autodirectory = "fg=#${c.base0B},underline";
+          arg0 = "fg=#${c.base0B}";
+
+          # --- shell 自己的东西：用蓝，和外部命令区分开 ---
+          builtin = "fg=#${c.base0D}";
+          function = "fg=#${c.base0D}";
+          reserved-word = "fg=#${c.base0E}"; # if / for / while，base16 里紫是关键字
+
+          # --- 字符串：黄。刻意不用绿，否则和「能跑的命令」撞色 ---
+          single-quoted-argument = "fg=#${c.base0A}";
+          double-quoted-argument = "fg=#${c.base0A}";
+          dollar-quoted-argument = "fg=#${c.base0A}";
+          rc-quote = "fg=#${c.base0A}";
+
+          # --- 字符串里的插值/转义：青，从黄色底子里跳出来 ---
+          dollar-double-quoted-argument = "fg=#${c.base0C}";
+          back-double-quoted-argument = "fg=#${c.base0C}";
+          back-dollar-quoted-argument = "fg=#${c.base0C}";
+          globbing = "fg=#${c.base0C}"; # * ? [
+          history-expansion = "fg=#${c.base0C}"; # !
+
+          # --- 命令替换 / 进程替换的定界符：紫 ---
+          command-substitution-delimiter = "fg=#${c.base0E}";
+          process-substitution-delimiter = "fg=#${c.base0E}";
+          back-quoted-argument-delimiter = "fg=#${c.base0E}";
+
+          # --- 选项和重定向：橙。这是 ANSI 16 色给不了的那个颜色 ---
+          single-hyphen-option = "fg=#${c.base09}";
+          double-hyphen-option = "fg=#${c.base09}";
+          redirection = "fg=#${c.base09}";
+          named-fd = "fg=#${c.base09}";
+          numeric-fd = "fg=#${c.base09}";
+
+          # --- 其余 ---
+          path = "fg=#${c.base05},underline";
+          comment = "fg=#${c.base03}"; # 见上面第 1 条
+          assign = "fg=#${c.base05}";
+          default = "fg=#${c.base05}";
+
+          # --- brackets highlighter：按嵌套层级轮转，落单的用上面的红 ---
+          bracket-level-1 = "fg=#${c.base0D}";
+          bracket-level-2 = "fg=#${c.base0B}";
+          bracket-level-3 = "fg=#${c.base0E}";
+          bracket-level-4 = "fg=#${c.base0A}";
+          bracket-level-5 = "fg=#${c.base0C}";
+
+          # --- cursor highlighter：用反显而不是具体颜色，
+          #     这样任何 base16 方案下都一定看得见 ---
+          cursor = "standout";
+          cursor-matchingbracket = "standout";
+        };
     };
 
     # 这里刻意**没有** historySubstringSearch.enable。
