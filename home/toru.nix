@@ -101,17 +101,56 @@ let
     light = "${pkgs.nixos-artwork.wallpapers.nineish}/share/backgrounds/nixos/nix-wallpaper-nineish.png";
   };
 
+  # 光标也按明暗配对。stylix.cursor 本身是单一值（不像 icons 会按
+  # polarity 自动选），但它在 homeManagerIntegration 的透传清单里，
+  # 所以 specialisation 能覆盖 —— 在 mkTheme 里统一处理，
+  # 免得亮色主题配一个白光标（在浅色背景上几乎看不见）。
+  #
+  # 包和尺寸在 modules/stylix.nix 里设，这里只换名字。
+  cursors = {
+    dark = "Bibata-Modern-Ice"; # 白色，配深色背景
+    light = "Bibata-Modern-Classic"; # 黑色，配浅色背景
+  };
+
   # base16Scheme 和 polarity **必须成对**出现，理由见 modules/stylix.nix：
   # polarity 默认值 "either" 不等于 "dark"，GNOME 会落到亮色界面，
   # 结果是深色终端配亮色窗口的错配。这里用一个函数生成，
-  # 从结构上保证不会漏掉其中一个。
+  # 从结构上保证不会漏掉其中一个，顺带把壁纸和光标也一起配好。
+  #
+  # 调色板有两种给法，二选一：
+  #   scheme   base16-schemes 包里的方案文件名（现成的 19 套走这条）
+  #   palette  直接写一份 base16 属性集（手写的那两套走这条）
+  # stylix.base16Scheme 的类型是 path | lines | attrs，
+  # 属性集这条路实测可用。
   mkTheme =
-    { scheme, polarity }:
+    {
+      polarity,
+      scheme ? null,
+      palette ? null,
+    }:
     {
       configuration = {
-        stylix.base16Scheme = "${pkgs.base16-schemes}/share/themes/${scheme}.yaml";
+        stylix.base16Scheme =
+          if palette != null then
+            palette
+          else if scheme != null then
+            "${pkgs.base16-schemes}/share/themes/${scheme}.yaml"
+          else
+            throw "mkTheme: scheme 和 palette 必须给一个";
         stylix.polarity = polarity;
         stylix.image = wallpapers.${polarity};
+        # 只写 name 不行：stylix.cursor 是个 nullOr submodule，
+        # 在 specialisation 里只给一个子属性的话，package 和 size 会退回
+        # 它们各自的默认值 null，把透传进来的 mkDefault 顶掉，
+        # 于是 stylix/hm/cursor.nix 里 home.pointerCursor 拿到 null 包，
+        # 报 "cannot coerce null to a string"。（实测踩到过。）
+        #
+        # 所以整个 submodule 一起给，package 和 size 从外层 config 取 ——
+        # 那是 modules/stylix.nix 里设的那份，仍然只有一处真相。
+        stylix.cursor = {
+          inherit (config.stylix.cursor) package size;
+          name = cursors.${polarity};
+        };
       };
     };
 
@@ -173,7 +212,82 @@ let
       polarity = "dark";
     };
 
+    # ---------- 手写调色板：Cyberpunk 2077（暗） ----------
+    # base16-schemes 里没有现成的，自己配一份。
+    #
+    # 取色依据是游戏的视觉标识而不是随便挑霓虹色：
+    #   #fcee0a  那个标志性的酸性黄，游戏 UI、logo、义体高亮都用它
+    #   #00f0ff  夜之城的电子青
+    #   #ff003c  警示红/洋红，任务失败和敌对标记
+    #   #d300c5  霓虹紫，招牌和全息广告
+    # 背景取近黑但带一点蓝（#0b0d13）而不是纯黑，
+    # 纯黑在 OLED 以外的屏幕上反而显脏。
+    #
+    # 分配到 base16 的槽位时按本仓库 zsh 那套语义走
+    # （见 programs.zsh.syntaxHighlighting.styles 的注释）：
+    # 黄给字符串、绿给「能跑的命令」、青给插值、紫给关键字。
+    # 所以最抢眼的酸性黄落在 base0A，写字符串时最显眼。
+    #
+    # base03（注释）刻意用了偏亮的 #4b5878：霓虹配色容易把注释
+    # 压到看不见，这是 gruvbox 那个 fg=black 坑的同类问题。
+    cyberpunk-2077 = {
+      polarity = "dark";
+      palette = {
+        base00 = "0b0d13"; # 背景，近黑带蓝
+        base01 = "141824";
+        base02 = "1f2535"; # 选中
+        base03 = "4b5878"; # 注释，刻意提亮保证可读
+        base04 = "7d8aa8";
+        base05 = "c5d1e6"; # 正文，冷白
+        base06 = "e2eaf7";
+        base07 = "ffffff";
+        base08 = "ff003c"; # 警示红，报错
+        base09 = "ff6d1f"; # 霓虹橙，选项
+        base0A = "fcee0a"; # 标志性酸性黄，字符串
+        base0B = "00ff9f"; # 霓虹薄荷绿，命令
+        base0C = "00f0ff"; # 电子青，插值
+        base0D = "0a84ff"; # 电光蓝，内建
+        base0E = "d300c5"; # 霓虹紫，关键字
+        base0F = "ff5470";
+      };
+    };
+
     # ---------- 亮色（10 套） ----------
+
+    # ---------- 手写调色板：NieR: Automata（亮） ----------
+    # 游戏 UI 是一整套做旧的米色 + 暗橄榄字，几乎没有饱和色，
+    # 这也是它和其它亮色主题最不一样的地方 —— 别的亮色主题背景
+    # 都偏白偏冷，这套是暖米色。
+    #
+    #   #d1cdbe  主背景，泛黄的米色（游戏菜单底色）
+    #   #4e4a3f  正文，暗橄榄褐（游戏里的字色）
+    #   #a24b42  唯一比较跳的颜色，对应游戏里的警示红
+    # 其余强调色全部压低饱和度，保持那种褪色、风化的观感。
+    #
+    # 注意它不是「把暗色反过来」：低饱和度是刻意的，
+    # 如果按常规亮色主题的做法给足饱和度，就不像 NieR 了。
+    nier-automata = {
+      polarity = "light";
+      palette = {
+        base00 = "d1cdbe"; # 背景，做旧米色
+        base01 = "c7c2b1";
+        base02 = "b9b3a0"; # 选中
+        base03 = "8b8676"; # 注释
+        base04 = "6d6857";
+        base05 = "4e4a3f"; # 正文，暗橄榄褐
+        base06 = "3a3730";
+        base07 = "2a2823";
+        base08 = "a24b42"; # 警示红，报错
+        base09 = "b1763c"; # 陶土橙，选项
+        base0A = "977a2e"; # 暗金，字符串
+        base0B = "68764a"; # 橄榄绿，命令
+        base0C = "4d7a70"; # 灰青，插值
+        base0D = "5a6d88"; # 石板蓝，内建
+        base0E = "7c5f7e"; # 灰紫，关键字
+        base0F = "8a6a48";
+      };
+    };
+
     gruvbox-light = {
       scheme = "gruvbox-light-hard";
       polarity = "light";

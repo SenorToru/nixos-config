@@ -57,6 +57,52 @@
   stylix.image = "${pkgs.nixos-artwork.wallpapers.nineish-dark-gray}/share/backgrounds/nixos/nix-wallpaper-nineish-dark-gray.png";
 
   # ============================================
+  # 光标
+  # ============================================
+  # stylix.cursor 是「全有或全无」的：name / package / size 三项
+  # 要么都不设，要么都设，只设一部分会被它自己的 assertion 拦下。
+  #
+  # 应用它的有两处，**分属不同层**：
+  #   stylix/hm/cursor.nix   → home.pointerCursor，管用户会话
+  #   modules/gnome/nixos.nix → GDM 的 dconf 库，管登录界面
+  # 所以这里设一次，登录界面和桌面都能覆盖到。
+  #
+  # 这里的 name 是**基础主题（暗色）**用的白色光标。
+  # 亮色主题会在 home/toru.nix 的 mkTheme 里换成黑色那版 ——
+  # stylix.cursor 在 homeManagerIntegration 的透传清单里，
+  # 所以 specialisation 能覆盖它。
+  #
+  # Bibata-Modern-Ice 是包里的真实主题名，和字体族名一样
+  # 写错了不会报错只会静默回退，已 ls 包内目录确认过。
+  # 换别的光标：phinger-cursors、capitaine-cursors 都在 nixpkgs 里。
+  stylix.cursor = {
+    package = pkgs.bibata-cursors;
+    name = "Bibata-Modern-Ice";
+    size = 24; # GNOME 的默认值
+  };
+
+  # ============================================
+  # 图标
+  # ============================================
+  # 这个不用手动配对明暗 —— stylix/hm/icons.nix 会按 polarity
+  # 在 dark / light 之间自己选，所以换主题时图标自动跟着切。
+  #
+  # 主题名同样是包内的真实名字（Papirus-Dark / Papirus-Light），
+  # 已 ls 确认。
+  #
+  # 代价要说清楚：papirus-icon-theme 的闭包有 **1.0 GiB**，
+  # 是本仓库里最大的单个包之一。它胜在有成套的明暗两版，
+  # 这正是 20 套主题需要的。
+  # 嫌大的话 adwaita-icon-theme（GNOME 自带，已经装了）也能用，
+  # 但它没有分开的明暗变体，换亮色主题时图标不会跟着变。
+  stylix.icons = {
+    enable = true;
+    package = pkgs.papirus-icon-theme;
+    dark = "Papirus-Dark";
+    light = "Papirus-Light";
+  };
+
+  # ============================================
   # 逐个白名单启用，不用「默认全开」
   # ============================================
   # autoEnable 默认是 true，会去接管它认识的**所有**已启用程序，
