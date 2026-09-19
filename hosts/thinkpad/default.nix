@@ -20,8 +20,15 @@
     ../../modules/apps.nix
     ../../modules/browsers.nix
     ../../modules/shell.nix
+    ../../modules/stylix.nix
 
     inputs.home-manager.nixosModules.home-manager
+
+    # Stylix 的 NixOS 模块。它会通过 stylix.homeManagerIntegration.autoImport
+    # （默认开）自动把配色传给 home-manager.users.* 那一份，
+    # 所以 home/toru.nix 里**不需要**再单独 import 一次。
+    # 必须排在 home-manager 模块之后。
+    inputs.stylix.nixosModules.stylix
   ];
 
   # ThinkPad 主机名

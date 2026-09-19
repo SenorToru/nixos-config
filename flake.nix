@@ -7,6 +7,13 @@
     home-manager.url = "github:nix-community/home-manager/release-26.05";
     home-manager.inputs.nixpkgs.follows = "nixpkgs";
 
+    # Stylix —— 全局配色框架，配置见 modules/stylix.nix。
+    # 必须跟 release-26.05 这个发布分支，和上面的 nixpkgs / home-manager 对齐。
+    # 跟 master 的话它是按 nixpkgs unstable 开发的，选项和这里 pin 的 26.05
+    # 会错位，出问题时很难判断是配置写错还是版本不匹配。
+    stylix.url = "github:danth/stylix/release-26.05";
+    stylix.inputs.nixpkgs.follows = "nixpkgs";
+
     # 原生 Zen Browser Flake 源
     zen-browser.url = "github:youwen5/zen-browser-flake";
     # optional, but recommended if you closely follow NixOS unstable so it shares

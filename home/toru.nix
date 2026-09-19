@@ -299,13 +299,57 @@ in
   programs.bat = {
     enable = true;
     config = {
-      theme = "gruvbox-dark"; # 和 Neovim 的 gruvbox 主题对齐
+      # 这里刻意**没有** theme。配色由 stylix 统一注入（它会生成一套
+      # 名为 base16-stylix 的 tmTheme 并设成默认），见 modules/stylix.nix。
+      #
+      # 原先这里写的是 theme = "gruvbox-dark"，和 stylix 的
+      # config.theme = "base16-stylix" 都是普通赋值，两条同时存在
+      # Nix 会直接报 conflicting definition values，不是静默取其一。
       style = "numbers,changes";
     };
   };
 
   programs.btop.enable = true;
   programs.lazygit.enable = true;
+
+  # vivid 生成 LS_COLORS，让 eza 的文件着色也走 stylix 那套配色。
+  # 主题名由 modules/stylix.nix 的 vivid target 注入，这里只管开关。
+  #
+  # shell 集成的实现是在 rc 里跑一次 export LS_COLORS="$(vivid generate ...)"，
+  # 也就是每开一个终端多一次子进程。实测单次 < 10 ms，可以接受
+  # （对比：zsh 的 compinit 是几百毫秒，那个才值得专门关掉）。
+  programs.vivid = {
+    enable = true;
+    enableZshIntegration = true;
+    enableBashIntegration = true;
+  };
+
+  # ============================================
+  # Stylix：哪些用户程序交给它着色
+  # ============================================
+  # 调色板本身（base16 方案、polarity、壁纸）在 modules/stylix.nix，
+  # 会自动透传到这一层，所以这里**只写开关**，不重复写颜色。
+  #
+  # 这些 target 都是 home-manager 级的实现，必须写在这里；
+  # 写进 modules/stylix.nix 会报 option does not exist。
+  #
+  # 这一批的共同点：程序本身上面已经用 programs.* 声明过，而且 stylix
+  # 接管的只有配色，不碰任何行为选项，所以是纯增量、零冲突。
+  stylix.targets = {
+    bat.enable = true;
+    starship.enable = true;
+    fzf.enable = true;
+    tmux.enable = true;
+    btop.enable = true;
+    lazygit.enable = true;
+    vivid.enable = true;
+  };
+
+  # 注：firefox 的 target 刻意**不**在这一阶段开。
+  # 它要求 stylix.targets.firefox.profileNames 指定 profile 名，
+  # 而一旦指定，home-manager 就会接管那个 Firefox profile 的 settings，
+  # 有覆盖现有浏览器配置的风险 —— 这不属于「零冲突」，留到后面单独处理。
+  # 不设 profileNames 时 stylix 只会发一条 warning，不会报错。
 
   programs.tmux = {
     enable = true;
