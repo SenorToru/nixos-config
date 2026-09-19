@@ -429,6 +429,37 @@ in
     # 不用手动往 desktop-gnome.nix 的扩展列表里加 user-themes。
     gnome.enable = true;
 
+    # neovim：往 programs.neovim.plugins 加一个 Nix 管理的 mini.nvim，
+    # 并在 init.lua 末尾调 require('mini.base16').setup({palette = ...})
+    # 注入这套 base16 调色板。
+    #
+    # 和 lazy.nvim 的关系已经实测确认过，不冲突：
+    # xdg.configFile."nvim/init.lua".text 的类型是 types.lines，
+    # 多个定义**按行拼接**而不是报冲突，stylix 那段落在
+    # require("config.lazy") 之后，所以它最后生效。
+    neovim.enable = true;
+
+    # neovide 的 target 刻意**不开**，这不是嫌麻烦，是踩过之后的决定。
+    #
+    # 它唯一做的事就是把字体写进 ~/.config/neovide/config.toml：
+    #     [font]
+    #     normal = ["Sarasa Mono J"]
+    #     size = 12
+    #
+    # 开了之后 Neovide 会**间歇性地永远起不来**：进程在，窗口不出，
+    # 一个 CPU 核跑满 99.5%，内存平在 187MB 不涨（说明是死循环不是慢计算）。
+    # journal 里留下过 13 分 21 秒和 19 分 7 秒两条满载记录，
+    # 而同一次启动里另一个实例只用了 19 秒就正常了 —— 所以是竞态，
+    # 不是每次必现。用回退前的构建 + 只手工放这份 config.toml
+    # 也能复现（实测转满 150 秒无进展），确认了变量就是它。
+    #
+    # 因为复现不稳定，没法证明「改个写法就好了」，所以直接绕开这条路径：
+    # 下面 init.lua 里用 vim.opt.guifont 设字体。那是本机用了几个月
+    # 的老办法，从没出过这个问题。
+    #
+    # 配色不受影响：Neovide 渲染的就是 Neovim 的颜色，
+    # 上面 neovim.enable 那条已经覆盖，这里丢掉的只有字体和不透明度。
+
     # qt 刻意**不开**。理由是实测下来性价比为负：
     #
     # platform 这个选项会从 NixOS 层透传过来（它是少数几个在透传清单里的
@@ -516,6 +547,18 @@ in
   #       曾经还有一份系统级 programs.neovim，导致 vim / vi 指向另一个不带
   #       extraPackages 的 neovim，Copilot 在那个 neovim 下必然离线。
   #       别再把 programs.neovim 加回 development.nix。
+  # Neovide —— Neovim 的图形前端。
+  #
+  # 从 modules/development.nix 的 systemPackages 挪到这里，理由是坑 3：
+  # stylix 的 neovide target 是往 programs.neovide.settings 写配置的，
+  # 要用它就必须有这个 home-manager 声明；而如果系统层再装一份裸包，
+  # Nix 不报冲突但会装出两个 neovide，PATH 上谁赢取决于顺序 ——
+  # 和当初 nvim / vim 指向两个不同派生是同一类问题。
+  #
+  # 配色不用在这里管：Neovide 渲染的就是 Neovim 的颜色，
+  # 上面 stylix.targets.neovim 已经覆盖。这里 stylix 只注入字体和不透明度。
+  programs.neovide.enable = true;
+
   programs.neovim = {
     enable = true;
 
@@ -575,10 +618,16 @@ in
         vim.opt.signcolumn = "yes"
 
         -- Neovide 特定配置
+        --
+        -- 字体走 guifont 而**不是** Neovide 自己的 config.toml。
+        -- 后者会让 Neovide 间歇性死循环（起不来、一个核 99.5%），
+        -- 详见上面 stylix.targets 里 neovide 那段的记录。
+        --
+        -- 但族名和字号不是手写死的，是从 stylix 的字体设置插值进来的，
+        -- 所以仍然只有一处真相：改 modules/localization.nix 里的
+        -- stylix.fonts.monospace，这里自动跟着变。
         if vim.g.neovide then
-          -- 使用 Sarasa Mono J (日文编程字体，支持中日韩)
-          -- 字体名必须与系统安装的字体名完全匹配
-          vim.opt.guifont = "Sarasa Mono J:h12"
+          vim.opt.guifont = "${config.stylix.fonts.monospace.name}:h${toString config.stylix.fonts.sizes.terminal}"
           vim.g.neovide_cursor_animation_length = 0.13
           vim.g.neovide_cursor_trail_size = 0.8
         end
@@ -613,6 +662,42 @@ in
           },
           -- 禁用启动时的更新检查提示，避免交互式提示
           checker = { enabled = false },
+
+          performance = {
+            -- **这一项不能省，而且容易设错。**
+            --
+            -- home-manager 装 programs.neovim.plugins 里的插件时，不走
+            -- wrapper 参数，而是把它们链到
+            --     ~/.local/share/nvim/site/pack/hm/start/<插件>
+            -- 靠 packpath 默认包含 $XDG_DATA_HOME/nvim/site 被找到。
+            --
+            -- 而 lazy.nvim 默认 reset_packpath = true，启动时直接
+            --     vim.go.packpath = vim.env.VIMRUNTIME
+            -- （见 lazy.nvim 的 lua/lazy/core/config.lua:295）
+            -- 一句话把整个 packpath 清成只剩 runtime 自己，
+            -- 于是 **Nix 装的插件全部消失**。症状是启动时报
+            --     E5113: module 'mini.base16' not found
+            -- 而那个文件明明存在于上面那个路径下。
+            --
+            -- mini.base16 是 stylix 的 neovim target 注入配色用的
+            -- （它往 programs.neovim.plugins 加 Nix 管理的 mini.nvim，
+            -- 再在 init.lua 末尾 require 它）。lazy 在第 33 行清掉
+            -- packpath，stylix 的 require 在第 41 行，正好被打掉。
+            --
+            -- 注意**不是** performance.rtp.reset。那是另一个独立开关，
+            -- 只管 runtimepath。实测四种组合：
+            --     默认                        失败
+            --     rtp.reset = false           仍然失败
+            --     reset_packpath = false      成功
+            --     两个都关                    成功
+            -- 所以这里只关 reset_packpath，rtp.reset 保持默认的 true，
+            -- 它那部分启动优化没必要一起丢掉。
+            --
+            -- 这是通用规则，不只为 mini.base16：**只要这个仓库用
+            -- lazy.nvim，任何经 programs.neovim.plugins 装的插件都需要
+            -- 它**。以后再加 Nix 管理的插件不用重新踩一遍。
+            reset_packpath = false,
+          },
 
           git = {
             -- 默认 120 秒。本机上行/下行都很慢（实测 ~80 KiB/s），
@@ -859,7 +944,12 @@ in
             config = function()
               require("lualine").setup({
                 options = {
-                  theme = "gruvbox",
+                  -- "auto" 会从**当前生效的配色方案**推导状态栏配色。
+                  -- 原先写死的 "gruvbox" 对应的是 gruvbox.nvim 插件自带的
+                  -- lualine 主题，那个插件已经移除（配色改由 stylix 注入），
+                  -- 继续写死会得到一条和正文配色对不上的状态栏。
+                  -- 用 auto 之后，将来换 base16 方案状态栏自动跟着变。
+                  theme = "auto",
                   icons_enabled = true,
                 },
                 sections = {
@@ -873,13 +963,17 @@ in
               })
             end,
           },
-          {
-            "ellisonleao/gruvbox.nvim",
-            priority = 1000,
-            config = function()
-              vim.cmd("colorscheme gruvbox")
-            end,
-          },
+          -- 这里原先有 ellisonleao/gruvbox.nvim + colorscheme gruvbox，
+          -- 已移除。配色改由 stylix 的 neovim target 注入：它往
+          -- programs.neovim.plugins 加一个 Nix 管理的 mini.nvim，
+          -- 并在 init.lua 末尾调 require('mini.base16').setup({palette=...})。
+          --
+          -- 顺序上 stylix 那段排在 require("config.lazy") **之后**
+          -- （xdg.configFile 的 text 是 types.lines，多个定义按行拼接，
+          -- stylix 的部分追加在尾部），所以即使留着 gruvbox 也会被盖掉。
+          -- 但留着就是白下载一个插件 + 一条永远不生效的 colorscheme，
+          -- 而且 lazy.nvim 的插件是运行时从网上拉的（见 000E），
+          -- 在这台机器的慢网络上更没必要。
         }
       '';
     };

@@ -54,7 +54,6 @@
     vscode
     nil
     nixfmt
-    neovide
     nodejs_24
     # GitHub CLI 用于 Copilot 认证
     # 如果希望仅使用 VSCode 认证而不使用 GitHub CLI，可注释掉此行
@@ -79,4 +78,10 @@
   # 打开却一切正常——极难排查。
   #
   # viAlias / vimAlias / defaultEditor 现已统一在 home/toru.nix 里设置。
+  #
+  # **neovide 同理，也已经从上面的 systemPackages 移走。**
+  # 它现在由 home/toru.nix 的 programs.neovide 声明 —— 那是 stylix 的
+  # neovide target 写字体配置的前提。两边各装一份的话同样会得到两个
+  # neovide 派生，只有 home-manager 那份能读到 stylix 生成的
+  # ~/.config/neovide/config.toml。
 }
