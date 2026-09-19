@@ -115,26 +115,113 @@ let
       };
     };
 
-  # 主题清单。**基础主题 gruvbox-dark-hard 不在这里** ——
-  # 它是 modules/stylix.nix 里的默认值，切回它用 `theme default`。
+  # ============================================
+  # 主题清单
+  # ============================================
+  # **基础主题 gruvbox-dark-hard 不在这里** —— 它是 modules/stylix.nix
+  # 里的默认值，切回它用 `theme default`。所以总数是 19 + 1 = 20 套，
+  # 10 暗 10 亮。
   #
-  # 这是阶段 7a 的试水规模（3 个 specialisation + 基础 = 4 套），
-  # 先拿它实测每次 rebuild 多花多少时间，再决定扩到 10 还是 20 套。
-  # 扩容只需要往这张表里加行，下面的生成逻辑不用动。
+  # 方案名是 base16-schemes 包里的 yaml 文件名，全部逐个确认过存在。
+  # 明暗归类不是按名字猜的：base16 的 yaml 自带 variant 字段，
+  # 交叉比对过 base00 的相对亮度，303 个方案上零矛盾。
+  #
+  # 其中 7 组是「同族明暗对」（gruvbox / catppuccin / nord /
+  # tokyo-night / rose-pine / solarized / onedark），换句话说
+  # 大部分主题都能原地切明暗。
+  # everforest / kanagawa / dracula 在 base16-schemes 里没有亮色变体，
+  # github / ayu-light / selenized-light 则没有对应的暗色，属于落单的。
+  #
+  # 加主题只需往这张表里加一行，生成逻辑和 theme 命令都不用动。
+  # 代价是每套给「改配置后重建」增加约 5 秒（实测，见提交注释）。
   themes = {
-    gruvbox-light = {
-      scheme = "gruvbox-light-hard";
-      polarity = "light";
-    };
+    # ---------- 暗色（连基础的 gruvbox-dark-hard 共 10 套） ----------
     catppuccin-mocha = {
       scheme = "catppuccin-mocha";
       polarity = "dark";
+    };
+    everforest = {
+      scheme = "everforest-dark-hard";
+      polarity = "dark";
+    };
+    nord = {
+      scheme = "nord";
+      polarity = "dark";
+    };
+    tokyo-night = {
+      scheme = "tokyo-night-dark";
+      polarity = "dark";
+    };
+    rose-pine = {
+      scheme = "rose-pine";
+      polarity = "dark";
+    };
+    solarized-dark = {
+      scheme = "solarized-dark";
+      polarity = "dark";
+    };
+    onedark = {
+      scheme = "onedark";
+      polarity = "dark";
+    };
+    kanagawa = {
+      scheme = "kanagawa";
+      polarity = "dark";
+    };
+    dracula = {
+      scheme = "dracula";
+      polarity = "dark";
+    };
+
+    # ---------- 亮色（10 套） ----------
+    gruvbox-light = {
+      scheme = "gruvbox-light-hard";
+      polarity = "light";
     };
     catppuccin-latte = {
       scheme = "catppuccin-latte";
       polarity = "light";
     };
+    nord-light = {
+      scheme = "nord-light";
+      polarity = "light";
+    };
+    tokyo-night-light = {
+      scheme = "tokyo-night-light";
+      polarity = "light";
+    };
+    rose-pine-dawn = {
+      scheme = "rose-pine-dawn";
+      polarity = "light";
+    };
+    solarized-light = {
+      scheme = "solarized-light";
+      polarity = "light";
+    };
+    one-light = {
+      scheme = "one-light";
+      polarity = "light";
+    };
+    github = {
+      scheme = "github";
+      polarity = "light";
+    };
+    ayu-light = {
+      scheme = "ayu-light";
+      polarity = "light";
+    };
+    selenized-light = {
+      scheme = "selenized-light";
+      polarity = "light";
+    };
   };
+
+  # 20 套的列表如果只按字母排，暗色和亮色会交错在一起，选起来很难找。
+  # 所以把明暗信息在**构建期**烤进 theme 命令里：这张表 Nix 这边是
+  # 已知的，运行时却只能看到 specialisation 的目录名，没法反推。
+  themePolarity = lib.concatStringsSep "\n" (
+    lib.mapAttrsToList (name: t: "    ${name}) echo ${t.polarity} ;;") themes
+  );
   # theme 命令的实现，见下面 home.packages 处的说明。
   themeSwitcher = pkgs.writeShellApplication {
     name = "theme";
@@ -187,22 +274,46 @@ let
         done
       fi
 
-      list_themes() {
-        echo "default"
-        if [ -d "$base/specialisation" ]; then
-          find "$base/specialisation" -maxdepth 1 -mindepth 1 -printf '%f\n' | sort
-        fi
+      # 明暗对照表在构建期由 Nix 生成（见 home/toru.nix 的 themePolarity）。
+      # 运行时只能看到 specialisation 的目录名，反推不出明暗。
+      polarity_of() {
+        case "$1" in
+          default) echo dark ;;
+      ${themePolarity}
+          *) echo "?" ;;
+        esac
       }
+
+      # 20 套按字母排会让明暗交错，很难找。这里先暗后亮、组内按字母，
+      # 并把明暗标在名字后面。
+      list_themes() {
+        {
+          echo "default"
+          if [ -d "$base/specialisation" ]; then
+            find "$base/specialisation" -maxdepth 1 -mindepth 1 -printf '%f\n'
+          fi
+        } | while read -r n; do
+          printf '%s\t%s\n' "$(polarity_of "$n")" "$n"
+        done | sort -k1,1 -k2,2 | while IFS=$'\t' read -r p n; do
+          printf '%-20s %s\n' "$n" "[$p]"
+        done
+      }
+
+      # 从 list_themes 的一行里取回主题名
+      name_of_line() { echo "$1" | awk '{print $1}'; }
+
+      # 在当前主题那一行末尾加标记
+      mark_current() { sed "s/^\\($current_name  *\\[[a-z?]*\\]\\)\$/\\1  <- 当前/"; }
 
       case "''${1-}" in
         list|-l|--list)
-          list_themes | sed "s/^$current_name\$/& (当前)/"
+          list_themes | mark_current
           exit 0
           ;;
         "")
-          target=$(list_themes | sed "s/^$current_name\$/& (当前)/" \
-            | fzf --prompt='主题> ' --height=40% --layout=reverse --border \
-            | sed 's/ (当前)$//') || exit 0
+          line=$(list_themes | mark_current \
+            | fzf --prompt='主题> ' --height=60% --layout=reverse --border) || exit 0
+          target=$(name_of_line "$line")
           ;;
         *)
           target="$1"
