@@ -336,9 +336,39 @@ let
       fi
 
       "$script"
+
+      # ============================================
+      # 强制已经开着的 GTK 程序重建整套样式
+      # ============================================
+      # 不加这一步的话，切主题后 GTK 程序的**标题栏不会变色**，
+      # 内容区却变了，要注销重登才一致。原因查清楚了：
+      #
+      #   切换主题时，GTK 这边唯一变的是 ~/.config/gtk-{3,4}.0/gtk.css
+      #   这个符号链接的目标。dconf 里那组 interface 键
+      #   （gtk-theme / color-scheme / 各种字体）在同明暗的主题之间
+      #   **完全相同** —— gtk-theme 永远是 adw-gtk3，
+      #   color-scheme 永远跟着 polarity 走。
+      #
+      #   也就是说没有任何 dconf 变化去触发 GTK 重建样式。
+      #   stylix 的 activate 脚本里 "gtk" 出现 0 次，它只写文件、
+      #   从不通知运行中的程序（对比 gnome-shell 那边是有
+      #   gnome-extensions disable/enable 重载钩子的，所以顶栏立刻变）。
+      #
+      # 把 gtk-theme 改一下再改回来，GtkSettings:gtk-theme-name 变化会
+      # 让 GTK 重建整条样式级联，标题栏也跟着重算。
+      # 中间那一下会让窗口闪一次，这是代价。
+      if command -v gsettings >/dev/null 2>&1; then
+        gtk_theme=$(gsettings get org.gnome.desktop.interface gtk-theme | tr -d "'")
+        if [ -n "$gtk_theme" ]; then
+          gsettings set org.gnome.desktop.interface gtk-theme "Adwaita"
+          gsettings set org.gnome.desktop.interface gtk-theme "$gtk_theme"
+        fi
+      fi
+
       echo
       echo "已切到主题: $target"
-      echo "已经开着的 GTK / GNOME 程序可能要重开才会完全跟上。"
+      echo "GTK 程序已强制重载样式。Electron 程序（VSCode 等）和终端"
+      echo "仍然要重开才会跟上 —— 它们的配色是启动时读的文件。"
     '';
   };
 in
