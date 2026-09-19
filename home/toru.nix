@@ -1,5 +1,6 @@
 {
   config,
+  lib,
   pkgs,
   ...
 }:
@@ -137,7 +138,33 @@ in
     dotDir = config.home.homeDirectory;
 
     autosuggestion.enable = true;
-    syntaxHighlighting.enable = true;
+
+    syntaxHighlighting = {
+      enable = true;
+
+      #   main      命令是否存在、参数、引号、重定向的基础着色。默认就只有它。
+      #   brackets  括号 / 引号配对着色，落单的一律标红。
+      #             写长 nix 表达式和嵌套 shell 命令时，少一个 } 或 )
+      #             当场就能看见，不用等 zsh 报 parse error。
+      #   cursor    高亮光标所在的那个词，长命令里定位用。
+      #
+      # **数组顺序有含义**：zsh-syntax-highlighting 按顺序依次跑，后面的
+      # highlighter 覆盖前面的对同一段文本的着色。上游文档因此要求
+      # cursor 排在最后，否则它加的高亮会被 main 压掉。
+      #
+      # mkForce 是必须的，不是偷懒。home-manager 的 zsh 模块在 config 段里
+      # 无条件追加一条 `highlighters = [ "main" ]`（普通优先级），列表选项
+      # 又是合并而非覆盖，所以直接写 [ "brackets" "cursor" ] 的结果是
+      # `ZSH_HIGHLIGHT_HIGHLIGHTERS=(brackets cursor main)` —— main 跑到了
+      # 最后，正好把 cursor 压掉。已在 /tmp/hm/home-files/.zshrc 里实测确认。
+      # mkForce 丢掉模块那条定义，顺序才完全由这里说了算。
+      highlighters = lib.mkForce [
+        "main"
+        "brackets"
+        "cursor"
+      ];
+    };
+
     # 这里刻意**没有** historySubstringSearch.enable。
     # 它会 bindkey ↑/↓ 到 zsh-history-substring-search，和 atuin 抢同两个键，
     # 而且功能是 atuin 的真子集：它只对 ~/.zsh_history 做子串匹配，
