@@ -388,7 +388,99 @@ in
     # ghostty 的 font-family，所以字体也在这一步被连带接管了，
     # 见 modules/localization.nix。
     ghostty.enable = true;
+
+    # ============================================
+    # 桌面本体：GTK / GNOME / Qt
+    # ============================================
+    # 到这一步为止接管的都是终端里的东西。下面三个管窗口和桌面，
+    # 是「从终端到桌面」这条线上剩下的部分。
+    #
+    # 这三个在 modules/stylix.nix 里还各有一份 NixOS 侧的开关 ——
+    # stylix.targets 不在自动透传清单里，两层必须各写一次。
+
+    # gtk：把主题换成 adw-gtk3 并生成 gtk-3.0/gtk.css 与 gtk-4.0/gtk.css，
+    # 同时用 stylix.fonts.sansSerif 设界面字体。
+    gtk = {
+      enable = true;
+
+      # flatpakSupport 必须显式打开，**不能靠它自己的默认值**。
+      # 它的默认写法是 mkEnableTarget "..." true，展开后是
+      # `cfg.autoEnable && true` —— 而 modules/stylix.nix 里把
+      # stylix.autoEnable 关掉了，于是这个子选项也跟着变成 false。
+      # 也就是说「关掉总开关」会连带关掉各 target 的子功能，
+      # 不只是 target 本身。这一点很容易漏，已实测确认过
+      # （求值 stylix.targets.gtk.flatpakSupport.enable 得到 false）。
+      #
+      # 开了它会多生成一份 ~/.themes/adw-gtk3（把 CSS 直接烤进主题），
+      # 并写 ~/.local/share/flatpak/overrides/global，让 Flatpak 应用
+      # 也用这套主题。本机的微信、Betterbird、百度网盘、Flatseal
+      # 都是 Flatpak 装的（见 modules/flatpak.nix），不开的话
+      # 它们会是整个桌面里唯一不变色的一批窗口。
+      #
+      # 接管前确认过 ~/.local/share/flatpak/overrides/global 原本不存在，
+      # 没有手动配置会被覆盖。以后若要用 Flatseal 调权限，注意那个
+      # 文件已经归 home-manager 管，改动会在下次 switch 时被覆盖。
+      flatpakSupport.enable = true;
+    };
+
+    # gnome：写 dconf 设壁纸、界面明暗（color-scheme，由 polarity 决定）
+    # 和界面字体；另外自带一个 user-theme 扩展并在登录时自动启用，
+    # 用来给 GNOME Shell 本身（顶栏、概览）套上同一套配色。
+    # 不用手动往 desktop-gnome.nix 的扩展列表里加 user-themes。
+    gnome.enable = true;
+
+    # qt 刻意**不开**。理由是实测下来性价比为负：
+    #
+    # platform 这个选项会从 NixOS 层透传过来（它是少数几个在透传清单里的
+    # target 子选项之一），在 GNOME 上取到 "gnome"。而 stylix 只支持
+    # "qtct"，开了会直接报两条 evaluation warning：
+    #
+    #   stylix: qt: `platform` other than 'qtct' are currently unsupported: gnome
+    #   The value `gnome` for option `qt.platformTheme.name` is deprecated
+    #
+    # 也就是说配色根本没注入，只留下警告。
+    #
+    # 要让它真的生效得设 platform = "qtct"，代价是引入 qt5ct/qt6ct +
+    # kvantum，而 stylix 自己的源码里就注释着 kvantum 有个会让
+    # systemd 出问题的上游 bug（home-manager#6565）。
+    #
+    # 而这台机器上唯一的 Qt 图形程序是 fcitx5-config-qt（输入法设置，
+    # 极少打开）—— Obsidian 是 Electron 不是 Qt。为一个偶尔打开的
+    # 配置对话框引入 kvantum 不划算。以后真装了 Qt 应用再回来开。
   };
+
+  # ============================================
+  # 修掉 stylix GNOME 主题的首次激活失败
+  # ============================================
+  # 症状：首次 switch 时 home-manager 激活失败，
+  #
+  #     Activating onFilesChange
+  #     Extension "user-theme@..." does not exist
+  #     home-manager-toru.service: Main process exited, status=2
+  #
+  # 原因是鸡生蛋：stylix 给 gnome-shell.css 挂了个 onChange 钩子去
+  # `gnome-extensions disable/enable` 那个扩展，但扩展是这次 switch 才
+  # 装进 profile 的，**正在运行的 GNOME Shell 只在启动时扫描扩展目录**，
+  # 所以此刻它还不认识这个 UUID。stylix 的脚本用 writeShellApplication
+  # 生成（自带 set -euo pipefail），disable 一失败整个激活就退出。
+  #
+  # 影响不只是难看：systemd 会重试，第二次因为文件没再变所以能过，
+  # 于是 nrb/nrt 报失败但系统其实是好的 —— 这种「假失败」比真失败更糟，
+  # 会训练人忽略 switch 的报错（CLAUDE.md 坑 4 反复强调要把输出看到底）。
+  # 而且这是个多机仓库，每台新机器第一次 switch 都会撞上。
+  #
+  # 解法不是关掉自动 reload —— 那个钩子在将来做多主题切换时正是需要的
+  # （换主题后不用注销就能让 Shell 吃到新配色）。这里只是加一道守卫：
+  # 先问运行中的 Shell 认不认识这个扩展，不认识就跳过。
+  # 注销重登之后它就认识了，钩子照常工作。
+  xdg.dataFile."themes/Stylix/gnome-shell/gnome-shell.css".onChange = lib.mkForce ''
+    uuid='user-theme@gnome-shell-extensions.gcampax.github.com'
+    gx=/run/current-system/sw/bin/gnome-extensions
+    if [ -x "$gx" ] && "$gx" list 2>/dev/null | grep -qx "$uuid"; then
+      "$gx" disable "$uuid" || true
+      "$gx" enable "$uuid" || true
+    fi
+  '';
 
   # 注：firefox 的 target 刻意**不**在这一阶段开。
   # 它要求 stylix.targets.firefox.profileNames 指定 profile 名，

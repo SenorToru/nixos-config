@@ -85,6 +85,28 @@
   # 「以 mkDefault 透传」这一点将来做多主题切换时是关键：
   # specialisation 里的普通赋值可以干净地覆盖掉它。
   #
-  # 目前还没有需要开的 NixOS 级 target（console / plymouth / grub
-  # 都是开机和 TTY 场景，等配色方案定下来再说），所以这里是空的。
+  # 注意 stylix.targets **不在**上面那份透传清单里，所以同名 target
+  # 在两层要各写一次，不是写一处两边都生效。
+  stylix.targets = {
+    # gtk 的 NixOS 侧只做一件事：programs.dconf.enable = true，
+    # 这是 home-manager 的 GTK 设置能落地的前提。
+    # 本仓库 modules/desktop-gnome.nix 里本来就开了 dconf，
+    # 这里是幂等的，写上是为了不依赖另一个模块的实现细节。
+    gtk.enable = true;
+
+    # gnome 的 NixOS 侧管 GDM 登录界面的光标，以及在设了 stylix.image
+    # 时把 gnome-backgrounds 从默认包里排掉（避免系统壁纸和这里指定的
+    # 壁纸两套并存）。
+    gnome.enable = true;
+
+    # qt 刻意不开，理由写在 home/toru.nix 的同一处：
+    # platform 在 GNOME 上取到 "gnome"，而 stylix 只支持 "qtct"，
+    # 开了只会报警告不注入配色；要真生效得引入 kvantum，
+    # 而本机唯一的 Qt 图形程序只有 fcitx5 的配置对话框，不划算。
+  };
+
+  # console / plymouth / grub 这三个 NixOS 级 target 仍然没开：
+  # 都是开机和 TTY 场景，平时看不到，而且它们是**多主题切换切不到**的
+  # 那部分（home-manager specialisation 只能换 HM 级的东西）。
+  # 等主题方案最终定下来再一次性配好，避免切主题后开机画面对不上。
 }

@@ -74,7 +74,7 @@
 | `browsers.nix` | Zen / Brave 与 chromium 扩展策略 |
 | `apps.nix` | 桌面应用 |
 | `flatpak.nix` | Flatpak 与 Flathub 自动安装 |
-| `stylix.nix` | 全局配色的单一真相：base16 方案、polarity、壁纸、逐个启用的 target |
+| `stylix.nix` | 全局配色的单一真相：base16 方案、polarity、壁纸、NixOS 级 target |
 | `claude-code-manifest.json` | 数据文件，供 `development.nix` 的 overlay 读取 |
 
 `hosts/thinkpad/default.nix` 的 `imports` 按
