@@ -65,7 +65,7 @@
 
 | 文件 | 负责 |
 |------|------|
-| `common.nix` | Nix 设置与自动 GC、`allowUnfree`、时区与 locale、`nix-ld`、NetworkManager、基础 CLI 工具、fwupd |
+| `common.nix` | Nix 设置与自动 GC、`allowUnfree`、时区与 locale、`nix-ld`、NetworkManager、基础 CLI 工具、fwupd、sudo 密码回显 |
 | `desktop.nix` | GDM + GNOME、蓝牙、PipeWire、打印、默认终端（`xdg.terminal-exec` → Ghostty）、`nautilus-python`（让 Ghostty 自带的右键扩展能加载） |
 | `desktop-gnome.nix` | dconf 设置与 GNOME 扩展 |
 | `localization.nix` | 字体（全系统唯一的 `fonts` 声明处，含 `stylix.fonts`）与 fcitx5 输入法 |
