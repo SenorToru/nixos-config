@@ -8,7 +8,7 @@
 | 频道 | `nixos-26.05`（home-manager `release-26.05`） |
 | 桌面 | GNOME on Wayland |
 | 登录 shell | zsh（starship / atuin / direnv / fzf / zoxide） |
-| 输入法 | fcitx5（rime + mozc） |
+| 输入法 | fcitx5（rime 白霜拼音 + mozc UT 词典版） |
 
 > 本文件是**给人看的操作手册**。
 > 给 AI 协作用的约定在 [CLAUDE.md](CLAUDE.md)，
