@@ -13,6 +13,7 @@ Toru 的 NixOS 多机配置仓库（flake，home-manager 作为 NixOS 模块）�
 | `hosts/<主机>/tuning.nix` | 绑死在这台硬件上的调优 | 只对这台成立 |
 | `hosts/<主机>/default.nix` | 主机名、引导、键盘布局、用户账户、模块拼装 | 本机身份 |
 | `hosts/<主机>/hardware-configuration.nix` | `nixos-generate-config` 自动生成，别手改 | — |
+| `home/<用户>.nix` 及同目录文件 | home-manager 用户配置。按主题拆文件，由 `home/toru.nix` 的 `imports` 拼装 | 跟着用户走 |
 
 典型的**必须**放 `hosts/` 的东西：
 
@@ -40,11 +41,13 @@ Toru 的 NixOS 多机配置仓库（flake，home-manager 作为 NixOS 模块）�
 **改动下列任何一项时，必须同步更新 README.md：**
 
 - 新增、删除、重命名 `modules/` 下的模块
+- 新增、删除 `home/` 下的文件
 - 新增主机（`hosts/<新主机>/`）或调整 `hosts/` 的文件划分
 - 改变 `modules/` 与 `hosts/` 的分界判据
 - 改变重建命令、别名，或六步流程中的任何一步
 - 改变清理 generation 的流程，或 `nix.gc` / `configurationLimit` 的设置
 - 改变「什么时候需要重启」的结论
+- 改变 Agent Skills 的装法、`skills` / `skills-update` 命令，或升级流程
 
 **两边描述同一件事时，改了一边就要改另一边**，不要让它们漂移。
 漂移之后最糟的情况不是信息缺失，而是两份文档给出互相矛盾的指示 ——
@@ -195,6 +198,31 @@ find . ! -user toru -printf '%u  %p\n'
 **应该没有任何输出。** 有输出说明又被 root 写过，
 `sudo chown -R toru:users .` 修掉。见坑 5。
 
+## Agent Skills
+
+`home/agent-skills.nix` 把 [mattpocock/skills](https://github.com/mattpocock/skills)
+的 25 个 skill 装成**全局**的，Claude Code / Copilot / Zed / Gemini 共用一份。
+完整说明见 [Lesson-Learn/0012_AGENT_SKILLS.md](Lesson-Learn/0012_AGENT_SKILLS.md)
+和 [README.md](README.md) 的「Agent Skills」一节。
+
+改这块之前必须知道的三件事：
+
+1. **分两层，别把它们合并回去。**
+   `~/.local/share/agent-skills` 由 home-manager 管（声明式，flake.lock 钉版本）；
+   `~/.claude/skills/` `~/.agents/skills/` `~/.copilot/skills/` 里的链接由
+   `skills sync` 管（可变状态）。合并的话 `skills off` 会在下次 `nrb` 时被悄悄撤销。
+2. **`Lesson-Learn/0012_AGENT_SKILLS.md` 里 `<!-- BEGIN GENERATED -->` 到
+   `<!-- END GENERATED -->` 之间是生成物**，由 `skills doc` 写，`nrb` 时自动刷新。
+   别手改那一段，改动会被覆盖；要改就改 `home/agent-skills.nix` 里的 `cmd_doc`。
+   标记之外的手写部分不会被动。
+3. **那两个脚本用 `writeShellScriptBin` 而不是 `writeShellApplication`。**
+   后者会在构建时跑 shellcheck，而 shellcheck 在沙箱的 C locale 下打印不出中文，
+   一有 warning 就崩在 `commitBuffer: invalid argument` 上，报错完全看不出原因。
+   改完脚本请实机跑 `skills list` / `skills status` 验证。
+
+加新 skill 源要同时改 `flake.nix`（加 `flake = false` 的 input）和
+`skillSources` 表，两处缺一不可。
+
 ## Shell 环境
 
 登录 shell 是 **zsh**（`modules/shell.nix` 定系统层，`home/toru.nix` 定交互体验）。
@@ -206,6 +234,7 @@ bash 保持完全可用，两者配的是同一套基线。
   `ll`、`gs`、`nrb`、`ncheck` 这些只存在于交互 shell，
   `zsh -c 'll'` / `bash -c 'll'` 一律 command not found。
   `eza` `bat` `fzf` `zoxide` `atuin` `btop` `lazygit` `tmux` `dua` `duf` `direnv` `starship`
+  `skills` `skills-update`
   都是真二进制（在 `/etc/profiles/per-user/toru/bin`），可以直接调用。
 - **`ls` / `cat` / `grep` / `find` 没有被 alias 遮蔽**，输出就是 coreutils 的
   原始格式，可以放心解析。要彩色分栏请显式写 `eza` / `bat`。

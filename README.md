@@ -29,7 +29,8 @@
 │       └── tuning.nix        本机硬件调优
 ├── modules/                  共用模块（任何机器都能 import）
 ├── home/
-│   └── toru.nix              home-manager 用户配置
+│   ├── toru.nix              home-manager 用户配置
+│   └── agent-skills.nix      Agent Skills：一份 skill 喂给所有 AI 工具
 ├── Lesson-Learn/             知识库（按时间顺序编号）
 └── CLAUDE.md                 AI 协作约定
 ```
@@ -76,6 +77,13 @@
 | `flatpak.nix` | Flatpak 与 Flathub 自动安装 |
 | `stylix.nix` | 全局配色的单一真相：base16 方案、polarity、壁纸、NixOS 级 target |
 | `claude-code-manifest.json` | 数据文件，供 `development.nix` 的 overlay 读取 |
+
+### `home/` 各文件职责
+
+| 文件 | 负责 |
+|------|------|
+| `toru.nix` | home-manager 主配置：别名、程序、主题 specialisation |
+| `agent-skills.nix` | Agent Skills 的安装、开关命令和使用指南生成（见下面「Agent Skills」一节） |
 
 `hosts/thinkpad/default.nix` 的 `imports` 按
 **「本机专属在前、共用模块在后」**分两组写，加新机器时照抄这个骨架即可。
@@ -398,7 +406,8 @@ kernel + initrd。如果哪天 `df -h /boot` 逼近满，先看
 ### 仓库负责的部分：完美复现
 
 新机器上 `nrb` 一下就和这台字节级一致 —— 包括 rime-frost 的版本和
-打在它上面的 lua 补丁、mozc-ut 的 8 套词典、fcitx5 的插件组合。
+打在它上面的 lua 补丁、mozc-ut 的 8 套词典、fcitx5 的插件组合、
+那 25 个 Agent Skill。
 全部由 `flake.lock` 锁死。
 
 新机器的步骤只有三步：
@@ -423,6 +432,7 @@ sudo nixos-rebuild switch --flake ~/nixos-config#<新主机>
 | `~/.config/mozc/` | **Mozc 学习历史** | 整个目录拷，**必须含 `.encrypt_key.db`** |
 | `~/.local/share/fcitx5/rime/build/` | 编译缓存 | **不要拷**，见下 |
 | `~/.local/share/fcitx5/rime/installation.yaml` | 本机安装标识 | **不要拷**，见下 |
+| `~/.local/state/agent-skills/disabled` | 关掉了哪些 Agent Skill | 不用拷，新机器默认全开 |
 
 ### 三个必须避开的坑
 
@@ -466,6 +476,85 @@ sync_dir: "/home/toru/Sync/rime"
 
 ---
 
+## Agent Skills
+
+装了 [mattpocock/skills](https://github.com/mattpocock/skills) 的 25 个 skill，
+**全局**安装 —— Claude Code、GitHub Copilot、Zed、Gemini CLI 共用同一份。
+配置在 [`home/agent-skills.nix`](home/agent-skills.nix)。
+
+完整使用指南（每个 skill 的调用方式和 token 消耗）见
+[Lesson-Learn/0012_AGENT_SKILLS.md](Lesson-Learn/0012_AGENT_SKILLS.md)。
+
+### 装在哪
+
+```
+第一层（声明式，home-manager 管，版本由 flake.lock 钉死）
+  ~/.local/share/agent-skills -> /nix/store/…-agent-skills/
+
+第二层（可变状态，skills 命令管，状态存 ~/.local/state/agent-skills/disabled）
+  ~/.claude/skills/<名>   -> ~/.local/share/agent-skills/<名>
+  ~/.agents/skills/<名>   -> 同上
+  ~/.copilot/skills/<名>  -> 同上
+```
+
+三个目录覆盖所有工具：Claude Code 只读 `~/.claude/skills/`，
+Zed 和 Gemini CLI 读 `~/.agents/skills/`，Copilot 三个都读。
+
+**为什么分两层：** 如果让 home-manager 直接管第二层那些链接，
+`skills off tdd` 之后下一次 `nrb` 会把它悄悄装回来。拆开之后，
+禁用状态活得过 rebuild，而新机器第一次 build 完是全开的。
+
+### 命令
+
+| 命令 | 作用 |
+|------|------|
+| `skills list` | 全部 skill：调用方式、token 估算、开关状态 |
+| `skills status` | pool 指向哪个 store 路径、三个目录的链接健不健康 |
+| `skills off <名>` / `skills off --all` | 临时禁用，立刻对所有工具生效 |
+| `skills on <名>` / `skills on --all` | 启用 |
+| `skills sync` | 按开关状态重建链接（`nrb` 时自动跑，平时用不到） |
+| `skills doc` | 重新生成指南里的表（`nrb` 时自动跑） |
+| `skills-update` | 升级 skill |
+
+这些都是 `$PATH` 上的真二进制，不是别名，脚本和非交互 shell 里能直接调。
+
+### 升级
+
+```bash
+skills-update                                          # 更新 lock + 用户态构建两层
+sudo nixos-rebuild switch --flake /home/toru/nixos-config#thinkpad   # 别名 nrb
+git add -A && git commit -F GIT_COMMIT_MESSAGE.txt     # flake.lock 和指南一起提交
+```
+
+`skills-update` 内部跑的是 `nix flake update`，**不带 sudo**（见坑 5）。
+它不替你 switch，也不替你 commit。没有新版本时会直接说「已是最新」并退出。
+
+`nrb` 的时候 home-manager 会自动 `skills sync` + `skills doc`，
+所以升级之后 `Lesson-Learn/0012_AGENT_SKILLS.md` 会跟着变 —— 那是生成物，
+连同 `flake.lock` 一起提交就行。
+
+### 加一个新的 skill 源
+
+两处都要改：
+
+1. `flake.nix` 加一个 `flake = false` 的 input；
+2. `home/agent-skills.nix` 的 `skillSources` 表加一条，写明装哪些类别。
+
+`skills-update` 会自动把表里所有源一起更新。skill 名字撞车时构建会直接失败
+并报出是哪两个源撞了 —— 四家工具都只按目录名认 skill，悄悄覆盖比构建失败难查。
+
+### 实机验证
+
+```bash
+skills status                             # 三个目录各能看见多少个
+readlink -f ~/.local/share/agent-skills   # 应落在 /nix/store 里
+```
+
+然后在 Claude Code 里打一次 `/tdd`，在 VS Code 的 Copilot 里问一个该触发
+`diagnosing-bugs` 的问题 —— 构建通过不等于工具真的认这些符号链接。
+
+---
+
 ## 其他注意事项
 
 1. **字体族名写错，fontconfig 完全静默回退。** 写完必须 `fc-match "族名"` 验证。
@@ -505,6 +594,7 @@ sync_dir: "/home/toru/Sync/rime"
 > - 改变重建命令、别名，或六步流程中的任何一步
 > - 改变清理 generation 的流程，或 `nix.gc` / `configurationLimit` 的设置
 > - 改变「什么时候需要重启」的结论
+> - 新增、删除 `home/` 下的文件，或改变 Agent Skills 的装法、命令、更新流程
 >
 > 本文件与 [CLAUDE.md](CLAUDE.md) 有意重叠：
 > README 是给人看的操作手册，CLAUDE.md 是给 AI 的协作约定。

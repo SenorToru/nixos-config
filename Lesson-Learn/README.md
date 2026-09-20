@@ -8,7 +8,7 @@
   想知道某个配置是怎么演变成现在这样的，从小到大读一遍即可。
 - **编号是 4 位大写十六进制**：`0000` → `0009` → `000A` → `000F` → `0010` → …
   一直到 `FFFF`。注意 `0009` 的下一个是 `000A` 而不是 `0010`。
-- **新增文档接着当前最大编号加一**。当前最大是 `0011`，**下一个是 `0012`**。
+- **新增文档接着当前最大编号加一**。当前最大是 `0012`，**下一个是 `0013`**。
   不要插空、不要复用编号。
 - 编号一旦分配就不再变动。文档作废时**加废弃横幅并指向新文档**，不删除、不重排 ——
   历史记录本身有价值，而且重排会让已有的交叉引用全部失效。
@@ -37,13 +37,15 @@
 | `000F` | [LAPTOP_TUNING_AND_AI_FRIENDLY_SHELL](000F_LAPTOP_TUNING_AND_AI_FRIENDLY_SHELL.md) | zram / thermald / VAAPI；zsh + atuin 环境与「不遮蔽标准命令」的 AI 友好约定；`modules/` 与 `hosts/` 的分界 | ✅ 有效 |
 | `0010` | [CLAUDE_CODE_VERSION_PINNING](0010_CLAUDE_CODE_VERSION_PINNING.md) | 发布分支冻结在旧版，`nix flake update` 空操作；覆写 manifest 升级 claude-code | ✅ 有效 |
 | `0011` | [ROOT_OWNED_FILES_IN_REPO](0011_ROOT_OWNED_FILES_IN_REPO.md) | `sudo nixos-rebuild` 把 `flake.lock` 和 `.git/objects` 写成 root；git 只对哈希前缀撞上的那个文件报错 | ✅ 有效 |
+| `0012` | [AGENT_SKILLS](0012_AGENT_SKILLS.md) | Agent Skills 全局安装：一份 skill 喂给 Claude Code / Copilot / Zed / Gemini；开关命令与 token 成本（持续更新） | 📖 常读 |
 
 ## 按主题快速定位
 
 - **Neovim / Copilot** —— `0000`（用法）、`0001`、`0002`、`0003`、`0005`、`0006`、`0007`、`0009`、`000E`
-- **Claude Code** —— `000C`、`000D`、`0010`
+- **Agent Skills（跨工具）** —— `0012`
+- **Claude Code** —— `000C`、`000D`、`0010`、`0012`
 - **字体** —— `0002`、`0004`、`000A`
-- **NixOS / home-manager 机制** —— `0003`、`000A`、`000B`、`000C`、`000F`
+- **NixOS / home-manager 机制** —— `0003`、`000A`、`000B`、`000C`、`000F`、`0012`
 - **git 与仓库状态** —— `0011`
 - **Shell / CLI 环境** —— `000F`
 - **仓库分层（modules 与 hosts）** —— `000F`

@@ -524,6 +524,13 @@ let
   };
 in
 {
+  imports = [
+    # Agent Skills：一份 skill 同时喂给 Claude Code / Copilot / Zed / Gemini。
+    # 拆出去是因为它自带一套命令（skills、skills-update）和生成逻辑，
+    # 塞进这个文件会把本来就长的 toru.nix 顶到没法读。
+    ./agent-skills.nix
+  ];
+
   home.username = "toru";
   home.homeDirectory = "/home/toru";
   home.stateVersion = "26.05";

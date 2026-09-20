@@ -14,6 +14,18 @@
     stylix.url = "github:danth/stylix/release-26.05";
     stylix.inputs.nixpkgs.follows = "nixpkgs";
 
+    # Agent Skills 源。这些仓库不是 flake，只是一棵放着 SKILL.md 的源码树，
+    # 所以 `flake = false`，当普通源码取用（见 home/agent-skills.nix）。
+    #
+    # 版本由 flake.lock 钉死 —— 这是「新机器 build 完立刻拿到一模一样的
+    # skill」的全部理由，别为了「总是最新」把它改成不钉死的写法。
+    # 更新用 `skills-update`（它内部跑 nix flake update，**不带 sudo**，见坑 5）。
+    #
+    # 再加一个 skill 源时：这里加一个 input，然后在 home/agent-skills.nix
+    # 的 skillSources 表里加一条，两处都要改。
+    matt-skills.url = "github:mattpocock/skills";
+    matt-skills.flake = false;
+
     # 原生 Zen Browser Flake 源
     zen-browser.url = "github:youwen5/zen-browser-flake";
     # optional, but recommended if you closely follow NixOS unstable so it shares
