@@ -336,6 +336,11 @@ let
   themePolarity = lib.concatStringsSep "\n" (
     lib.mapAttrsToList (name: t: "    ${name}) echo ${t.polarity} ;;") themes
   );
+  # 记住当前选的主题。放 XDG_STATE_HOME 下：它就该是「跨会话保留、
+  # 但丢了也不影响正确性」的那类数据（和 atuin 的库、nvim 的 shada 同类）。
+  # theme 命令写它，home.activation.restoreTheme 读它。
+  themeStateFile = "\${XDG_STATE_HOME:-$HOME/.local/state}/theme/current";
+
   # theme 命令的实现，见下面 home.packages 处的说明。
   themeSwitcher = pkgs.writeShellApplication {
     name = "theme";
@@ -374,18 +379,40 @@ let
         exit 1
       fi
 
-      # 当前激活的是哪一套，用来在列表里打标记
-      current_gen=$(readlink -f "$HOME/.local/state/home-manager/gcroots/current-home" 2>/dev/null || echo "")
-      current_name="?"
-      if [ "$current_gen" = "$(readlink -f "$base")" ]; then
-        current_name="default"
-      elif [ -d "$base/specialisation" ]; then
-        for s in "$base"/specialisation/*; do
-          if [ "$(readlink -f "$s")" = "$current_gen" ]; then
-            current_name=$(basename "$s")
-            break
-          fi
-        done
+      # ============================================
+      # 当前是哪一套：读状态文件，**不要**去比对 gcroot
+      # ============================================
+      # 这里踩过坑。原先的写法是把
+      #   ~/.local/state/home-manager/gcroots/current-home
+      # 和基础 generation、各 specialisation 的 realpath 逐个比对。
+      # 平时看着没问题，但开机之后就会报错成 default。
+      #
+      # 原因是 activate 脚本的执行顺序：
+      #
+      #   第 445 行  restoreTheme 钩子跑 specialisation 的 activate，
+      #              那一步会把 current-home 指向 specialisation
+      #   第 468 行  基础 activate 在**所有钩子跑完之后**执行
+      #                nix-store --realise "$newGenPath" \
+      #                  --add-root "$currentGenGcPath"
+      #              无条件把 current-home 指回它自己
+      #
+      # 于是开机后进入一个错位状态：配置文件是 specialisation 写的
+      # （所以看到的配色是对的），gcroot 却指着基础 generation。
+      # 这个顺序改不了 —— 那一行在 home-manager 自己的脚本里，
+      # 排在用户钩子之后。
+      #
+      # 状态文件才是「选了哪套」的权威记录：theme 每次切换成功都写它，
+      # restoreTheme 每次开机都照它恢复，两边引用的是同一个事实。
+      state_file="${themeStateFile}"
+      current_name="default"
+      if [ -r "$state_file" ]; then
+        saved=$(cat "$state_file")
+        # 记录的主题可能已经从 themes 表里删掉了。那种情况下
+        # restoreTheme 会警告一声然后保持默认，所以这里也报 default，
+        # 两边说法一致。不加这个判断的话列表里会一行标记都没有。
+        if [ -n "$saved" ] && { [ "$saved" = "default" ] || [ -d "$base/specialisation/$saved" ]; }; then
+          current_name="$saved"
+        fi
       fi
 
       # 明暗对照表在构建期由 Nix 生成（见 home/toru.nix 的 themePolarity）。
@@ -452,6 +479,16 @@ let
       "$script"
 
       # ============================================
+      # 记住这次的选择，好让开机后能恢复
+      # ============================================
+      # 不记的话，下次开机 home-manager-toru.service 会重跑**基础**
+      # generation 的 activate，主题就被打回默认。nixos-rebuild switch
+      # 同理。恢复动作在 home.activation.restoreTheme 里，见那边的注释。
+      state="${themeStateFile}"
+      mkdir -p "$(dirname "$state")"
+      printf '%s\n' "$target" > "$state"
+
+      # ============================================
       # 强制已经开着的 GTK 程序重建整套样式
       # ============================================
       # 不加这一步的话，切主题后 GTK 程序的**标题栏不会变色**，
@@ -493,6 +530,46 @@ in
 
   # 每套主题生成一个 specialisation，见上面 let 里的说明。
   specialisation = lib.mapAttrs (_name: mkTheme) themes;
+
+  # ============================================
+  # 开机 / 重建之后把主题恢复回来
+  # ============================================
+  # 没有这一段的话，切过的主题**记不住**：
+  # home-manager-toru.service 是 WantedBy=multi-user.target 的系统服务，
+  # 每次开机都跑一遍**基础** generation 的 activate，把主题覆盖回默认。
+  # nixos-rebuild switch 也走同一条路，所以每次重建也会被打回去。
+  #
+  # 这不是 NixOS 的固有限制，只是 specialisation 本身不带「记住选择」
+  # 这个概念 —— 它只提供「切过去」的能力，记不记得是配置的事。
+  #
+  # 防递归靠的是 specialisation 不嵌套这个特性（home-manager 在
+  # modules/misc/specialisation.nix 里用 mkOverride 0 防无限递归）：
+  # specialisation 自己的 generation 底下没有 specialisation 目录，
+  # 所以下面那个 [ -x ] 测试必然失败，钩子自动空转，不用额外的标志位。
+  # 这个特性之前坑过 theme 命令，这次正好拿来当守卫。
+  #
+  # 刻意**不**调 theme 命令而是直接跑 activate：开机时还没有图形会话，
+  # theme 里那段 gsettings 的 GTK 重载会失败；而那时也没有程序需要重载。
+  #
+  # 失败不让它中断整个激活（|| true）：主题恢复不了顶多是配色不对，
+  # 不该把 nixos-rebuild switch 拖成 CLAUDE.md 坑 4 那种半成功状态。
+  home.activation.restoreTheme = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+    state="${themeStateFile}"
+    if [ -r "$state" ]; then
+      want=$(cat "$state")
+      if [ -n "$want" ] && [ "$want" != "default" ]; then
+        if [ -x "$newGenPath/specialisation/$want/activate" ]; then
+          verboseEcho "restoreTheme: 恢复主题 $want"
+          run "$newGenPath/specialisation/$want/activate" || \
+            warnEcho "restoreTheme: 恢复 $want 失败，保持默认主题"
+        elif [ -d "$newGenPath/specialisation" ]; then
+          # 只在基础 generation 上报警告。specialisation 自己激活时
+          # 走不到这里（它没有 specialisation 目录），不会误报。
+          warnEcho "restoreTheme: 记录的主题 $want 已不存在，保持默认主题"
+        fi
+      fi
+    fi
+  '';
 
   # ============================================
   # theme —— 主题切换命令
