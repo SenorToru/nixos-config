@@ -30,7 +30,8 @@
 ├── modules/                  共用模块（任何机器都能 import）
 ├── home/
 │   ├── toru.nix              home-manager 用户配置
-│   └── agent-skills.nix      Agent Skills：一份 skill 喂给所有 AI 工具
+│   ├── agent-skills.nix      Agent Skills：一份 skill 喂给所有 AI 工具
+│   └── skills-tests.sh       skills 命令的回归测试（构建期执行）
 ├── Lesson-Learn/             知识库（按时间顺序编号）
 └── CLAUDE.md                 AI 协作约定
 ```
@@ -84,6 +85,7 @@
 |------|------|
 | `toru.nix` | home-manager 主配置：别名、程序、主题 specialisation |
 | `agent-skills.nix` | Agent Skills 的安装、开关命令和使用指南生成（见下面「Agent Skills」一节） |
+| `skills-tests.sh` | `skills` 命令的回归测试，由 `agent-skills.nix` 在构建期执行 |
 
 `hosts/thinkpad/default.nix` 的 `imports` 按
 **「本机专属在前、共用模块在后」**分两组写，加新机器时照抄这个骨架即可。
@@ -533,6 +535,28 @@ git add -A && git commit -F GIT_COMMIT_MESSAGE.txt     # flake.lock 和指南一
 所以升级之后 `Lesson-Learn/0012_AGENT_SKILLS.md` 会跟着变 —— 那是生成物，
 连同 `flake.lock` 一起提交就行。
 
+### 和工具内建 skill 撞名
+
+`code-review` 装进来时会被改名成 `matt-code-review` —— Claude Code 自带一个
+内建的 `/code-review`，同名时内建赢，Matt 那个会静悄悄地够不着。
+改名配在 `skillSources.<源>.rename`，目录名和 frontmatter 的 `name:` 一起改。
+
+**构建期的撞名检查只管源与源之间，查不到和工具内建撞。**
+装完新 skill 集合之后，`skills list` 的数量要和每个工具里实际能看见的数量对一遍。
+详见 [Lesson-Learn/0012](Lesson-Learn/0012_AGENT_SKILLS.md) 第四节。
+
+### 回归测试
+
+`home/skills-tests.sh` 测 `skills` 命令，**在构建期跑** ——
+测试不过 `nhm` / `nrb` 就直接失败。目前守着「pool 之外的符号链接不会被
+`sync` 删掉」这一条（误删 `~/.claude/skills/` 里的东西不可逆）。
+
+```bash
+SKILLS_BIN=$(command -v skills) bash home/skills-tests.sh   # 手动跑
+```
+
+改剪枝逻辑之前请先看 [Lesson-Learn/0012](Lesson-Learn/0012_AGENT_SKILLS.md) 第八节。
+
 ### 加一个新的 skill 源
 
 两处都要改：
@@ -552,6 +576,9 @@ readlink -f ~/.local/share/agent-skills   # 应落在 /nix/store 里
 
 然后在 Claude Code 里打一次 `/tdd`，在 VS Code 的 Copilot 里问一个该触发
 `diagnosing-bugs` 的问题 —— 构建通过不等于工具真的认这些符号链接。
+
+**再数一遍数量。** `skills list` 说 25 个，就去每个工具的 skill 列表里数，
+少了就是撞了那个工具的内建 skill（见上面「和工具内建 skill 撞名」）。
 
 ---
 

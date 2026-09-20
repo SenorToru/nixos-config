@@ -59,6 +59,10 @@ let
   #   这里列出要装的类别，装的时候会**拍平**成 <名字>/SKILL.md ——
   #   因为四家工具都只认「skills 目录下一级就是 skill 名」，不递归。
   # exclude：类别里个别不要的。
+  # rename：装进去的时候换个名字，**目录名和 frontmatter 的 `name:` 一起改**。
+  #   只改目录名不够 —— 各家工具认 skill 的依据不完全一样，Claude Code 按
+  #   目录名，别家可能按 frontmatter，两边不一致会出现「目录叫 A、工具里
+  #   显示成 B」的错位，比撞名本身更难查。
   #
   # mattpocock 的 in-progress/ 和 misc/ 两个类别故意不装：前者是作者自己
   # 标了半成品的；后者里的 git-guardrails-claude-code 会和本仓库 CLAUDE.md
@@ -72,6 +76,16 @@ let
         "productivity"
       ];
       exclude = [ ];
+      rename = {
+        # Claude Code 自带一个内建的 code-review（`/code-review`，云端多
+        # agent 审查），同名时内建赢：文件装上了，但在 Claude Code 里
+        # 根本够不着。其它工具没有这个内建，于是同一个名字在不同工具里
+        # 指向两个不同的东西 —— 比「用不了」更坑，所以直接改名避开。
+        #
+        # 注意这种撞车只有运行时才知道，构建期的撞名检查只管源与源之间，
+        # 查不到「和工具内建撞」。以后装别的 skill 集合时留意这一点。
+        code-review = "matt-code-review";
+      };
     };
   };
 
@@ -96,13 +110,31 @@ let
             case " ${lib.concatStringsSep " " s.exclude} " in
               *" $n "*) continue ;;
             esac
-            if [ -e "$out/$n" ]; then
-              echo "agent-skills: skill 名字冲突：$n（${sname}/${cat} 和已有的撞了）" >&2
+            target="$n"
+            case "$n" in
+              ${lib.concatStrings (
+                lib.mapAttrsToList (from: to: ''
+                  ${from}) target=${to} ;;
+                '') s.rename
+              )}
+            esac
+            if [ -e "$out/$target" ]; then
+              echo "agent-skills: skill 名字冲突：$target（${sname}/${cat} 和已有的撞了）" >&2
               exit 1
             fi
-            cp -r "$d" "$out/$n"
-            chmod -R u+w "$out/$n"
-            printf '%s\t%s\t%s\n' "$n" "${sname}" "${cat}" >> "$out/.manifest"
+            cp -r "$d" "$out/$target"
+            chmod -R u+w "$out/$target"
+            # 改名的话 frontmatter 的 name 也要跟着改，只改目录名会错位。
+            if [ "$target" != "$n" ]; then
+              awk -v new="$target" '
+                NR == 1 && /^---$/  { print; inside = 1; next }
+                inside && /^---$/   { inside = 0; print; next }
+                inside && /^name:/  { print "name: " new; next }
+                                    { print }
+              ' "$d/SKILL.md" > "$out/$target/SKILL.md"
+            fi
+            printf '%s\t%s\t%s\t%s\n' "$target" "${sname}" "${cat}" "$n" \
+              >> "$out/.manifest"
           done
         '') s.categories
       ) skillSources
@@ -495,6 +527,29 @@ let
   # ============================================================
   # skills-update：升级 skill 源
   # ============================================================
+  # ============================================================
+  # skills 的回归测试
+  # ============================================================
+  # 测试内容和接缝的说明在 home/skills-tests.sh 的文件头。
+  # 这里只负责在**构建期**跑一遍：测试不过，skillsTests 就产不出 $out，
+  # 下面 skillsGated 引用不到它，整个 home 层构建失败 ——
+  # 也就是 `nhm` / `nrb` 会直接停在这，而不是等到运行时才发现误删。
+  skillsTests = pkgs.runCommand "skills-tests" { } ''
+    export SKILLS_BIN=${skillsCmd}/bin/skills
+    export HOME="$TMPDIR/home"
+    bash ${./skills-tests.sh}
+    touch "$out"
+  '';
+
+  # 把测试挂进 skills 的依赖链。单独留一层是因为 writeShellScriptBin 的
+  # 产物不好直接加依赖，而「测试不过就装不上」这件事必须是强制的 ——
+  # 否则测试只是摆设，没人会记得去跑。
+  skillsGated = pkgs.runCommand "skills" { } ''
+    test -f ${skillsTests}
+    mkdir -p "$out/bin"
+    ln -s ${skillsCmd}/bin/skills "$out/bin/skills"
+  '';
+
   skillsUpdateCmd = pkgs.writeShellScriptBin "skills-update" ''
     set -euo pipefail
     export PATH="${updatePath}:$PATH"
@@ -559,8 +614,9 @@ let
   '';
 in
 {
+  # 装 skillsGated 而不是 skillsCmd：前者把回归测试挂在依赖链上。
   home.packages = [
-    skillsCmd
+    skillsGated
     skillsUpdateCmd
   ];
 
@@ -571,7 +627,7 @@ in
   # 必须排在 linkGeneration 之后 —— 那一步才把上面的 pool 符号链接写好，
   # 早跑的话 sync 读到的还是上一代的池子。
   home.activation.agentSkills = lib.hm.dag.entryAfter [ "linkGeneration" ] ''
-    run ${skillsCmd}/bin/skills sync
-    run ${skillsCmd}/bin/skills doc --quiet || true
+    run ${skillsGated}/bin/skills sync
+    run ${skillsGated}/bin/skills doc --quiet || true
   '';
 }

@@ -53,7 +53,7 @@ skill 同样可能被模型自己捡起来。跨工具用的时候心里有数�
 第一层（声明式，home-manager 管，flake.lock 钉死版本）
   ~/.local/share/agent-skills -> /nix/store/…-agent-skills/
       ├── tdd/SKILL.md
-      ├── code-review/SKILL.md
+      ├── matt-code-review/SKILL.md
       └── …
 
 第二层（可变状态，skills 命令管，状态存 ~/.local/state/agent-skills/disabled）
@@ -84,7 +84,37 @@ skill 同样可能被模型自己捡起来。跨工具用的时候心里有数�
 不碰你手写的 skill，也不碰 `~/.claude/skills/synced/`（那是 Claude
 云端同步的真目录，不是符号链接）。
 
-## 四、命令
+## 四、和工具内建 skill 撞名
+
+**`code-review` 装进来时会被改名成 `matt-code-review`。**
+
+原因：Claude Code 自带一个内建的 `code-review`（就是 `/code-review`，
+云端多 agent 审查）。同名的时候**内建赢** —— 文件确实装上了，
+`ls ~/.claude/skills/` 看得见，但在 Claude Code 里根本够不着，
+skill 目录里也不会列出来。
+
+更坑的是其它工具没有这个内建，所以不改名的话，同一个名字在
+Claude Code 里是内建那个、在 Copilot / Zed / Gemini 里是 Matt 那个 ——
+同名不同物比单纯用不了难查得多。
+
+改名在 `home/agent-skills.nix` 的 `skillSources.<源>.rename` 里配：
+
+```nix
+rename = {
+  code-review = "matt-code-review";
+};
+```
+
+它会**同时**改目录名和 `SKILL.md` frontmatter 里的 `name:` —— 只改目录名不够，
+各家工具认 skill 的依据不完全一样，两边不一致会出现「目录叫 A、工具里显示成 B」。
+`.manifest` 里记着原名，查得到是从哪个 skill 改过来的。
+
+⚠️ **构建期的撞名检查只管源与源之间，查不到「和工具内建撞」** ——
+那是运行时才知道的事，Nix 层面没法预知。以后装别的 skill 集合时，
+装完记得在每个工具里数一遍：能看见的数量和 `skills list` 对不上，
+差的那个多半就是撞了内建。
+
+## 五、命令
 
 ```bash
 skills list             # 全部 skill：调用方式、token 估算、开关状态
@@ -110,7 +140,7 @@ skills-update
 `nrb` 的时候会自动 `skills sync` + 刷新本文的生成表，
 所以升级完 `git add` 的时候记得把 `flake.lock` 和本文一起带上。
 
-## 五、加一个新的 skill 源
+## 六、加一个新的 skill 源
 
 两处都要改，缺一不可：
 
@@ -121,8 +151,11 @@ skills-update
 
 名字撞车的话构建会直接失败并报出是哪两个源撞了 —— 这是故意的，
 因为四家工具都只按目录名认 skill，悄悄覆盖比构建失败难查得多。
+和工具**内建** skill 撞名则查不出来，要靠装完之后数数，见第四节。
 
-## 六、后续注意事项
+装完记得 `skills list` 数一遍，再在每个工具里数一遍，两个数对不上就是撞了内建。
+
+## 七、后续注意事项
 
 - **没装 `in-progress/` 和 `misc/` 两个类别。** 前者是作者自己标的半成品；
   后者的 `git-guardrails-claude-code` 会和本仓库 `CLAUDE.md`
@@ -135,11 +168,49 @@ skills-update
 - **token 数是字符数 ÷ 4 的英文经验估算**，误差约 ±15%。要精确值得调
   Anthropic 的 `count_tokens` API，换算逻辑集中在
   `home/agent-skills.nix` 里的 `tok()` 一个函数里。
+- **改 `skills` 脚本之前先看第八节。** 剪枝逻辑有回归测试挡着，
+  测试不过整个 home 层就构建不出来。
 - **构建通过 ≠ 可用。** 符号链接这种东西必须实机验证：
   `nrb` 之后在 Neovide 和 VSCode 里各开一次 `/tdd` 看看认不认。
   验证命令见下面「实机验证」。
 
-## 七、实机验证
+## 八、回归测试
+
+`home/skills-tests.sh` 是 `skills` 命令的回归测试，**在构建期跑** ——
+测试不过就 build 不出来，`nhm` / `nrb` 直接停在那一步，不用等运行时发现。
+
+**接缝（seam）是 CLI 边界。** 给定一个临时 `HOME`、一个 pool 夹具、
+一份 disabled 状态文件，跑 `skills sync` / `on` / `off`，
+断言三个目标目录里符号链接的**最终状态**。不测 `fm`、`catalog_chars`
+那些内部函数 —— 它们是实现细节，重构内部结构不该让测试变红。
+
+目前只有一条用例：**pool 之外的符号链接不会被 `sync` 删掉**。
+先测这条是因为它后果最重：`~/.claude/skills/` 是用户自己也会往里放东西的
+目录，误删不可逆；而剪枝逻辑又必须存在（换了 store 路径之后得清断链）。
+两个要求拉扯的地方最容易写错。
+
+用例里第二条断言（「pool 里的 skill 确实被装上了」）是**守住测试本身**的：
+要是 `sync` 其实什么都没干，第一条会假阳性地通过。
+
+手动跑：
+
+```bash
+SKILLS_BIN=$(command -v skills) bash home/skills-tests.sh
+```
+
+**改完剪枝逻辑，先确认测试能变红再提交。** 验证办法是把
+`cmd_sync` 里的 `case "$(readlink "$l")" in "$POOL"/*) rm -f "$l" ;; esac`
+临时改成无条件 `rm -f "$l"`，构建应当失败并打印
+`FAIL  pool 之外的符号链接被 sync 删掉了`。一条永远不会红的测试等于没有。
+
+下一批该补的用例（还没写）：
+
+- `~/.claude/skills/synced/` 这种**真目录**不能被剪掉（现在只测了符号链接）
+- `off <名字>` 之后三个目录里都不再有它，`on` 之后都回来
+- 指向 pool 里已不存在项的**断链**要被剪掉
+- `off --all` 之后 pool 本身不受影响
+
+## 九、实机验证
 
 ```bash
 skills status                          # 三个目录各能看见多少个
@@ -151,9 +222,13 @@ find . ! -user toru -printf '%u  %p\n'    # 应该没有任何输出（坑 5）
 然后在 Claude Code 里打 `/tdd`，在 VS Code Copilot 里问一个该触发
 `diagnosing-bugs` 的问题，各验一次。
 
+**还要数一遍数量。** `skills list` 说 25 个，就去每个工具的 skill 列表里数，
+少了就是和该工具的内建撞了名（见第四节）。`code-review` 就是这么发现的 ——
+它在 Claude Code 里既不报错也不出现，只是静悄悄地少一个。
+
 ---
 
-## 八、全部 skill 一览
+## 十、全部 skill 一览
 
 <!-- BEGIN GENERATED: skills doc -->
 
@@ -161,12 +236,11 @@ find . ! -user toru -printf '%u  %p\n'    # 应该没有任何输出（坑 5）
 > **别手改**，改动会被下一次生成覆盖；要改就去改生成逻辑
 > （`home/agent-skills.nix` 里的 `cmd_doc`）。
 >
-> 对应的 skill 池：`/nix/store/rwb9z1frc9f02hz6lhzgllv7q5b9yjzv-agent-skills`
+> 对应的 skill 池：`/nix/store/f0aalgngcycbq7fgbfikfgqlrw5s65w7-agent-skills`
 
 | Skill | 调用方式 | 常驻 tok | 调用 tok | 附属 tok | 用途（作者原文 description，这也是模型看到的触发条件） |
 |---|---|---:|---:|---:|---|
 | `ask-matt` | 打 `/ask-matt` | 23 | 2813 | 1097 | Ask which skill or flow fits your situation. A router over the skills in this repo. |
-| `code-review` | 模型自动 / 也可手打 | 108 | 1525 | 25 | "Review the changes since a fixed point (commit, branch, tag, or merge-base) along two axes: Standards (does the code follow this repo's documented coding standards?) and Spec (does the code match what the originating issue/spec asked for?). Runs both reviews in parallel sub-agents and reports them side by side. Use when the user wants to review a branch, a PR, work-in-progress changes, or asks to \"review since X\"." |
 | `codebase-design` | 模型自动 / 也可手打 | 70 | 1440 | 1330 | Shared vocabulary for designing deep modules. Use when the user wants to design or improve a module's interface, find deepening opportunities, decide where a seam goes, make code more testable or AI-navigable, or when another skill needs the deep-module vocabulary. |
 | `diagnosing-bugs` | 模型自动 / 也可手打 | 43 | 2082 | 355 | Diagnosis loop for hard bugs and performance regressions. Use when the user says "diagnose"/"debug this", or reports something broken/throwing/failing/slow. |
 | `domain-modeling` | 模型自动 / 也可手打 | 42 | 754 | 1281 | Build and sharpen a project's domain model. Use when discussing codebase terminology, writing or editing a CONTEXT.md, or recording or editing an ADR. |
@@ -176,6 +250,7 @@ find . ! -user toru -printf '%u  %p\n'    # 应该没有任何输出（坑 5）
 | `handoff` | 打 `/handoff` | 24 | 171 | 36 | Compact the current conversation into a handoff document for another agent to pick up. |
 | `implement` | 打 `/implement` | 18 | 76 | 35 | "Implement a piece of work based on a spec or set of tickets." |
 | `improve-codebase-architecture` | 打 `/improve-codebase-architecture` | 39 | 1445 | 1702 | Scan a codebase for deepening opportunities, present them as a visual HTML report, then grill through whichever one you pick. |
+| `matt-code-review` | 模型自动 / 也可手打 | 110 | 1525 | 25 | "Review the changes since a fixed point (commit, branch, tag, or merge-base) along two axes: Standards (does the code follow this repo's documented coding standards?) and Spec (does the code match what the originating issue/spec asked for?). Runs both reviews in parallel sub-agents and reports them side by side. Use when the user wants to review a branch, a PR, work-in-progress changes, or asks to \"review since X\"." |
 | `prototype` | 模型自动 / 也可手打 | 47 | 677 | 3263 | Build a throwaway prototype to answer a design question. Use when the user wants to sanity-check whether a state model or logic feels right, or explore what a UI should look like. |
 | `research` | 模型自动 / 也可手打 | 62 | 130 | 24 | Investigate a question against high-trust primary sources and capture the findings as a Markdown file in the repo. Use when the user wants a topic researched, docs or API facts gathered, or reading legwork delegated to a background agent. |
 | `resolving-merge-conflicts` | 模型自动 / 也可手打 | 25 | 198 | 29 | "Use when you need to resolve an in-progress git merge/rebase conflict." |
@@ -191,7 +266,7 @@ find . ! -user toru -printf '%u  %p\n'    # 应该没有任何输出（坑 5）
 | `wizard` | 模型自动 / 也可手打 | 80 | 942 | 2166 | Generate an interactive bash wizard that walks a human through steps only they can perform. Use when provisioning infrastructure, setting up credentials or CI secrets, walking an unfamiliar third-party dashboard, or running a one-off migration or cutover. Don't invoke this for steps the agent can perform itself. |
 | `writing-for-agents` | 模型自动 / 也可手打 | 31 | 2683 | 683 | Writing documents for agents. Use when creating or editing skills, or modifying AGENTS.md or CLAUDE.md. |
 
-合计 **25** 个 skill：常驻 ≈ **1030 tokens**（每个会话都付），正文全加起来 ≈ 27514 tokens，附属文件另计 ≈ 21702 tokens。
+合计 **25** 个 skill：常驻 ≈ **1032 tokens**（每个会话都付），正文全加起来 ≈ 27514 tokens，附属文件另计 ≈ 21702 tokens。
 
 token 数是字符数 ÷ 4 的英文经验估算，误差约 ±15%。
 

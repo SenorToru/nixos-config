@@ -205,7 +205,7 @@ find . ! -user toru -printf '%u  %p\n'
 完整说明见 [Lesson-Learn/0012_AGENT_SKILLS.md](Lesson-Learn/0012_AGENT_SKILLS.md)
 和 [README.md](README.md) 的「Agent Skills」一节。
 
-改这块之前必须知道的三件事：
+改这块之前必须知道的五件事：
 
 1. **分两层，别把它们合并回去。**
    `~/.local/share/agent-skills` 由 home-manager 管（声明式，flake.lock 钉版本）；
@@ -219,6 +219,16 @@ find . ! -user toru -printf '%u  %p\n'
    后者会在构建时跑 shellcheck，而 shellcheck 在沙箱的 C locale 下打印不出中文，
    一有 warning 就崩在 `commitBuffer: invalid argument` 上，报错完全看不出原因。
    改完脚本请实机跑 `skills list` / `skills status` 验证。
+
+4. **`home/skills-tests.sh` 在构建期执行，测试不过 `nhm` / `nrb` 就失败。**
+   它测的是 `skills` 的 CLI 边界（临时 HOME + pool 夹具 + 断言最终的链接状态），
+   不测内部函数。改 `cmd_sync` 的剪枝逻辑时，先确认测试**能变红**再提交 ——
+   把剪枝条件临时改成无条件 `rm -f`，构建必须失败。
+5. **撞名分两种，构建期只拦得住一种。**
+   源与源之间撞名构建会直接失败；和**工具内建 skill** 撞名查不出来 ——
+   `code-review` 就是被 Claude Code 的内建盖掉的，已改名成 `matt-code-review`
+   （配在 `skillSources.<源>.rename`，目录名和 frontmatter 的 `name:` 一起改）。
+   装新 skill 集合之后要数一遍：`skills list` 的数量和每个工具里能看见的对得上吗。
 
 加新 skill 源要同时改 `flake.nix`（加 `flake = false` 的 input）和
 `skillSources` 表，两处缺一不可。
