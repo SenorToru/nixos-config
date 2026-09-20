@@ -391,6 +391,81 @@ kernel + initrd。如果哪天 `df -h /boot` 逼近满，先看
 
 ---
 
+## 迁移到新机器
+
+**仓库能复现的和不能复现的，是两回事，必须分开看。**
+
+### 仓库负责的部分：完美复现
+
+新机器上 `nrb` 一下就和这台字节级一致 —— 包括 rime-frost 的版本和
+打在它上面的 lua 补丁、mozc-ut 的 8 套词典、fcitx5 的插件组合。
+全部由 `flake.lock` 锁死。
+
+新机器的步骤只有三步：
+
+```bash
+git clone git@github.com:SenorToru/nixos-config.git ~/nixos-config
+# 把 hosts/<新主机>/ 建起来（hardware-configuration.nix 用
+# nixos-generate-config 生成，tuning.nix 按新硬件重写，别照抄 thinkpad 的）
+sudo nixos-rebuild switch --flake ~/nixos-config#<新主机>
+```
+
+### 仓库不管的部分：`$HOME` 里的用户状态
+
+**这些一个都不会自动跟过去**，因为它们不在版本库里：
+
+| 路径 | 内容 | 怎么办 |
+|------|------|--------|
+| `~/.config/fcitx5/profile` | 启用了哪些输入法、顺序 | 直接拷 |
+| `~/.config/fcitx5/config` | 全局快捷键 | 直接拷 |
+| `~/.config/fcitx5/conf/` | 各插件的设置 | 直接拷 |
+| `~/.local/share/fcitx5/rime/*.userdb/` | **Rime 学习数据** | 用 Rime 自带同步，见下 |
+| `~/.config/mozc/` | **Mozc 学习历史** | 整个目录拷，**必须含 `.encrypt_key.db`** |
+| `~/.local/share/fcitx5/rime/build/` | 编译缓存 | **不要拷**，见下 |
+| `~/.local/share/fcitx5/rime/installation.yaml` | 本机安装标识 | **不要拷**，见下 |
+
+### 三个必须避开的坑
+
+**`build/` 不要拷。** 里面固化了旧机器的 nix store 路径。
+到新机器上第一件事是删掉它，让 rime 重新部署：
+
+```bash
+rm -rf ~/.local/share/fcitx5/rime/build
+```
+
+首次部署要一两分钟（白霜 29M 词库 + 7MB 语法模型要编译成 `.bin`），
+属正常，别以为卡死了。
+
+**`installation.yaml` 不要拷。** 里面的 `installation_id` 是每台机器
+一个 UUID，Rime 的同步目录就按它分子目录。拷过去两台机器会认成同一台，
+同步就废了。让新机器自己生成。
+
+**Mozc 的 `.encrypt_key.db` 必须一起拷。** `.history.db` 是加密的，
+只拷历史不拷密钥，到新机器上读不出来，等于学习记录全丢。
+整个 `~/.config/mozc/` 一起拷最省事。
+
+### Rime 学习数据：用内建同步，别手工拷 userdb
+
+`*.userdb/` 是 LevelDB，手工拷贝容易出问题，而且**没法合并** ——
+两台机器各自学的东西只能二选一。Rime 自带的同步是为这个设计的，
+它导出成文本再**双向合并词频**。
+
+在**每台**机器的 `~/.local/share/fcitx5/rime/installation.yaml` 里加一行
+（这个文件 Rime 自己也要写 `install_time` 等字段，
+所以**不要用 home-manager 去管它**，软链成只读会让 Rime 写失败）：
+
+```yaml
+sync_dir: "/home/toru/Sync/rime"
+```
+
+然后指向同一个目录（Syncthing / git / 网盘都行），
+在输入法菜单里点「同步」。它会在 `<sync_dir>/<installation_id>/` 下
+写出 `*.userdb.txt`，两边各自同步时自动合并。
+
+**Mozc 没有同步功能**，只能整个目录拷。
+
+---
+
 ## 其他注意事项
 
 1. **字体族名写错，fontconfig 完全静默回退。** 写完必须 `fc-match "族名"` 验证。

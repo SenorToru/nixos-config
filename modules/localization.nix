@@ -25,6 +25,33 @@ let
       hash = "sha256-1yxbLuVcCqgHGS14AecbVL7AQFGC/wbFO7US3Onz/R0=";
     };
 
+    # 修上游的一个 lua 崩溃（1.0.4 与 master 都有这个问题）。
+    #
+    # lua/lunar.lua 的 Date2LunarDate() 把字符串拼接和数值比较都放在
+    # 长度校验**之前**：
+    #   552  Day = tonumber(Gregorian.sub(Gregorian, 7, 8))
+    #   553  LunarDate3 = Year .. "年" .. Month .."月".. Day .. "日"
+    #   554  if Year > 2100 or ... or string.len(Gregorian) < 8 then 无效日期
+    #
+    # 而识别器 gregorian_to_lunar 写的是 "^N[0-9]{1,8}"，允许 1 到 8 位。
+    # 输入 N 加不足 8 位数字（边打边看时必然经过）就会 tonumber("") 得 nil，
+    # 553 行拼接 nil 抛异常，日志刷屏：
+    #   LuaTranslation::Next error(2): attempt to concatenate local 'Day'
+    # 就算躲过 553，554 行的 Year > 2100 也会「attempt to compare nil」。
+    #
+    # 输入功能本身不受影响（该 translator 出错就不产候选，其它照常），
+    # 但错误日志会把真正有用的信息淹掉，所以修掉。
+    #
+    # 用两处**单行**替换而不是多行：多行替换写在 nix 缩进字符串里会被
+    # nixfmt 重排，缩进一变 --replace-fail 就匹配不上，构建直接失败。
+    #   1. 553 行套 tostring()，nil 不再导致拼接异常
+    #   2. 554 行条件最前面加 nil 检查，靠 or 短路，避免拿 nil 去比大小
+    postPatch = ''
+      substituteInPlace lua/lunar.lua \
+        --replace-fail 'LunarDate3 = Year .. "年" .. Month .."月".. Day .. "日"' 'LunarDate3 = tostring(Year) .. "年" .. tostring(Month) .."月".. tostring(Day) .. "日"' \
+        --replace-fail 'if Year > 2100 or Year < 1899' 'if not Year or not Month or not Day or Year > 2100 or Year < 1899'
+    '';
+
     installPhase = ''
       runHook preInstall
 
