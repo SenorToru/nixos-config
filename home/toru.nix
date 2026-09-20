@@ -2,10 +2,15 @@
   config,
   lib,
   pkgs,
+  osConfig,
   ...
 }:
 
 let
+  # 仓库位置与 flake 属性名。别名和脚本都从这里取，不要各写一份。
+  repoPath = "${config.home.homeDirectory}/nixos-config";
+  flakeHost = osConfig.custom.flakeHost;
+
   baseExtensionPolicies = {
     ExtensionUpdate = true;
     ExtensionSettings = {
@@ -48,10 +53,18 @@ let
     lt = "eza --tree --level=2";
 
     # 本仓库的高频操作（命令本体见 CLAUDE.md「验证流程」）
-    nrb = "sudo nixos-rebuild switch --flake /home/toru/nixos-config#thinkpad";
-    nrt = "sudo nixos-rebuild test --flake /home/toru/nixos-config#thinkpad";
-    ncheck = "nix build /home/toru/nixos-config#nixosConfigurations.thinkpad.config.system.build.toplevel --out-link /tmp/res";
-    nhm = "nix build /home/toru/nixos-config#nixosConfigurations.thinkpad.config.home-manager.users.toru.home.activationPackage --out-link /tmp/hm";
+    #
+    # 仓库路径和主机名都**不写死**：
+    #   repoPath  从 home.homeDirectory 推，换用户名也成立
+    #   flakeHost 从系统层的 custom.flakeHost 取，不是 networking.hostName ——
+    #             后者在本机是 thinkpad-nixos，而 flake 属性是 thinkpad
+    #
+    # 写死过一次：四个别名里都是 `/home/toru/nixos-config#thinkpad`，
+    # 结果新机器上 nrb 会去构建 thinkpad 的配置。
+    nrb = "sudo nixos-rebuild switch --flake ${repoPath}#${flakeHost}";
+    nrt = "sudo nixos-rebuild test --flake ${repoPath}#${flakeHost}";
+    ncheck = "nix build ${repoPath}#nixosConfigurations.${flakeHost}.config.system.build.toplevel --out-link /tmp/res";
+    nhm = "nix build ${repoPath}#nixosConfigurations.${flakeHost}.config.home-manager.users.${config.home.username}.home.activationPackage --out-link /tmp/hm";
     # 用 nixos-rebuild 而不是 nix-env --list-generations：后者要开
     # /nix/var/nix/profiles/system.lock，非 root 直接 permission denied。
     # 前者不用 sudo，而且带构建日期、内核版本和 Current 标记。
@@ -529,6 +542,10 @@ in
     # 拆出去是因为它自带一套命令（skills、skills-update）和生成逻辑，
     # 塞进这个文件会把本来就长的 toru.nix 顶到没法读。
     ./agent-skills.nix
+
+    # state-sync（搬 B 类用户状态）和 migration-check（查漂移）。
+    # 同样自带命令和构建期测试，拆出去。见 MIGRATION.md 第 7 和第 10 节。
+    ./migration.nix
   ];
 
   home.username = "toru";
@@ -1199,7 +1216,125 @@ in
       background-color = rgba "base00" "0.8";
       border-color = rgba "base03" "0.4";
       icon-color = rgba "base05" "0.9";
+
+      # 下面这些是布局和行为，和配色无关，但同属这个扩展所以放一起。
+      # 原先只活在 ~/.config/dconf 里，换机器不跟过去。
+      # position-x / position-y 是面板上的百分比位置，
+      # 在不同宽度的屏幕上仍然成立，所以可以当通用值搬。
+      enable-popups = true;
+      label-font-size = 11;
+      orientation = "horizontal";
+      vital-orientation = "vertical";
+      position-x = 82.0;
+      position-y = 2.0;
+      ring-diameter = 48;
+      show-labels = true;
+      show-rings = true;
     };
+
+  # ============================================
+  # GNOME 的其余 dconf 设置
+  # ============================================
+  # 原先这些只活在 ~/.config/dconf 里 —— 换台机器全部丢失，
+  # 属于 MIGRATION.md 第 0 节说的「其实该进 Nix 却没进」那一类。
+  #
+  # **刻意只收下面这些，不是整份 dconf dump。** 被排除的和理由：
+  #
+  #   org/gnome/desktop/interface、.../background
+  #       stylix 在管（stylix.targets.gnome.enable），声明了会打架
+  #   shell/extensions/user-theme
+  #       由下面那段 home.activation 管（它要等扩展装好才能设）
+  #   shell/app-picker-layout
+  #       几百项的位置索引，加个应用就变，搬过去毫无意义
+  #   shell/extensions/burn-my-windows
+  #       active-profile 指向 ~/.config/burn-my-windows/profiles/<时间戳>.conf，
+  #       是本机路径；其余键（last-*-version、prefs-open-count）是运行状态
+  #   shell/extensions/dash-to-panel
+  #       panel-* 全是空的 '{}' 默认值，extension-version / prefs-opened 是状态
+  #   shell/extensions/appindicator
+  #       这个扩展在 disabled-extensions 里，设了也没人读
+  #   shell/welcome-dialog-last-shown-version、各种 window-state
+  #       纯状态
+  dconf.settings = {
+    "org/gnome/shell" = {
+      # 注意这里**不是** dconf dump 的原样照抄：原来的列表里还有一个
+      # gnome-shell-screenshot@ttll.de，但那个扩展根本没装
+      # （gnome-extensions list 里看不到它），是以前用 Extension Manager
+      # 装了又删留下的死 UUID。GNOME 对不认识的 UUID 静默忽略，
+      # 所以平时看不出来。照抄会把这个垃圾一起搬到新机器上。
+      enabled-extensions = [
+        "apps-menu@gnome-shell-extensions.gcampax.github.com"
+        "burn-my-windows@schneegans.github.com"
+        "color-picker@tuberry"
+        "dash-to-panel@jderose9.github.com"
+        "draw-on-gnome@daveprowse.github.io"
+        "gTile@vibou"
+        "kimpanel@kde.org"
+        "user-theme@gnome-shell-extensions.gcampax.github.com"
+        "vitalsWidget@ctrln3rd.github.com"
+      ];
+
+      disabled-extensions = [ "appindicatorsupport@rgcjonas.gmail.com" ];
+
+      favorite-apps = [
+        "code.desktop"
+        "neovide.desktop"
+        "org.gnome.Nautilus.desktop"
+        "firefox.desktop"
+        "org.gnome.TextEditor.desktop"
+        "com.mitchellh.ghostty.desktop"
+      ];
+    };
+
+    # 窗口按钮布局。**从 modules/desktop-gnome.nix 的系统层挪过来的** ——
+    # 按钮放左还是放右是用户偏好，跟着人走不跟着机器走，
+    # 按仓库判据属于 home 层。挪过来之后系统层不再有任何 dconf 声明，
+    # 只剩 programs.dconf.enable，单一真相。
+    "org/gnome/desktop/wm/preferences".button-layout = "close,minimize,maximize:";
+
+    # 输入法面板。
+    #
+    # font 的值是 **Pango 字体描述**，不是 fontconfig 族名 ——
+    # Pango 会把它拆成 族名「Sarasa Fixed CL」+ 权重 ultralight + 字号 11。
+    # 所以**不要拿 `fc-match "Sarasa Fixed CL Ultra-Light"` 去验证它**，
+    # 那样整串会被当成族名，必然匹配失败、让人以为踩了坑 1。
+    # 正确的验证是分开查：`fc-match "Sarasa Fixed CL"` 和
+    # `fc-match "Sarasa Fixed CL:weight=extralight"`，两个都命中才对。
+    #
+    # 这里用 CL（中文）而系统等宽用 J（日文），是有意的：
+    # 这个面板显示的是拼音候选词。
+    "org/gnome/shell/extensions/kimpanel" = {
+      font = "Sarasa Fixed CL Ultra-Light 11";
+      vertical = true;
+    };
+
+    "org/gnome/shell/extensions/color-picker" = {
+      enable-format = true;
+      enable-notify = false;
+      enable-shortcut = true;
+      persistent-mode = true;
+      preview-style = 0;
+    };
+
+    # 画板的调色板。九个颜色是手挑的，重配一遍很烦，值得搬。
+    # 格式是 GVariant 的 (String, Array of String)，
+    # home-manager 的 dconf 模块要用 lib.gvariant 显式构造 ——
+    # 直接写 Nix 列表会被当成 'as' 而丢掉外层的 tuple。
+    "org/gnome/shell/extensions/draw-on-gnome/drawing".tool-palette = lib.gvariant.mkTuple [
+      "Palette"
+      [
+        "rgb(255,105,180):HotPink"
+        "rgb(0,255,255):Cyan"
+        "rgb(255,255,0):yellow"
+        "rgb(255,69,0):Orangered"
+        "rgb(127,255,0):Chartreuse"
+        "rgb(148,0,211):DarkViolet"
+        "rgb(255,255,255):White"
+        "rgb(190,190,190):Gray"
+        "rgb(0,0,0):Black"
+      ]
+    ];
+  };
 
   programs.tmux = {
     enable = true;
@@ -1215,7 +1350,7 @@ in
   # 注意：git / ripgrep / fd / jq / htop / tree 已经在 modules/common.nix 的
   # systemPackages 里了，不要在这里再装一份 —— 见 CLAUDE.md 的坑 3。
   # 尤其是 git：root 跑 `nixos-rebuild --flake` 时需要它，
-  # 必须留在系统层，所以这里也不能启用 programs.git。
+  # 必须留在系统层 —— 但那**不妨碍**这里启用 programs.git，见下面那段。
   home.packages = with pkgs; [
     dua # 交互式磁盘占用分析（Omarchy 4 的默认选择）
     duf # 挂载点/剩余空间一览
@@ -1224,6 +1359,60 @@ in
     # 说明见上面「theme —— 主题切换命令」那一段。
     themeSwitcher
   ];
+
+  # ============================================
+  # Git
+  # ============================================
+  # 之前 ~/.gitconfig 是仓库外的一个手写文件，有两个问题：
+  #
+  #   1. 换机器完全不跟过去（A 类漏网，见 MIGRATION.md 第 0 节）
+  #   2. 更要命的是它里面**钉死了一个 store 绝对路径**：
+  #        helper = !/nix/store/3s30bx…-gh-2.99.0/bin/.gh-wrapped auth git-credential
+  #      那是当时 gh 的版本。nix.gc 每周删 7 天前的东西，那个路径迟早消失，
+  #      届时凡走 HTTPS 的 git 操作都会在凭据助手上失败。
+  #      症状还很隐蔽：SSH remote 不经凭据助手，平时完全看不出来。
+  #
+  # 现在写成 ${pkgs.gh}/bin/gh，跟着 store 走，GC 也动不了它
+  # （home-manager 的 generation 引用着它）。
+  #
+  # 关于「git 必须留在系统层」那条：成立，root 跑 nixos-rebuild --flake
+  # 时要用。但它**不妨碍**这里同时启用 programs.git ——
+  # 坑 3 说的是 nvim/vim 那种「两个不同派生」的情况（一个带 extraPackages
+  # 一个不带），而这里两边解析到的是**同一个 store path**
+  # （useGlobalPkgs = true，HM 的 programs.git.package 默认就是 pkgs.git）。
+  # 实测确认过：系统层和 home 层都是 …-git-2.54.0。
+  # 改动这里之前请重新确认一次，别默认它永远成立。
+  programs.git = {
+    enable = true;
+
+    # 全局 gitignore。原先在 ~/.config/git/ignore 这个仓库外的手写文件里，
+    # 是 migration-check 第一次跑就抓出来的漏网之鱼。
+    # Claude Code 的本地设置文件不该进任何项目的版本库。
+    ignores = [ "**/.claude/settings.local.json" ];
+
+    # 用 settings 而不是 userName / userEmail / extraConfig ——
+    # 这个 home-manager 版本已经把那三个改名了，继续用会在每次构建时
+    # 打弃用警告（`nrb` 的输出里多两行噪音，久了就没人看警告了）。
+    settings = {
+      user.name = "SenorToru";
+      user.email = "dev@toru-leathers.com";
+
+      pull.rebase = false;
+
+      # 空字符串那一项是 gh 自己的写法：先清空 helper 列表再追加，
+      # 避免和系统级 gitconfig 里可能存在的 helper 叠加。
+      credential = {
+        "https://github.com".helper = [
+          ""
+          "!${pkgs.gh}/bin/gh auth git-credential"
+        ];
+        "https://gist.github.com".helper = [
+          ""
+          "!${pkgs.gh}/bin/gh auth git-credential"
+        ];
+      };
+    };
+  };
 
   # ============================================
   # Neovim 配置 (HomeManager)

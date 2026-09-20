@@ -219,7 +219,7 @@ let
 
     # 默认路径用的是 flakeHost 而不是 $(hostname)：
     # 这两个在本仓库里是不一样的（hosts/thinkpad/ vs thinkpad-nixos）。
-    out=''${1:-hosts/${cfg.flakeHost}/hwinfo.nix}
+    out=''${1:-hosts/${config.custom.flakeHost}/hwinfo.nix}
 
     if [ ! -e flake.nix ]; then
       echo "请在仓库根目录跑这个命令（当前目录下找不到 flake.nix）。" >&2
@@ -325,7 +325,7 @@ let
     echo
     echo "接下来（三步都要，少一步图片不会更新）："
     echo "  git add $out            # 新文件，flake 看不见未跟踪文件"
-    echo "  sudo nixos-rebuild switch --flake .#${cfg.flakeHost}"
+    echo "  sudo nixos-rebuild switch --flake .#${config.custom.flakeHost}"
     echo "  sudo refind-sync"
     if [ "$(id -u)" -ne 0 ]; then
       echo
@@ -502,23 +502,6 @@ in
         换了硬件就重跑一次。
 
         内核那一行不用管，`appendKernelRow` 会自动补，且永远跟着实际内核走。
-      '';
-    };
-
-    flakeHost = lib.mkOption {
-      type = lib.types.str;
-      default = config.networking.hostName;
-      defaultText = lib.literalExpression "config.networking.hostName";
-      description = ''
-        这台机器在仓库里的名字：`hosts/<这个名字>/` 目录名，同时也是
-        `flake.nix` 里 `nixosConfigurations` 的属性名。
-
-        **它不一定等于 `networking.hostName`。** 本机就是个例子：
-        目录叫 `hosts/thinkpad/`、flake 属性叫 `thinkpad`，
-        而 `networking.hostName` 是 `thinkpad-nixos`。
-
-        只被 `refind-hwinfo` 用来决定默认输出路径和打印下一步命令，
-        不影响任何构建产物。
       '';
     };
 

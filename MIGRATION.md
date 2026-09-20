@@ -21,14 +21,14 @@
 |------|------|------|
 | 一 | 本文档 | 已完成 |
 | 二 | rEFInd 主题 derivation、`refind-sync`、`refind-hwinfo`、在 thinkpad 上实装验证 | **已完成** |
-| 三 | A 类配置补全、`migration-check`、`state-sync`、README/CLAUDE.md 同步 | **未开始** |
+| 三 | A 类配置补全、`migration-check`、`state-sync`、README/CLAUDE.md 同步 | **已完成** |
 
-**第 6 节和第 9 节（rEFInd）已经在这台 thinkpad 上完整跑过一遍**，
-包括重启验证菜单、图标和分辨率。过程中踩的五个坑和修法记在
-[Lesson-Learn/0013](Lesson-Learn/0013_REFIND_BOOT.md)，本文相应步骤已按实测结果改写。
+**第 6、7、9 节都已在这台 thinkpad 上实际跑过。** rEFInd 那部分连重启
+验证菜单、图标、分辨率都做了，踩的五个坑记在
+[Lesson-Learn/0013](Lesson-Learn/0013_REFIND_BOOT.md)。
 
-**还没落地的是第 7 节**：`state-sync` 和 `migration-check` 两个命令尚不存在，
-`dotfiles-state` 仓库也还没建（批三）。该节步骤按设计写，未经验证。
+**唯一没做的是把 `dotfiles-state` 推上 GitHub** —— 本地仓库已建好、
+内容已 `state-sync push` 过并人工看过，但远程仓库要你自己建（见 7.1）。
 
 第 1-5 节和第 8 节是基于现有仓库和 NixOS 标准流程写的，可以照做，
 但**没有在一台全新机器上从头跑过** —— 下次真装新机器时按它走，
@@ -627,7 +627,8 @@ bcdedit /set {bootmgr} path \EFI\refind\refind_x64.efi
 
 ## 7. 还原 `$HOME` 里 Nix 管不到的部分
 
-> **本节尚未验证**，`state-sync` 命令目前还不存在（批三）。
+> **本节已实现并实测过**（2026-09-21）。`state-sync` 和 `migration-check`
+> 都在 PATH 上，本地状态仓库已建。**远程仓库还没建**，见 7.1。
 
 ### 7.1 B 类状态
 
@@ -636,16 +637,39 @@ git clone git@github.com:SenorToru/dotfiles-state ~/dotfiles-state
 state-sync restore
 ```
 
-`state-sync` 的三个子命令：
+`state-sync` 的四个子命令：
 
 | 命令 | 作用 |
 |------|------|
-| `state-sync push` | 把本机的 B 类路径收进仓库并提交 |
+| `state-sync status` | 看哪些路径有差异 |
+| `state-sync push` | 把本机的 B 类路径收进仓库（**不自动 commit**） |
 | `state-sync pull` | 拉远程最新 |
 | `state-sync restore` | 把仓库内容铺回 `$HOME` |
 
-**推送是手动的**，没有定时器。理由和这个仓库「Toru 实机验证过再提交」
-是同一条：不能让一个刚改坏的配置被自动推上去覆盖掉好的。
+**推送是手动的**，而且 `push` 只复制不提交。理由和这个仓库
+「Toru 实机验证过再提交」是同一条：不能让一个刚改坏的配置
+被自动推上去覆盖掉好的。
+
+收哪些路径由 `home/migration.nix` 的 `stateFiles` 决定，
+`state-sync` 和 `migration-check` 共用同一份清单。
+
+`push` 会剔掉日志、锁文件和 `.session.ipc`。最后那个记的是**本机的
+套接字路径**，拷到新机器上是错的。
+
+> ### 这个仓库还没建到 GitHub 上
+>
+> 本地的 `~/dotfiles-state` 已经建好并 push 过一轮（480 KB，
+> 内容人工核对过，确认没混进 `~/.config/gh` 的 token 之类的东西）。
+> 但**远程仓库要你自己建**：
+>
+> ```bash
+> cd ~/dotfiles-state
+> git add -A && git commit -m "初始状态"
+> gh repo create SenorToru/dotfiles-state --private --source=. --push
+> ```
+>
+> **必须是 private。** 里面有输入法的学习历史 ——
+> 那是你打过的字的统计痕迹。
 
 ### 7.2 输入法
 
@@ -676,6 +700,38 @@ sync_dir: "/home/toru/Sync/rime"
 
 **Mozc 没有同步功能**，只能靠 `state-sync` 整个目录搬。
 `.history.db` 是加密的，`.encrypt_key.db` 必须一起 —— 少了密钥等于学习记录全丢。
+
+### 7.2.5 让 home-manager 接管一个已存在的配置文件
+
+把某个手写的配置收进 Nix 时（比如 `~/.gitconfig` → `programs.git`），
+**顺序是「先让新的生效，确认无误，再删旧的」，不能反过来。**
+
+反过来做会有一段**空窗期**：旧的删了、新的还没 switch 上去，
+这期间那个程序没有配置。`git` 的表现是 `git commit` 直接被拒
+（`Please tell me who you are`）。实际踩过一次。
+
+正确顺序：
+
+```bash
+sudo nixos-rebuild switch --flake .#<主机>   # 1. 新配置先生效
+git config --list --show-origin              # 2. 确认来源变成了新文件
+rm ~/.gitconfig                              # 3. 再删旧的
+```
+
+> **`~/.gitconfig` 这个例子还有个额外的坑**：home-manager 写的是
+> `~/.config/git/config`，而 git 读完 XDG 路径**之后**才读 `~/.gitconfig`
+> —— 后读的赢。所以旧文件不删的话，switch 完仍然是旧配置在生效，
+> 看起来像「改了没用」。
+
+`backupFileExtension = "hm-bak"` 会把被接管的原文件改名成
+`<原名>.hm-bak` 保留下来。那是接管成功的证据，核对完就该删：
+
+```bash
+migration-check        # 它会列出所有 .hm-bak 并告诉你内容和现役是否一致
+```
+
+不删的话它们会一直躺着，而且会让 `migration-check` 把整个目录
+误报成「没人认领」（因为目录里混进了一个不是 store 链接的真实文件）。
 
 ### 7.3 C 类：重新签发清单
 
@@ -870,7 +926,9 @@ rEFInd 白装。
 migration-check
 ```
 
-> 这个命令目前还不存在（批三）。
+> 已实现。首次运行就抓到三处真实漂移：没声明的 HandBrake、
+> `enabled-extensions` 里一个根本没装的死 UUID、以及一条只存在于
+> `~/.config/git/ignore` 里的全局 gitignore 规则。
 
 它扫 `$HOME`，把**实际存在但本文档和 `dotfiles-state` 都没提到**的东西报出来。
 加完新工具之后跑一下就知道这份指南缺了什么。
@@ -893,14 +951,18 @@ migration-check
 
 | 问题 | 状态 |
 |------|------|
-| `users.users.toru` 没有密码字段，新机器装完账户是锁定的 | 第 5.4 节绕过了。根治要加 `initialPassword` 或 `hashedPasswordFile`（批三）|
-| `nrb` / `nrt` / `ncheck` / `nhm` 四个别名把 `#thinkpad` 写死了 | 新机器上这些别名会去构建 thinkpad 的配置。要改成跟着 `networking.hostName` 走（批三）|
-| `~/.gitconfig` 里钉死了 `/nix/store/…-gh-2.99.0/…` 绝对路径 | 那个版本被 GC 掉后 git 的 GitHub 凭据助手就失效。改成 `programs.git` 声明（批三）|
-| 第 7 节（`state-sync` / `dotfiles-state`）未实现 | 两个命令还不存在，仓库也还没建（批三）|
+| `users.users.toru` 没有密码字段，新机器装完账户是锁定的 | **有意不改**。密码属 C 类，塞进仓库是倒退。第 5.4 节的 `nixos-enter … passwd toru` 是正解 |
+| `dotfiles-state` 还没推上 GitHub | 本地仓库已建、已 push 过一轮并人工核对。远程要你自己建，见 7.1 |
 | 第 1-5 节没在全新机器上从头跑过 | 只能等下次真装新机器时验证，对不上的地方回来改 |
 | 独显探测判据未经多显卡机器验证 | AMD 的 APU 不在 PCI bus 00 上且也报显存，可能被误判成独显。真遇到直接改 `hwinfo.nix` |
+| VS Code 的四个扩展仍是手工装的 | nixpkgs 里的版本比实际装的旧（claude-code 会退到 2.1.223），声明进 Nix 等于降级。归手工清单，`migration-check` 盯着 |
 
-**已解决**（原先列在这里，批二做掉了）：
-rEFInd 在 thinkpad 上的实际 GOP 模式 —— 是 `Mode 0: 2560x1440`（面板原生），
-**没有 1080p**。经过和五个实机坑一起记在
-[Lesson-Learn/0013](Lesson-Learn/0013_REFIND_BOOT.md)。
+**已解决**（原先列在这里）：
+
+- **rEFInd 的实际 GOP 模式**（批二）—— 是 `Mode 0: 2560x1440`（面板原生），
+  **没有 1080p**。和另外四个实机坑一起记在
+  [Lesson-Learn/0013](Lesson-Learn/0013_REFIND_BOOT.md)。
+- **四个别名写死 `#thinkpad`**（批三）—— 改成从
+  `osConfig.custom.flakeHost` 和 `config.home.homeDirectory` 取。
+- **`~/.gitconfig` 钉死 gh 的 store 路径**（批三）—— 改成
+  `programs.git` 声明，helper 写成 `${pkgs.gh}/bin/gh`，跟着 store 走。

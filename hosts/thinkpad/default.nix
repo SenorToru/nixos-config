@@ -37,6 +37,11 @@
   # ThinkPad 主机名
   networking.hostName = "thinkpad-nixos";
 
+  # 这台机器在仓库里的名字：hosts/thinkpad/ 目录名 + flake 属性名。
+  # **和上面的 hostName 不一样**，别把两者混用 —— shell 别名、
+  # refind-hwinfo 的输出路径都靠它。选项定义在 modules/common.nix。
+  custom.flakeHost = "thinkpad";
+
   # UEFI 引导配置
   #
   # 两层结构：rEFInd 做顶层入口（好看 + 将来多系统选单），
@@ -82,11 +87,6 @@
   # 内核那一行也不在，它由模块从 config.boot.kernelPackages 直接取。
   custom.refind = {
     enable = true;
-
-    # 仓库里的名字（hosts/ 目录名 + flake 属性名）。
-    # 它和 networking.hostName（thinkpad-nixos）**不一样** ——
-    # refind-hwinfo 要靠这个才能把 hwinfo.nix 写对地方。
-    flakeHost = "thinkpad";
 
     # 2560x1440 = 面板原生，**已实机确认是固件 GOP 的 Mode 0**。
     #

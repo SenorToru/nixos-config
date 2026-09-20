@@ -14,6 +14,7 @@ Toru 的 NixOS 多机配置仓库（flake，home-manager 作为 NixOS 模块）�
 | `hosts/<主机>/default.nix` | 主机名、引导、键盘布局、用户账户、模块拼装 | 本机身份 |
 | `hosts/<主机>/hardware-configuration.nix` | `nixos-generate-config` 自动生成，别手改 | — |
 | `hosts/<主机>/hwinfo.nix` | `refind-hwinfo` 生成：引导画面上那几行硬件 | 工具生成，换硬件重跑 |
+| `home/migration.nix` | `state-sync` / `migration-check`，以及 B 类状态清单 | 跟着用户走 |
 | `home/<用户>.nix` 及同目录文件 | home-manager 用户配置。按主题拆文件，由 `home/toru.nix` 的 `imports` 拼装 | 跟着用户走 |
 
 典型的**必须**放 `hosts/` 的东西：
@@ -285,6 +286,60 @@ find . ! -user toru -printf '%u  %p\n'
 
 ---
 
+## 用户状态：state-sync 与 migration-check
+
+`$HOME` 里 Nix 管不到的东西按 [MIGRATION.md](MIGRATION.md) 第 0 节分三类：
+**A 能进 Nix 就进 Nix，B 进不了但可版本化的进 `dotfiles-state`，
+C 是秘密的一律不搬**（新机器重新签发）。
+
+实现在 `home/migration.nix`，两个命令共用同一份清单。
+
+改这块之前必须知道的四件事：
+
+1. **B 类清单（`stateFiles`）是单一真相，别在脚本里另写一份。**
+   两份清单必然漂移，而漂移的表现是「换机器之后某个设置莫名其妙没了」，
+   极难联想回这里。
+
+2. **`state-sync push` 会把内容复制进一个将来要推上 GitHub 的仓库。**
+   往 `stateFiles` 里加东西之前先问：这是不是 C 类？
+   `home/migration-tests.sh` 有一条用例专门守这个（把 `.config/gh`
+   加进清单，构建必须失败）。改清单前先确认测试**能变红**。
+
+3. **`migration-check` 靠「home-manager 管的都是指向 `/nix/store` 的
+   符号链接」来自动跳过。** 目录的话是「目录非空且里面每个文件都是这样的
+   链接」—— 只查顶层符号链接会把 `~/.config/bat`、`btop`、`ghostty`
+   这一大批全部误报。
+
+4. **加了新的开发工具之后跑一次 `migration-check`。**
+   它会报出 `$HOME` 里没人认领的东西。每一处问：A、B 还是 C？
+   处理完同步 `MIGRATION.md` 第 10 节的表。
+
+## 在 nix 字符串里写 shell 脚本
+
+两条硬规则，都是踩出来的：
+
+1. **用 `writeShellScriptBin`，不要用 `writeShellApplication`。**
+   后者构建期跑 shellcheck，而 shellcheck 在沙箱的 C locale 下打印不出
+   中文，一有 warning 就崩在 `commitBuffer: invalid argument` 上，
+   报错完全看不出原因。
+
+2. **不要在 nix 缩进字符串里写 heredoc。**
+   `cat <<'X' ... X` 的终止符必须顶格，而 nix 的公共缩进剥离加上 nixfmt
+   的重排会让它带上缩进，bash 报 `syntax error: unexpected end of file`，
+   指向的行号还离得很远。
+   **清单一律用 `pkgs.writeText` 落成 store 里的文件**，脚本只管 `cat`，
+   缩进怎么变都不影响。`home/migration.nix` 的 `listFile` 是现成的写法。
+
+另外两个从 Nix 侧读配置时的坑，都会报成「类型不对」且位置离得很远
+（惰性求值，实测都指到了 fontconfig）：
+
+- `services.flatpak.packages` 被 nix-flatpak 规范化成了 attrset，
+  取 `appId` 才是字符串
+- `config.dconf.settings` 的值被 home-manager 包成 gvariant
+  （`{ _type; type; value; }`，列表里每项再包一层），要剥两层
+
+---
+
 ## Shell 环境
 
 登录 shell 是 **zsh**（`modules/shell.nix` 定系统层，`home/toru.nix` 定交互体验）。
@@ -296,7 +351,7 @@ bash 保持完全可用，两者配的是同一套基线。
   `ll`、`gs`、`nrb`、`ncheck` 这些只存在于交互 shell，
   `zsh -c 'll'` / `bash -c 'll'` 一律 command not found。
   `eza` `bat` `fzf` `zoxide` `atuin` `btop` `lazygit` `tmux` `dua` `duf` `direnv` `starship`
-  `skills` `skills-update`
+  `skills` `skills-update` `state-sync` `migration-check`
   都是真二进制（在 `/etc/profiles/per-user/toru/bin`），可以直接调用。
   `refind-sync` `refind-hwinfo` `efibootmgr` 在系统层
   （`/run/current-system/sw/bin`），同样是真二进制。

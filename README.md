@@ -34,7 +34,9 @@
 ├── home/
 │   ├── toru.nix              home-manager 用户配置
 │   ├── agent-skills.nix      Agent Skills：一份 skill 喂给所有 AI 工具
-│   └── skills-tests.sh       skills 命令的回归测试（构建期执行）
+│   ├── skills-tests.sh       skills 命令的回归测试（构建期执行）
+│   ├── migration.nix         state-sync + migration-check
+│   └── migration-tests.sh    state-sync 的回归测试（构建期执行）
 ├── Lesson-Learn/             知识库（按时间顺序编号）
 ├── MIGRATION.md              装新机器 + 搬 Nix 管不到的用户状态
 └── CLAUDE.md                 AI 协作约定
@@ -74,7 +76,7 @@
 |------|------|
 | `common.nix` | Nix 设置与自动 GC、`allowUnfree`、时区与 locale、`nix-ld`、NetworkManager、基础 CLI 工具、fwupd、sudo 密码回显 |
 | `desktop.nix` | GDM + GNOME、蓝牙、PipeWire、打印、默认终端（`xdg.terminal-exec` → Ghostty）、`nautilus-python`（让 Ghostty 自带的右键扩展能加载） |
-| `desktop-gnome.nix` | dconf 设置与 GNOME 扩展 |
+| `desktop-gnome.nix` | GNOME 扩展包；**只开 `programs.dconf`，不声明任何设置** —— dconf 的单一真相在 `home/toru.nix` |
 | `localization.nix` | 字体（全系统唯一的 `fonts` 声明处，含 `stylix.fonts`）与 fcitx5 输入法 |
 | `shell.nix` | 系统层 zsh、`PAGER`（**不含**用户名指派） |
 | `development.nix` | 编辑器与工具链、claude-code 版本覆写 overlay |
@@ -92,6 +94,8 @@
 | `toru.nix` | home-manager 主配置：别名、程序、主题 specialisation |
 | `agent-skills.nix` | Agent Skills 的安装、开关命令和使用指南生成（见下面「Agent Skills」一节） |
 | `skills-tests.sh` | `skills` 命令的回归测试，由 `agent-skills.nix` 在构建期执行 |
+| `migration.nix` | `state-sync`（搬 B 类用户状态）和 `migration-check`（查漂移）；B 类清单的单一真相 |
+| `migration-tests.sh` | `state-sync` 的回归测试，由 `migration.nix` 在构建期执行 |
 
 `hosts/thinkpad/default.nix` 的 `imports` 按
 **「本机专属在前、共用模块在后」**分两组写，加新机器时照抄这个骨架即可。
@@ -544,6 +548,79 @@ sudo nixos-rebuild switch --flake ~/nixos-config#<新主机>
 > 判据是「它有没有留下 Nix 管不到的状态」。
 > `MIGRATION.md` 第 10 节有一张「加了什么 → 要检查什么」的表。
 
+## 搬用户状态：state-sync 与 migration-check
+
+`$HOME` 里有一批 Nix 管不到的东西。[MIGRATION.md](MIGRATION.md) 第 0 节
+把它们分成三类，这两个命令负责其中的 B 类和「有没有漏」的检查。
+
+### `state-sync` —— 搬 B 类状态
+
+```bash
+state-sync status     # 看哪些路径有差异
+state-sync push       # 把 $HOME 里的状态收进仓库（不自动 commit）
+state-sync pull       # git pull
+state-sync restore    # 把仓库里的状态铺回 $HOME
+```
+
+仓库默认 `~/dotfiles-state`，可用 `STATE_REPO` 覆盖。
+**这个仓库要建成 private** —— 里面有输入法的学习数据。
+
+收哪些路径由 [`home/migration.nix`](home/migration.nix) 的 `stateFiles`
+决定，两个命令共用同一份清单。目前是 fcitx5 配置、mozc 学习历史、
+当前主题、Agent Skill 的禁用状态、多显示器布局、XDG 目录指向。
+
+> **push 不自动提交。** 和 nixos-config 一个道理：人工看过再提交，
+> 不让一个刚改坏的配置覆盖掉好的。
+
+push 时会剔掉日志、锁文件和 `.session.ipc` —— 最后那个记的是**本机的
+套接字路径**，搬到新机器上是错的。
+
+### `migration-check` —— 查漂移
+
+```bash
+migration-check
+```
+
+只读。扫五处，报出「实际存在但没人认领」的东西：
+
+| 查什么 | 抓什么 |
+|--------|--------|
+| Flatpak | 装了但 `modules/flatpak.nix` 里没声明 |
+| GNOME 扩展 | 启用了但没声明；**以及声明了但根本没装的死 UUID** |
+| VS Code 扩展 | 和手工清单对不上 |
+| home-manager 的接管备份 | `*.hm-bak` 文件，并告诉你内容和现役是否一致 |
+| B 类状态 | 在 `$HOME` 里但还没 `state-sync push` |
+| `~/.config`、`~/.local/share` | 既不是 home-manager 管的，也不在白名单里 |
+
+最后一项的判据是：**home-manager 管的东西都是指向 `/nix/store` 的符号链接**
+（目录的话，是目录里每个文件都是这样的链接），按这一点自动跳过，
+所以白名单只需要列「真实存在、但确实不用搬」的。
+
+它抓到过的真东西：没声明的 HandBrake、`enabled-extensions` 里一个
+根本没装的死 UUID（GNOME 对不认识的 UUID 静默忽略，平时完全看不出来）、
+还有一条只存在于 `~/.config/git/ignore` 里的全局 gitignore 规则。
+
+**加了新的开发工具之后跑一下**，就知道 `MIGRATION.md` 缺了什么。
+
+### 回归测试
+
+[`home/migration-tests.sh`](home/migration-tests.sh) 在**构建期**跑，
+测试不过 `nhm` / `nrb` 直接失败。
+
+守的是 `state-sync`：`push` 会把 `$HOME` 的东西复制进一个将来要推上
+GitHub 的仓库（**收多了就是泄密**），`restore` 会 `rm -rf` 后覆盖 `$HOME`
+里的文件（写错不可逆）。`migration-check` 是只读的，误报顶多浪费几分钟，
+所以不测它 —— 测试力度按后果分配。
+
+```bash
+STATE_SYNC_BIN=$(command -v state-sync) bash home/migration-tests.sh   # 手动跑
+```
+
+改清单之前先确认测试**能变红**：把 `.config/gh` 加进 `stateFiles`，
+构建必须失败并报 `push 把清单外的 .config/gh 收进去了（那里面是 token！）`。
+
+---
+
 ## Agent Skills
 
 装了 [mattpocock/skills](https://github.com/mattpocock/skills) 的 25 个 skill，
@@ -690,6 +767,7 @@ readlink -f ~/.local/share/agent-skills   # 应落在 /nix/store 里
 > - 新增、删除 `home/` 下的文件，或改变 Agent Skills 的装法、命令、更新流程
 > - 改变引导架构、`custom.refind.*` 的选项，或 `refind-sync` /
 >   `refind-hwinfo` 的用法
+> - 改变 `state-sync` / `migration-check` 的用法，或 B 类状态清单
 >
 > 本文件与 [CLAUDE.md](CLAUDE.md) 有意重叠：
 > README 是给人看的操作手册，CLAUDE.md 是给 AI 的协作约定。
