@@ -28,5 +28,6 @@
     gnomeExtensions.draw-on-gnome
     gnomeExtensions.vitals-widget
     gnomeExtensions.kimpanel
+    gnomeExtensions.color-picker
   ];
 }
