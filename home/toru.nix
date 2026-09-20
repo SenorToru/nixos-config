@@ -1145,6 +1145,55 @@ in
   # 有覆盖现有浏览器配置的风险 —— 这不属于「零冲突」，留到后面单独处理。
   # 不设 profileNames 时 stylix 只会发一条 warning，不会报错。
 
+  # ============================================
+  # Vitals Widget 扩展的配色：手写，stylix 没有这个 target
+  # ============================================
+  # 和 zsh-syntax-highlighting 那份一样，是手写但**不脱离** stylix ——
+  # 颜色全部取自 config.lib.stylix.colors。而且因为写在 dconf.settings
+  # 里（home 层），它会跟着 specialisation 一起切，换主题时环的颜色
+  # 自动跟着变。
+  #
+  # 键名和取值格式是读扩展源码确认的，不是猜的：
+  #   schema path  /org/gnome/shell/extensions/vitalswidget/
+  #   五个指标各有独立的 <name>-color 键，类型都是字符串
+  #   ring.js 的 _parseColor 支持 #rrggbb、#rgb 和 rgb()/rgba()，
+  #     其中只有 rgba() 这条路能带透明度
+  #   background/border/icon 是直接插进 St 的 CSS
+  #     （extension.js: `background-color: ${bgColor};`），
+  #     所以同样可以用 rgba()
+  #
+  # 顺带修掉一个真问题：扩展默认的 border / icon / inactive-ring
+  # 都是**白色**带透明度（rgba(255,255,255,...)），那是假设了深色背景。
+  # 换到亮色主题（nier-automata、one-light 这些）上会几乎看不见。
+  # 改成跟着调色板走之后两边都成立。
+  dconf.settings."org/gnome/shell/extensions/vitalswidget" =
+    let
+      c = config.lib.stylix.colors;
+      # ring.js 只认 rgb()/rgba() 这一种带透明度的写法（不认 8 位 hex），
+      # 所以用 stylix 现成的 RGB 分量拼出来。
+      rgba =
+        base: alpha: "rgba(${c."${base}-rgb-r"}, ${c."${base}-rgb-g"}, ${c."${base}-rgb-b"}, ${alpha})";
+    in
+    {
+      # 五个指标各用一个 base16 强调色。挑的是 base16 里彼此色相
+      # 差得最开的五个，任何配色方案下都能一眼分辨：
+      cpu-color = "#${c.base0D}"; # 蓝，主计算
+      ram-color = "#${c.base0E}"; # 紫，内存
+      storage-color = "#${c.base0B}"; # 绿，磁盘
+      temp-color = "#${c.base09}"; # 橙，温度（语义上正好对上「热」）
+      gpu-color = "#${c.base0C}"; # 青，图形
+
+      # 环没走满的那一段。用 base03（注释色那一档），
+      # 深浅两种主题下都是「比背景明显、又不抢眼」的灰。
+      inactive-ring-color = rgba "base03" "0.25";
+
+      # 控件本体。透明度沿用扩展原本的意图（背景半透、边框很淡），
+      # 只把颜色换成跟着主题走。
+      background-color = rgba "base00" "0.8";
+      border-color = rgba "base03" "0.4";
+      icon-color = rgba "base05" "0.9";
+    };
+
   programs.tmux = {
     enable = true;
     baseIndex = 1;
