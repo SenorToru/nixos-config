@@ -9,9 +9,11 @@
 | 桌面 | GNOME on Wayland |
 | 登录 shell | zsh（starship / atuin / direnv / fzf / zoxide） |
 | 输入法 | fcitx5（rime 白霜拼音 + mozc UT 词典版） |
+| 引导 | rEFInd（顶层入口）→ systemd-boot（管 generation） |
 
 > 本文件是**给人看的操作手册**。
 > 给 AI 协作用的约定在 [CLAUDE.md](CLAUDE.md)，
+> **装新机器和搬用户状态**在 [MIGRATION.md](MIGRATION.md)，
 > 踩过的坑和排查过程在 [Lesson-Learn/](Lesson-Learn/README.md)。
 
 ---
@@ -25,7 +27,8 @@
 ├── hosts/
 │   └── thinkpad/
 │       ├── default.nix       本机身份 + 模块拼装
-│       ├── hardware-configuration.nix   自动生成，别手改
+│       ├── hardware-configuration.nix   nixos-generate-config 生成，别手改
+│       ├── hwinfo.nix        refind-hwinfo 生成，别手改（引导画面的硬件行）
 │       └── tuning.nix        本机硬件调优
 ├── modules/                  共用模块（任何机器都能 import）
 ├── home/
@@ -33,6 +36,7 @@
 │   ├── agent-skills.nix      Agent Skills：一份 skill 喂给所有 AI 工具
 │   └── skills-tests.sh       skills 命令的回归测试（构建期执行）
 ├── Lesson-Learn/             知识库（按时间顺序编号）
+├── MIGRATION.md              装新机器 + 搬 Nix 管不到的用户状态
 └── CLAUDE.md                 AI 协作约定
 ```
 
@@ -49,6 +53,7 @@
 | `hosts/<主机>/tuning.nix` | 绑死在这台硬件上的调优 | 只对这台成立 |
 | `hosts/<主机>/default.nix` | 主机名、引导、键盘、用户账户、模块拼装 | 本机身份 |
 | `hosts/<主机>/hardware-configuration.nix` | `nixos-generate-config` 生成 | 别手改 |
+| `hosts/<主机>/hwinfo.nix` | `refind-hwinfo` 生成：引导画面上那几行硬件 | 工具生成，改了硬件重跑 |
 | `home/toru.nix` | 用户级配置（shell、编辑器、浏览器策略） | 跟人走，不跟机器走 |
 
 **必须**放 `hosts/` 的典型例子：
@@ -77,6 +82,7 @@
 | `apps.nix` | 桌面应用 |
 | `flatpak.nix` | Flatpak 与 Flathub 自动安装 |
 | `stylix.nix` | 全局配色的单一真相：base16 方案、polarity、壁纸、NixOS 级 target |
+| `refind.nix` | rEFInd 顶层引导入口：主题 derivation、`refind.conf`、`refind-sync`、`refind-hwinfo`（见下面「引导」一节） |
 | `claude-code-manifest.json` | 数据文件，供 `development.nix` 的 overlay 读取 |
 
 ### `home/` 各文件职责
@@ -176,8 +182,12 @@ swapon --show                              # 改了 zram
 vainfo                                     # 改了显卡驱动：配错只会静默软解
 claude --version                           # 改了 claude-code
 systemctl is-active thermald fwupd         # 改了服务
+skills status                              # 改了 Agent Skills
 nixos-rebuild list-generations | head -3   # 确认真的生成了新 generation（别名 ngen）
 ```
+
+**改了 `custom.refind.*` 的话 `nrb` 不够** —— 它只把新素材放进 store，
+不碰 ESP。要 `sudo refind-sync` 再重启才看得到。见「引导」一节。
 
 ### 6. 提交
 
@@ -224,6 +234,7 @@ done
 | systemd 本体升级 | **重启** |
 | CPU 微码（`hardware.cpu.*.updateMicrocode`） | **重启** |
 | 引导配置（`boot.loader.*`） | 写入立即，**下次启动生效** |
+| `custom.refind.*`（rEFInd 主题、分辨率、菜单项） | **`nrb` 不生效**，必须再跑 `sudo refind-sync`，然后重启才看得到 |
 
 改内核时推荐先 `sudo nixos-rebuild boot --flake .#thinkpad`，
 把新配置排进引导菜单但不激活，方便下次重启时一起生效。
@@ -239,11 +250,16 @@ nixos-rebuild list-generations         # 看所有 generation 和当前是哪个
 
 `--rollback` 和 `--flake` **互斥** —— 回滚走已有 generation，不需要 flake。
 
-**开不了机**：在 systemd-boot 菜单里直接选上一个 generation 条目。
+**开不了机**：开机先过 rEFInd，选 NixOS 进**systemd-boot 的菜单**，
+在那里直接选上一个 generation 条目。
 这是 NixOS 最大的安全网 —— 每次 `switch` 都会留下一个可回退的条目。
 菜单里保留**最近 20 个**（见
 [引导菜单条目数上限](#引导菜单条目数上限)）；更早的 generation 仍然存在，
 只是要在能开机的情况下用 `--rollback` 回退。
+
+**rEFInd 本身出问题**（黑屏 / 菜单不出来 / 选了没反应）：
+开机敲 **F12** 选 `Linux Boot Manager`，绕过 rEFInd 直接进 systemd-boot。
+**这条路实测验证过。** 详见下面「引导」一节。
 
 ### 权限自查
 
@@ -260,6 +276,102 @@ sudo chown -R toru:users .
 ```
 
 （`toru` 的主组是 `users`，不是 `toru`。）
+
+---
+
+## 引导
+
+两层：**rEFInd 做顶层入口，systemd-boot 继续管 generation。**
+
+```
+UEFI 固件
+   │
+   ▼
+rEFInd                      好看的开机画面 + 将来的多系统选单
+   └──> systemd-boot        \EFI\systemd\systemd-bootx64.efi
+           └──> NixOS 的全部 generation（回滚安全网在这一层）
+```
+
+配置在 [`modules/refind.nix`](modules/refind.nix)，本机参数在
+`hosts/thinkpad/default.nix` 的 `custom.refind` 和 `hosts/thinkpad/hwinfo.nix`。
+选型推理和踩过的五个坑见
+[Lesson-Learn/0013](Lesson-Learn/0013_REFIND_BOOT.md)。
+
+### 关键：rEFInd 不由 `nixos-rebuild` 管
+
+`nrb` **永远不会碰 ESP 上的 rEFInd 目录**。仓库只负责把素材声明式地备好
+（二进制、按本机参数生成的主题、`refind.conf`），真正写进 ESP 的动作
+由你手动跑 `refind-sync` 触发。
+
+这是刻意的：引导坏掉等于开不了机，是全仓库风险最高的一处，
+而 `nrb` 每天要跑好几次。
+
+**推论：改了 `custom.refind.*` 之后，`nrb` 不会让它生效，必须再跑一次
+`sudo refind-sync`。**
+
+### 命令
+
+| 命令 | 作用 | 要 root |
+|------|------|---------|
+| `sudo refind-sync` | 把 rEFInd 本体、主题、`refind.conf` 写进 ESP，并建 NVRAM 项提到第一位 | 是 |
+| `refind-hwinfo` | 探测硬件，写出 `hosts/<主机>/hwinfo.nix` | 建议加（读内存代数要） |
+| `efibootmgr` | 查 / 改 UEFI 启动项与顺序 | 读不用，改要 |
+
+### 改了硬件之后
+
+三步，**少一步图片不会更新**：
+
+```bash
+cd ~/nixos-config
+sudo refind-hwinfo                    # 重新探测，覆盖 hwinfo.nix
+sudo nixos-rebuild switch --flake .#thinkpad
+sudo refind-sync
+```
+
+中间那次 switch 不能省 —— `refind-sync` 里的主题路径是**构建时烤死的
+store 路径**，不重新构建的话新图根本不存在。
+
+内核版本那一行不用管，它由模块从 `config.boot.kernelPackages` 求值时取，
+升级内核会自己跟着变。
+
+### 分辨率
+
+`custom.refind.resolution` **只能填 UEFI GOP 实际提供的模式**。
+本机是 `2560x1440`（面板原生，固件的 Mode 0）—— 注意它**没有 1080p**，
+别想当然。
+
+换机器时先随便填一个装上去，固件不支持会在启动时把支持的模式全列出来，
+再回来改。想主动列出来就把分辨率临时设成 `1 1`。
+
+### 验证
+
+```bash
+efibootmgr | grep -E '^(BootOrder|Boot[0-9A-F]{4}\* (rEFInd|Linux))'
+sudo ls /boot/EFI/refind/                  # /boot 是 dmask=0077，必须 sudo
+```
+
+然后**重启实际看一眼**：菜单出来没有、背景是不是 finn-term、
+NixOS 图标在不在（如果是个约 32×32 的黄黑斜条小方块，那是 rEFInd 的
+「图片加载失败」占位符，说明 `icon` 路径不对）。
+
+在 rEFInd 界面按 **`F10`** 会截图到 ESP 根目录。
+**它自己从不清理**，每张 11 MB，看完记得删：
+
+```bash
+sudo rm -f /boot/screenshot_*.bmp
+```
+
+### 安全网
+
+有两条独立的路，`refind-sync` 都不碰（它只往 `\EFI\refind\` 这个新目录写）：
+
+| 路径 | 怎么触发 |
+|------|----------|
+| `Boot0003` → `\EFI\systemd\systemd-bootx64.efi` | 开机敲 **F12** 选 `Linux Boot Manager`。**已实测** |
+| 通用设备项 `NVMe0` → `\EFI\BOOT\BOOTX64.EFI` | rEFInd 的 NVRAM 项失效时固件**自动**落下来 |
+
+> **动引导之前先把退路实际走一遍** —— 敲 F12、选 `Linux Boot Manager`、
+> 真的进一次系统。「理论上有退路」和「亲手走过一遍」是两回事。
 
 ---
 
@@ -403,80 +515,34 @@ kernel + initrd。如果哪天 `df -h /boot` 逼近满，先看
 
 ## 迁移到新机器
 
-**仓库能复现的和不能复现的，是两回事，必须分开看。**
+**完整流程在 [MIGRATION.md](MIGRATION.md)** —— 从插 U 盘装 NixOS 写起，
+一直到新机器和这台用起来一样为止。含两种 ISO 的安装步骤、Btrfs 分区、
+rEFInd、以及所有 Nix 管不到的用户状态怎么搬。
 
-### 仓库负责的部分：完美复现
-
-新机器上 `nrb` 一下就和这台字节级一致 —— 包括 rime-frost 的版本和
-打在它上面的 lua 补丁、mozc-ut 的 8 套词典、fcitx5 的插件组合、
-那 25 个 Agent Skill。
-全部由 `flake.lock` 锁死。
-
-新机器的步骤只有三步：
+一句话版本：
 
 ```bash
-git clone git@github.com:SenorToru/nixos-config.git ~/nixos-config
-# 把 hosts/<新主机>/ 建起来（hardware-configuration.nix 用
-# nixos-generate-config 生成，tuning.nix 按新硬件重写，别照抄 thinkpad 的）
+git clone https://github.com/SenorToru/nixos-config ~/nixos-config
+# 建 hosts/<新主机>/，hardware-configuration.nix 用 nixos-generate-config 生成，
+# tuning.nix 按新硬件重写（别照抄 thinkpad 的）
 sudo nixos-rebuild switch --flake ~/nixos-config#<新主机>
 ```
 
-### 仓库不管的部分：`$HOME` 里的用户状态
+但**仓库能复现的和不能复现的是两回事**。`MIGRATION.md` 把所有东西分成三类：
 
-**这些一个都不会自动跟过去**，因为它们不在版本库里：
+| 类 | 是什么 | 怎么办 |
+|----|--------|--------|
+| A | 仓库负责，字节级复现 | 跑一遍构建就有，**不用做任何事** |
+| B | `$HOME` 里的用户状态 | 独立的私有仓库 `dotfiles-state` |
+| C | 秘密（SSH 私钥、token、keyring、WiFi） | **不搬**，新机器重新签发 |
 
-| 路径 | 内容 | 怎么办 |
-|------|------|--------|
-| `~/.config/fcitx5/profile` | 启用了哪些输入法、顺序 | 直接拷 |
-| `~/.config/fcitx5/config` | 全局快捷键 | 直接拷 |
-| `~/.config/fcitx5/conf/` | 各插件的设置 | 直接拷 |
-| `~/.local/share/fcitx5/rime/*.userdb/` | **Rime 学习数据** | 用 Rime 自带同步，见下 |
-| `~/.config/mozc/` | **Mozc 学习历史** | 整个目录拷，**必须含 `.encrypt_key.db`** |
-| `~/.local/share/fcitx5/rime/build/` | 编译缓存 | **不要拷**，见下 |
-| `~/.local/share/fcitx5/rime/installation.yaml` | 本机安装标识 | **不要拷**，见下 |
-| `~/.local/state/agent-skills/disabled` | 关掉了哪些 Agent Skill | 不用拷，新机器默认全开 |
+还有三样**既不搬也不进仓库**的：rime 的 `build/`（固化着旧机器的 store 路径）、
+`installation.yaml`（里面的 UUID 是 Rime 同步的分机标识）、
+`*.userdb/`（LevelDB，手工拷没法合并词频，得用 Rime 内建同步）。
 
-### 三个必须避开的坑
-
-**`build/` 不要拷。** 里面固化了旧机器的 nix store 路径。
-到新机器上第一件事是删掉它，让 rime 重新部署：
-
-```bash
-rm -rf ~/.local/share/fcitx5/rime/build
-```
-
-首次部署要一两分钟（白霜 29M 词库 + 7MB 语法模型要编译成 `.bin`），
-属正常，别以为卡死了。
-
-**`installation.yaml` 不要拷。** 里面的 `installation_id` 是每台机器
-一个 UUID，Rime 的同步目录就按它分子目录。拷过去两台机器会认成同一台，
-同步就废了。让新机器自己生成。
-
-**Mozc 的 `.encrypt_key.db` 必须一起拷。** `.history.db` 是加密的，
-只拷历史不拷密钥，到新机器上读不出来，等于学习记录全丢。
-整个 `~/.config/mozc/` 一起拷最省事。
-
-### Rime 学习数据：用内建同步，别手工拷 userdb
-
-`*.userdb/` 是 LevelDB，手工拷贝容易出问题，而且**没法合并** ——
-两台机器各自学的东西只能二选一。Rime 自带的同步是为这个设计的，
-它导出成文本再**双向合并词频**。
-
-在**每台**机器的 `~/.local/share/fcitx5/rime/installation.yaml` 里加一行
-（这个文件 Rime 自己也要写 `install_time` 等字段，
-所以**不要用 home-manager 去管它**，软链成只读会让 Rime 写失败）：
-
-```yaml
-sync_dir: "/home/toru/Sync/rime"
-```
-
-然后指向同一个目录（Syncthing / git / 网盘都行），
-在输入法菜单里点「同步」。它会在 `<sync_dir>/<installation_id>/` 下
-写出 `*.userdb.txt`，两边各自同步时自动合并。
-
-**Mozc 没有同步功能**，只能整个目录拷。
-
----
+> **加了新的开发工具之后要回去更新那份文档** ——
+> 判据是「它有没有留下 Nix 管不到的状态」。
+> `MIGRATION.md` 第 10 节有一张「加了什么 → 要检查什么」的表。
 
 ## Agent Skills
 
@@ -622,10 +688,23 @@ readlink -f ~/.local/share/agent-skills   # 应落在 /nix/store 里
 > - 改变清理 generation 的流程，或 `nix.gc` / `configurationLimit` 的设置
 > - 改变「什么时候需要重启」的结论
 > - 新增、删除 `home/` 下的文件，或改变 Agent Skills 的装法、命令、更新流程
+> - 改变引导架构、`custom.refind.*` 的选项，或 `refind-sync` /
+>   `refind-hwinfo` 的用法
 >
 > 本文件与 [CLAUDE.md](CLAUDE.md) 有意重叠：
 > README 是给人看的操作手册，CLAUDE.md 是给 AI 的协作约定。
 > **两边描述同一件事时，改了一边就要改另一边**，不要让它们漂移。
+
+### 还要同步 MIGRATION.md
+
+[MIGRATION.md](MIGRATION.md) 管的是**一次性的事**（装新机器、搬用户状态），
+和本文件管的**日常操作**不重叠，但有一个硬要求：
+
+> **加了任何新的开发工具（虚拟机、语言工具链、库、需要登录的服务）之后，
+> 要回去更新 MIGRATION.md。** 判据是「它有没有留下 Nix 管不到的状态」——
+> 用户级的缓存、凭据、registry 配置都算。
+>
+> 那份文档第 10 节有一张「加了什么 → 要检查什么」的表。
 
 新增 Lesson-Learn 文档时的编号规则和索引维护要求，见
 [Lesson-Learn/README.md](Lesson-Learn/README.md)。

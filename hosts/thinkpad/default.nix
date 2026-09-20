@@ -9,6 +9,8 @@
     # 本机专属（跟着这台硬件走）
     ./hardware-configuration.nix
     ./tuning.nix
+    # 由 refind-hwinfo 生成，供 rEFInd 启动画面用。换了硬件重跑一次那个命令。
+    ./hwinfo.nix
 
     # 共用模块（任何机器都能直接 import）
     ../../modules/common.nix
@@ -21,6 +23,7 @@
     ../../modules/browsers.nix
     ../../modules/shell.nix
     ../../modules/stylix.nix
+    ../../modules/refind.nix
 
     inputs.home-manager.nixosModules.home-manager
 
@@ -35,8 +38,22 @@
   networking.hostName = "thinkpad-nixos";
 
   # UEFI 引导配置
+  #
+  # 两层结构：rEFInd 做顶层入口（好看 + 将来多系统选单），
+  # systemd-boot 继续管 generation —— 回滚安全网在那一层，不能丢。
+  # rEFInd 的配置在下面 custom.refind，模块在 modules/refind.nix。
   boot.loader.systemd-boot.enable = true;
-  boot.loader.efi.canTouchEfiVariables = true;
+
+  # 必须是 false。
+  #
+  # 保持 true 的话，systemd-boot 每次 switch 都会把自己设回 UEFI 启动顺序
+  # 第一位，rEFInd 永远轮不到 —— 正好抵消装它的意义。
+  # modules/refind.nix 里有一条 assertion 守着这个。
+  #
+  # **改成 false 不会删掉已存在的 "Linux Boot Manager" NVRAM 项**，
+  # 只是不再更新它。那一项因此成了安全网：rEFInd 出任何问题，
+  # 开机敲 F12 选它就能正常进系统，不需要 U 盘救援。
+  boot.loader.efi.canTouchEfiVariables = false;
 
   # 引导菜单最多保留 20 个条目。
   #
@@ -53,6 +70,41 @@
   # 只是没法再从开机菜单里直接选中它们了。
   boot.loader.systemd-boot.configurationLimit = 20;
   boot.kernelPackages = pkgs.linuxPackages_latest;
+
+  # ============================================
+  # rEFInd 顶层引导入口
+  # ============================================
+  # 分辨率和仓库里的名字是**这台机器的事**，所以填在这里，
+  # 模块本身不带任何本机假设。加新机器时各填各的。
+  #
+  # 启动画面上那几行硬件**不在这里** —— 由 refind-hwinfo 探测后写进
+  # ./hwinfo.nix（上面 imports 里），换了硬件重跑一次那个命令即可。
+  # 内核那一行也不在，它由模块从 config.boot.kernelPackages 直接取。
+  custom.refind = {
+    enable = true;
+
+    # 仓库里的名字（hosts/ 目录名 + flake 属性名）。
+    # 它和 networking.hostName（thinkpad-nixos）**不一样** ——
+    # refind-hwinfo 要靠这个才能把 hwinfo.nix 写对地方。
+    flakeHost = "thinkpad";
+
+    # 2560x1440 = 面板原生，**已实机确认是固件 GOP 的 Mode 0**。
+    #
+    # 这个值不能靠猜。第一次装的时候填的是 1920x1080（想当然地以为
+    # 「1080p 哪个固件都支持」），结果 rEFInd 启动时直接报该模式不存在 ——
+    # 这台 ThinkPad 的 GOP 压根不提供 1080p。它实际给的是：
+    #     Mode 0: 2560x1440   面板原生，正解
+    #     Mode 5: 1600x1200   4:3，会有黑边
+    #     Mode 6: 1920x1440   4:3，比例和面板对不上，画面变形
+    #
+    # 教训：**每台新机器都必须先装上去看固件报什么，再回来填。**
+    # 流程见 MIGRATION.md 第 6.4 节。
+    resolution = {
+      width = 2560;
+      height = 1440;
+    };
+
+  };
 
   # ThinkPad 本地物理键盘 (JIS 106)
   console.keyMap = "jp106";

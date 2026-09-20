@@ -231,12 +231,29 @@
         "type": "github"
       }
     },
+    "refind-finn-term": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1783958220,
+        "narHash": "sha256-SRHl3u3bzTzXchiuER98SV5Kori2kwJ6zW6GIZ2/N34=",
+        "owner": "FaeArtz",
+        "repo": "refind-finn-term",
+        "rev": "2052440548c7d0421b6763803831a54ebf0930b2",
+        "type": "github"
+      },
+      "original": {
+        "owner": "FaeArtz",
+        "repo": "refind-finn-term",
+        "type": "github"
+      }
+    },
     "root": {
       "inputs": {
         "home-manager": "home-manager",
         "matt-skills": "matt-skills",
         "nix-flatpak": "nix-flatpak",
         "nixpkgs": "nixpkgs",
+        "refind-finn-term": "refind-finn-term",
         "stylix": "stylix",
         "zen-browser": "zen-browser"
       }

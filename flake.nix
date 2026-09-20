@@ -26,6 +26,16 @@
     matt-skills.url = "github:mattpocock/skills";
     matt-skills.flake = false;
 
+    # rEFInd 主题 finn-term。和上面的 skill 源同一个机制：不是 flake，
+    # 只是一棵源码树，版本由 flake.lock 钉死。
+    #
+    # 它不是一套现成的 PNG —— background.png / selection_*.png / 字体位图
+    # 都要跑 src/gen.py 现生成，参数是分辨率、主机名和那段假启动日志。
+    # 所以 modules/refind.nix 把它做成了参数化的 derivation，
+    # 每台机器在自己的 hosts/<主机>/ 里填参数。
+    refind-finn-term.url = "github:FaeArtz/refind-finn-term";
+    refind-finn-term.flake = false;
+
     # 原生 Zen Browser Flake 源
     zen-browser.url = "github:youwen5/zen-browser-flake";
     # optional, but recommended if you closely follow NixOS unstable so it shares

@@ -20,13 +20,19 @@
 | 批次 | 内容 | 状态 |
 |------|------|------|
 | 一 | 本文档 | 已完成 |
-| 二 | rEFInd 主题 derivation、`refind-sync`、在 thinkpad 上实装验证 | **未开始** |
+| 二 | rEFInd 主题 derivation、`refind-sync`、`refind-hwinfo`、在 thinkpad 上实装验证 | **已完成** |
 | 三 | A 类配置补全、`migration-check`、`state-sync`、README/CLAUDE.md 同步 | **未开始** |
 
-**因此：第 6 节（rEFInd）和第 7 节里出现的 `refind-sync` / `state-sync` /
-`migration-check` 三个命令现在还不存在**，相关步骤也**还没有在真实硬件上跑过**。
-批二会照着这份文档实际走一遍，把对不上的地方改掉，并把「实测」标记补上。
-第 1-5 节和第 8 节是基于现有仓库和 NixOS 标准流程写的，可以照做。
+**第 6 节和第 9 节（rEFInd）已经在这台 thinkpad 上完整跑过一遍**，
+包括重启验证菜单、图标和分辨率。过程中踩的五个坑和修法记在
+[Lesson-Learn/0013](Lesson-Learn/0013_REFIND_BOOT.md)，本文相应步骤已按实测结果改写。
+
+**还没落地的是第 7 节**：`state-sync` 和 `migration-check` 两个命令尚不存在，
+`dotfiles-state` 仓库也还没建（批三）。该节步骤按设计写，未经验证。
+
+第 1-5 节和第 8 节是基于现有仓库和 NixOS 标准流程写的，可以照做，
+但**没有在一台全新机器上从头跑过** —— 下次真装新机器时按它走，
+对不上的地方要回来改。
 
 ---
 
@@ -471,8 +477,9 @@ reboot
 
 ## 6. 装 rEFInd
 
-> **本节尚未在真实硬件上验证**（批二会做）。
-> `refind-sync` 命令目前还不存在。
+> **本节已在 thinkpad 上实测跑通**（2026-09-20）。
+> 选型推理和踩过的五个坑见
+> [Lesson-Learn/0013](Lesson-Learn/0013_REFIND_BOOT.md)。
 
 ### 6.1 架构：为什么是两层
 
@@ -530,27 +537,52 @@ sudo refind-sync
 
 主题来自 [FaeArtz/refind-finn-term](https://github.com/FaeArtz/refind-finn-term)，
 作为 `flake = false` 的 input 被 `flake.lock` 钉死，和 Agent Skills 同一个机制。
-它的 `src/gen.py` 会按**分辨率、主机名、假启动日志**生成背景图 ——
-这三个参数写在 `hosts/<主机>/`，每台机器一份。
+它的 `src/gen.py` 会按**分辨率、主机名、硬件清单**生成背景图。
+
+那几行硬件不用手写 —— 先跑一次探测：
+
+```bash
+cd ~/nixos-config
+sudo refind-hwinfo          # 加 sudo 才读得到内存代数（DDR3/DDR4）
+git add hosts/<主机>/hwinfo.nix
+sudo nixos-rebuild switch --flake .#<主机>
+sudo refind-sync
+```
+
+**中间那次 switch 不能省。** `refind-sync` 里的主题路径是**构建时烤死的
+store 路径**，不重新构建的话新图根本不存在，sync 拷的还是旧那份。
+
+内核版本那一行不进 `hwinfo.nix` —— 它由模块从
+`config.boot.kernelPackages` 直接取，升级内核会自己跟着变。
 
 ### 6.4 分辨率：装完必须回头校一次
 
 **rEFInd 的 `resolution` 只能从 UEFI GOP 实际提供的模式里挑**，
-不是面板是多少就能写多少。ThinkPad X1 Yoga 面板是 2560×1440，
-但固件很可能只给到 1920×1080。**写了固件不支持的值，rEFInd 会回退到别的模式，
-背景图就会被拉伸或平铺。**
+不是常见分辨率就一定有。**写了固件不支持的值，rEFInd 启动时会直接报该模式不存在，
+然后回退到别的模式，背景图被拉伸或平铺。**
+
+> **别想当然地填 1080p。** thinkpad 这台就是反例：
+> 第一次按「1080p 哪个固件都支持吧」填了 1920×1080，实机直接报不存在。
+> 它的 GOP 实际给的是 `Mode 0: 2560x1440`（面板原生）、
+> `Mode 5: 1600x1200`、`Mode 6: 1920x1440` —— **压根没有 1080p。**
 
 所以流程是：
 
-1. 先按 **1920×1080** 生成（几乎所有 UEFI 都支持），`refind-sync`，重启
-2. 在 rEFInd 界面按 **`F10`** 截图，或进它的 About 页看当前模式；
-   把 `resolution` 临时设成一个明显无效的值（比如 `resolution 1 1`），
-   rEFInd 启动时会**列出它支持的全部模式**
-3. 挑一个最接近面板原生的，改回 `hosts/<主机>/` 里的分辨率参数
-4. `sudo refind-sync` 再来一次
+1. 先随便填一个值装上去，`refind-sync`，重启
+2. 固件不支持的话，rEFInd 启动时会**把它支持的全部模式列出来**。
+   想主动列出来，把 `resolution` 临时设成一个明显无效的值（比如 `1 1`）
+3. 挑面板原生那个（通常就是 `Mode 0`），改回 `hosts/<主机>/` 的分辨率参数
+4. `nrb` 重新生成主题，再 `sudo refind-sync` 一次
 
-> **每台新机器都要走一遍这四步。** 这是屏幕尺寸各异带来的必然成本，
-> 没有能自动探测的办法 —— GOP 模式列表只有在固件环境里才拿得到。
+> **每台新机器都要走一遍这四步。** 没有能提前探测的办法 ——
+> GOP 模式列表只有在固件环境里才拿得到，Nix 构建的沙箱里更不可能。
+
+验证是否真的跑在目标分辨率：在 rEFInd 界面按 **`F10`** 截图，
+它会往 ESP 根目录写一张未压缩 24 位 BMP。文件大小 = `宽 × 高 × 3 + 54`，
+反推即可。2560×1440 对应 11,059,254 字节。
+
+> **F10 截图 rEFInd 自己从不清理**，每张 11 MB，攒几张就吃掉 ESP 一块。
+> 看完删掉：`sudo rm -f /boot/screenshot_*.bmp`
 
 ### 6.5 双启动：Windows 侧的防御
 
@@ -580,7 +612,8 @@ bcdedit /set {bootmgr} path \EFI\refind\refind_x64.efi
 | 症状 | 怎么救 |
 |------|--------|
 | rEFInd 起来了但找不到 NixOS | 按 `Esc` 让它重新扫描。还是没有的话看 `refind.conf` 里手写的那条 `menuentry` 路径对不对（`\EFI\systemd\systemd-bootx64.efi`）|
-| rEFInd 本身起不来 / 黑屏 | 开机敲 **F12**（ThinkPad）选 `Linux Boot Manager`，直接走 systemd-boot |
+| rEFInd 本身起不来 / 黑屏 | 开机敲 **F12**（ThinkPad）选 `Linux Boot Manager`，直接走 systemd-boot。**thinkpad 上实测过** |
+| rEFInd 的 NVRAM 项整个失效 | **什么都不用做** —— 固件会往下落到通用设备项（`NVMe0`），走 UEFI 可移动回退路径 `\EFI\BOOT\BOOTX64.EFI`，那也是 systemd-boot |
 | 启动菜单里也没有可用项 | 进固件设置（ThinkPad 是 **F1**），把启动项手动指到 `\EFI\systemd\systemd-bootx64.efi` |
 | 系统起来了但配置坏了 | `sudo nixos-rebuild switch --rollback` |
 | 以上全失败 | 用第 2 节的 U 盘启动，挂载分区后 `nixos-enter --root /mnt` 修 |
@@ -729,28 +762,86 @@ cd ~/nixos-config && find . ! -user toru -printf '%u  %p\n'
 现在这台 thinkpad 用这一节。它已经在跑 systemd-boot，
 所以只是**在上面加一层 rEFInd**，不换引导器。
 
-> **本节尚未验证** —— 批二会在 thinkpad 上实际走一遍，
-> 走完把这里改成实测过的版本。
+> **本节已在 thinkpad 上实测跑通**（2026-09-20）。下面是实际走过的顺序。
 
-前置确认：
+### 9.1 先把退路走一遍 —— 这一步不能跳
 
 ```bash
-df -h /boot                    # ESP 剩余空间。rEFInd + 主题约几 MB，1 GiB 绰绰有余
-nix shell nixpkgs#efibootmgr -c sudo efibootmgr
-#   ^ 确认 "Linux Boot Manager" 这一项存在。它就是 6.2 说的安全网。
+nix shell nixpkgs#efibootmgr -c efibootmgr    # 读 NVRAM 不需要 root
+df -h /boot                                   # rEFInd + 主题约 5 MB
 ```
 
-然后：
+在输出里找到 **`Linux Boot Manager`** 那一项（指向
+`\EFI\systemd\systemd-bootx64.efi`），记下它的 `Boot####` 号。
 
-1. 确认启动菜单键（ThinkPad 一般 F12），**先试一次**确保按得出来
-2. 在 `hosts/thinkpad/default.nix` 里加 `boot.loader.efi.canTouchEfiVariables = false;`
-3. 在 `hosts/thinkpad/` 里写好主题参数（分辨率先填 `1920 1080`，主机名 `thinkpad-nixos`）
-4. 走一遍 [README](README.md) 的重建流程（格式化 → 用户态构建两层 → `nrb`）
-5. `sudo refind-sync`
-6. 重启，验证 rEFInd 菜单出现且能进 NixOS
-7. 按 6.4 校正分辨率，再 `sudo refind-sync` 一次
+然后**重启，敲启动菜单键（ThinkPad 是 F12），选中它，真的进一次系统**。
+回来确认 `BootCurrent` 变成了那个号。
 
-任何一步出问题：**敲 F12 选 `Linux Boot Manager`**，一切照旧。
+> **「理论上有退路」和「亲手走过一遍退路」是两回事。**
+> 花的是三分钟，换的是出事时不用慌。这应该是固定环节，不是可选项。
+>
+> 有些 ThinkPad 要先在固件里打开 `Startup Interrupt Menu` 才有 F12。
+
+顺便看一眼有没有指向**不存在分区**的死启动项（以前装别的系统留下的）。
+有的话清掉，开机能快几秒：
+
+```bash
+sudo efibootmgr -b 0001 -B
+sudo efibootmgr -b 0002 -B
+```
+
+> **一条一条跑。** 用 `&&` 串起来实测只有第一条生效。
+> `-B` 会同时把该项从 `BootOrder` 里摘掉，不用手动改顺序。
+
+### 9.2 改配置
+
+在 `hosts/<主机>/default.nix` 里：
+
+```nix
+  imports = [ ... ./hwinfo.nix ];            # 下一步生成
+
+  boot.loader.efi.canTouchEfiVariables = false;   # 必须，见 6.2
+
+  custom.refind = {
+    enable = true;
+    flakeHost = "thinkpad";                  # hosts/ 目录名，可能 ≠ hostName
+    resolution = { width = 2560; height = 1440; };   # 先随便填，6.4 再校
+  };
+```
+
+并把 `../../modules/refind.nix` 加进 `imports`。
+
+### 9.3 装上去
+
+```bash
+cd ~/nixos-config
+sudo refind-hwinfo                                   # 生成 hwinfo.nix
+git add hosts/<主机>/hwinfo.nix modules/refind.nix   # 新文件必须 add
+nixfmt $(git ls-files '*.nix' | grep -v hardware-config)
+nix build .#nixosConfigurations.<主机>.config.system.build.toplevel --out-link /tmp/res
+sudo nixos-rebuild switch --flake .#<主机>
+sudo refind-sync
+```
+
+**顺序不能反：先 switch 再 sync。** 反过来的话，那次 switch 还带着
+`canTouchEfiVariables = true`，systemd-boot 会把自己重新设回第一位，
+rEFInd 白装。
+
+### 9.4 重启验证
+
+要看四件事：
+
+1. rEFInd 菜单出现（没出现说明落回 systemd-boot 了）
+2. 背景是 finn-term，左上角硬件信息是**这台机器的**
+3. **有一个 NixOS 图标**，不是一个约 32×32 的黄黑斜条小方块 ——
+   那个方块是 rEFInd 内置的「图片加载失败」占位符，说明 `icon` 路径不对
+4. 背景填满屏幕，没有被拉伸或平铺
+
+然后按 6.4 校分辨率，`nrb` + `sudo refind-sync` 再来一次。
+
+任何一步出问题：**敲 F12 选 `Linux Boot Manager`**，一切照旧 ——
+`refind-sync` 只往 `\EFI\refind\` 这个新目录写东西，
+`\EFI\systemd\` 和 `\EFI\BOOT\` 原封不动。
 
 ---
 
@@ -805,4 +896,11 @@ migration-check
 | `users.users.toru` 没有密码字段，新机器装完账户是锁定的 | 第 5.4 节绕过了。根治要加 `initialPassword` 或 `hashedPasswordFile`（批三）|
 | `nrb` / `nrt` / `ncheck` / `nhm` 四个别名把 `#thinkpad` 写死了 | 新机器上这些别名会去构建 thinkpad 的配置。要改成跟着 `networking.hostName` 走（批三）|
 | `~/.gitconfig` 里钉死了 `/nix/store/…-gh-2.99.0/…` 绝对路径 | 那个版本被 GC 掉后 git 的 GitHub 凭据助手就失效。改成 `programs.git` 声明（批三）|
-| rEFInd 在 thinkpad 上的实际 GOP 模式 | 未知，要实机才能测（批二）|
+| 第 7 节（`state-sync` / `dotfiles-state`）未实现 | 两个命令还不存在，仓库也还没建（批三）|
+| 第 1-5 节没在全新机器上从头跑过 | 只能等下次真装新机器时验证，对不上的地方回来改 |
+| 独显探测判据未经多显卡机器验证 | AMD 的 APU 不在 PCI bus 00 上且也报显存，可能被误判成独显。真遇到直接改 `hwinfo.nix` |
+
+**已解决**（原先列在这里，批二做掉了）：
+rEFInd 在 thinkpad 上的实际 GOP 模式 —— 是 `Mode 0: 2560x1440`（面板原生），
+**没有 1080p**。经过和五个实机坑一起记在
+[Lesson-Learn/0013](Lesson-Learn/0013_REFIND_BOOT.md)。

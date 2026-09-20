@@ -13,6 +13,7 @@ Toru 的 NixOS 多机配置仓库（flake，home-manager 作为 NixOS 模块）�
 | `hosts/<主机>/tuning.nix` | 绑死在这台硬件上的调优 | 只对这台成立 |
 | `hosts/<主机>/default.nix` | 主机名、引导、键盘布局、用户账户、模块拼装 | 本机身份 |
 | `hosts/<主机>/hardware-configuration.nix` | `nixos-generate-config` 自动生成，别手改 | — |
+| `hosts/<主机>/hwinfo.nix` | `refind-hwinfo` 生成：引导画面上那几行硬件 | 工具生成，换硬件重跑 |
 | `home/<用户>.nix` 及同目录文件 | home-manager 用户配置。按主题拆文件，由 `home/toru.nix` 的 `imports` 拼装 | 跟着用户走 |
 
 典型的**必须**放 `hosts/` 的东西：
@@ -33,10 +34,15 @@ Toru 的 NixOS 多机配置仓库（flake，home-manager 作为 NixOS 模块）�
 `hosts/thinkpad/default.nix` 的 `imports` 按「本机专属在前、共用模块在后」
 分两组写，加新机器时照抄这个骨架即可。
 
-## README.md 要保持同步
+## 三份文档的分工
 
-根目录的 [README.md](README.md) 是**给人看的操作手册**，
-本文件是**给 AI 的协作约定**。两者有意重叠。
+| 文件 | 管什么 |
+|------|--------|
+| [README.md](README.md) | **给人看的操作手册**：日常重建、清理、引导、Agent Skills |
+| 本文件 | **给 AI 的协作约定**：分层判据、提交格式、踩过的坑 |
+| [MIGRATION.md](MIGRATION.md) | **一次性的事**：装新机器、搬 Nix 管不到的用户状态 |
+
+README 和本文件有意重叠。
 
 **改动下列任何一项时，必须同步更新 README.md：**
 
@@ -48,6 +54,16 @@ Toru 的 NixOS 多机配置仓库（flake，home-manager 作为 NixOS 模块）�
 - 改变清理 generation 的流程，或 `nix.gc` / `configurationLimit` 的设置
 - 改变「什么时候需要重启」的结论
 - 改变 Agent Skills 的装法、`skills` / `skills-update` 命令，或升级流程
+- 改变引导架构、`custom.refind.*` 的选项，或 `refind-sync` / `refind-hwinfo` 的用法
+
+**改动下列任何一项时，必须同步更新 MIGRATION.md：**
+
+- **新增任何开发工具**（虚拟机、语言工具链、库、需要登录的服务）——
+  判据是「它有没有在 `$HOME` 里留下 Nix 管不到的状态」，
+  用户级的缓存、凭据、registry 配置都算。那份文档第 10 节有对照表。
+- 改变装机流程：分区方案、文件系统、ISO 选择、引导
+- 改变 A / B / C 三类的划分，或 `dotfiles-state` 收哪些路径
+- 改变 `refind-sync` / `refind-hwinfo` / `state-sync` / `migration-check` 的用法
 
 **两边描述同一件事时，改了一边就要改另一边**，不要让它们漂移。
 漂移之后最糟的情况不是信息缺失，而是两份文档给出互相矛盾的指示 ——
@@ -233,6 +249,42 @@ find . ! -user toru -printf '%u  %p\n'
 加新 skill 源要同时改 `flake.nix`（加 `flake = false` 的 input）和
 `skillSources` 表，两处缺一不可。
 
+## 引导：rEFInd 叠在 systemd-boot 之上
+
+两层。rEFInd 只做顶层入口，**generation 菜单和回滚仍归 systemd-boot** ——
+那是这个系统最重要的救命机制，不能动。
+
+配置在 `modules/refind.nix`，本机参数在 `hosts/<主机>/default.nix` 的
+`custom.refind` 和 `hosts/<主机>/hwinfo.nix`。
+完整记录见 [Lesson-Learn/0013](Lesson-Learn/0013_REFIND_BOOT.md)。
+
+改这块之前必须知道的四件事：
+
+1. **`nixos-rebuild` 不碰 ESP 上的 rEFInd 目录。**
+   仓库只声明式地备好素材（二进制、生成的主题、`refind.conf`），
+   写进 ESP 由手动跑 `sudo refind-sync` 触发。这是刻意的 ——
+   引导坏掉等于开不了机，而 `nrb` 每天跑好几次。
+   **推论：改了 `custom.refind.*` 之后 `nrb` 不会生效，必须再 `refind-sync`。**
+
+2. **不要改用官方的 `boot.loader.refind`。**
+   它设 `system.boot.loader.id = "refind"`，和 `systemd-boot.enable` 互斥，
+   两层结构搭不起来；而且会把每个 generation 摊成一条顶层菜单项。
+
+3. **`boot.loader.efi.canTouchEfiVariables` 必须保持 `false`。**
+   改回 `true` 的话 systemd-boot 每次 switch 都抢 NVRAM 第一位，
+   rEFInd 白装。模块里有 assertion 守着，但别去绕过它。
+
+4. **`refind.conf` 里 `icon` 的路径基准和 `banner` / `icons_dir` 不一样。**
+   前者相对 **ESP 卷根**，后两者相对 **rEFInd 目录**。
+   写错不报错，只显示一个约 32×32 的内置占位方块，而同目录下的功能图标
+   一切正常。路径统一走模块里的 `refindDir` / `themeDir` 变量，别手写。
+
+`hosts/<主机>/hwinfo.nix` 由 `refind-hwinfo` 生成，**别手写** ——
+但探测判断错了可以直接改它（它不在开机路径上）。
+换了硬件三步：`sudo refind-hwinfo` → `nrb` → `sudo refind-sync`，**少一步不生效**。
+
+---
+
 ## Shell 环境
 
 登录 shell 是 **zsh**（`modules/shell.nix` 定系统层，`home/toru.nix` 定交互体验）。
@@ -246,6 +298,9 @@ bash 保持完全可用，两者配的是同一套基线。
   `eza` `bat` `fzf` `zoxide` `atuin` `btop` `lazygit` `tmux` `dua` `duf` `direnv` `starship`
   `skills` `skills-update`
   都是真二进制（在 `/etc/profiles/per-user/toru/bin`），可以直接调用。
+  `refind-sync` `refind-hwinfo` `efibootmgr` 在系统层
+  （`/run/current-system/sw/bin`），同样是真二进制。
+  **前两个要 root**，非交互场景直接调会以非零退出并提示用 sudo。
 - **`ls` / `cat` / `grep` / `find` 没有被 alias 遮蔽**，输出就是 coreutils 的
   原始格式，可以放心解析。要彩色分栏请显式写 `eza` / `bat`。
   这是硬约定：人看到的输出和 AI 看到的输出必须是同一个东西。
@@ -291,3 +346,15 @@ bash 保持完全可用，两者配的是同一套基线。
    预防：重建流程第 3 步（用户态先 `nix build`）先把 `flake.lock` 以 toru 写好；
    `nix flake update` 永远不加 sudo。
    自查：`find . ! -user toru`，修复：`sudo chown -R toru:users .`。
+6. **构建通过 ≠ 实机可用，引导这块尤其严重。**
+   rEFInd 那一轮五个坑**全部是 `nix build` 通过、只在实机暴露的**：
+   `icon` 路径基准写错只显示一个占位小方块而不报错；固件 GOP 压根不提供
+   1920×1080；vfat 上 `chmod` 返回 EPERM 让脚本停在第一个文件；
+   `sed` 没考虑制表符导致**第二次**运行才堆出重复 NVRAM 项；
+   `$(hostname)` 不等于 `hosts/` 下的目录名。
+   详见 [Lesson-Learn/0013](Lesson-Learn/0013_REFIND_BOOT.md)。
+
+   两条可迁移的做法：
+   **配外部工具的配置格式时先去查它自带的样例文件**（`refind.conf-sample`
+   就在 `${pkgs.refind}/share/refind/` 里，查一眼十秒，比实机试错便宜得多）；
+   **动引导之前先把退路实际走一遍**，别信「理论上能回退」。

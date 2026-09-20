@@ -8,7 +8,7 @@
   想知道某个配置是怎么演变成现在这样的，从小到大读一遍即可。
 - **编号是 4 位大写十六进制**：`0000` → `0009` → `000A` → `000F` → `0010` → …
   一直到 `FFFF`。注意 `0009` 的下一个是 `000A` 而不是 `0010`。
-- **新增文档接着当前最大编号加一**。当前最大是 `0012`，**下一个是 `0013`**。
+- **新增文档接着当前最大编号加一**。当前最大是 `0013`，**下一个是 `0014`**。
   不要插空、不要复用编号。
 - 编号一旦分配就不再变动。文档作废时**加废弃横幅并指向新文档**，不删除、不重排 ——
   历史记录本身有价值，而且重排会让已有的交叉引用全部失效。
@@ -38,6 +38,7 @@
 | `0010` | [CLAUDE_CODE_VERSION_PINNING](0010_CLAUDE_CODE_VERSION_PINNING.md) | 发布分支冻结在旧版，`nix flake update` 空操作；覆写 manifest 升级 claude-code | ✅ 有效 |
 | `0011` | [ROOT_OWNED_FILES_IN_REPO](0011_ROOT_OWNED_FILES_IN_REPO.md) | `sudo nixos-rebuild` 把 `flake.lock` 和 `.git/objects` 写成 root；git 只对哈希前缀撞上的那个文件报错 | ✅ 有效 |
 | `0012` | [AGENT_SKILLS](0012_AGENT_SKILLS.md) | Agent Skills 全局安装：一份 skill 喂给 Claude Code / Copilot / Zed / Gemini；开关命令与 token 成本（持续更新） | 📖 常读 |
+| `0013` | [REFIND_BOOT](0013_REFIND_BOOT.md) | rEFInd 叠在 systemd-boot 之上做顶层引导入口；`icon` 路径基准、GOP 模式、vfat chmod 等五个实机坑 | ✅ 有效 |
 
 ## 按主题快速定位
 
@@ -50,6 +51,7 @@
 - **Shell / CLI 环境** —— `000F`
 - **仓库分层（modules 与 hosts）** —— `000F`
 - **笔电硬件（zram / 温控 / 显卡 / 指纹）** —— `000F`
+- **引导（UEFI / rEFInd / systemd-boot / NVRAM）** —— `0013`
 
 ## 反复出现的坑
 
@@ -81,6 +83,12 @@
    `insufficient permission for adding an object to repository database`，
    点名谁纯看该文件 blob 哈希的前两位撞上了哪个 `.git/objects/XX/`。
    自查 `find . ! -user toru`，修复 `sudo chown -R toru:users .`。
+10. **构建通过 ≠ 实机可用，引导这块尤其严重**（`0013`）——
+    rEFInd 那一轮五个坑全部是 `nix build` 通过、只在实机暴露的：
+    `icon` 路径基准写错只显示一个占位小方块而不报错；固件 GOP 压根不提供
+    1920×1080；vfat 上 `chmod` 返回 EPERM 让脚本停在第一个文件；
+    `sed` 没考虑制表符导致**第二次**运行才堆出重复 NVRAM 项。
+    **动引导之前先实际走一遍退路**，别信「理论上能回退」。
 
 > 补充：**从 GitHub clone 很慢**（实测 ~80 KiB/s），涉及 git clone 的环节要先怀疑超时，
 > 别急着怀疑配置写错了 —— 见 `000E`。
