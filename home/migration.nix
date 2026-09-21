@@ -34,12 +34,128 @@ let
     ".local/state/agent-skills/disabled" # 关掉了哪些 Agent Skill
     ".config/monitors.xml" # 多显示器布局（台式机上有用）
     ".config/user-dirs.dirs" # XDG 目录指向
+
+    # Claude Code 的偏好：当前模型、effort、主题、推送开关。
+    #
+    # **归 B 类而不是 A 类，是因为 Claude Code 在运行时写它** ——
+    # /model、/effort、/config、Remote Control 开关改的都是这个文件。
+    # 写成 home.file 的只读符号链接会让那几个命令全部失效，
+    # 等于为了声明式的纯度关掉工具的一部分功能。
+    #
+    # 同目录的 keybindings.json 相反：那是手写的、工具不碰，所以进了 Nix
+    # （home/toru.nix 的 home.file）。**同一个目录里两个文件分属两类，
+    # 判据是「谁在写这个文件」，不是「它们放在一起」。**
+    ".claude/settings.json"
   ];
 
   # ============================================
-  # migration-check 的白名单
+  # migration-check 的白名单（~/.claude 下）
   # ============================================
-  # ~/.config 和 ~/.local/share 下已知不需要搬的条目。
+  # 这个目录是混的：两个配置文件 + 凭据 + 一堆运行时状态。
+  #
+  # **单独扫它而不是整个目录加白名单**，是因为整个忽略的话，
+  # 以后 Claude Code 在这里新增一个该管的配置文件就发现不了了 ——
+  # 而那正是这个工具要防的事。
+  ignoredClaude = [
+    # C 类：凭据与会话
+    ".credentials.json"
+    "sessions"
+    "ide"
+    "daemon"
+    "daemon.log"
+
+    # 运行时状态与缓存，工具自己管
+    "history.jsonl"
+    "projects"
+    "file-history"
+    "shell-snapshots"
+    "paste-cache"
+    "cache"
+    "backups"
+    "telemetry"
+    "jobs"
+    "session-env"
+    "plugins" # 插件市场的同步缓存
+    ".last-cleanup"
+
+    # skills/ 是**混合目录**，两半各有主人，都不需要搬：
+    #   <skill名>  -> ~/.local/share/agent-skills/<名> -> store
+    #                 我们的 skills sync 建的链接（见 home/agent-skills.nix）
+    #   synced/    -> 真实文件，Claude Code 自己从账号同步下来的那批
+    #                 （docx / pptx / xlsx / pdf / skill-creator 等）
+    #
+    # 因为 synced/ 里是真实文件，整个目录过不了 is_managed 的
+    # 「每个文件都是 store 链接」判定，所以必须显式列出来。
+    #
+    # 禁用状态不在这里 —— 那在 ~/.local/state/agent-skills/disabled，
+    # 已经收进 B 类了。
+    "skills"
+  ];
+
+  # ============================================
+  # migration-check 的白名单（$HOME 根下）
+  # ============================================
+  # 家目录根下已知不需要搬的条目。**这一层原先根本没扫** ——
+  # 只扫了 ~/.config 和 ~/.local/share，结果 ~/.claude、~/.vscode、
+  # ~/.npm、~/.dotnet 这些开发工具留下的配置全在盲区里。
+  ignoredHome = [
+    # 单独扫的，不在这里重复报
+    ".claude"
+    ".config"
+    ".local"
+
+    # 缓存与运行时状态
+    ".cache"
+    ".atuin" # 历史库本体，B 类里刻意没收（见 stateFiles 的注释）
+    ".bash_history"
+    ".zsh_history"
+    ".zcompdump"
+    ".viminfo"
+    ".lesshst"
+    ".dotnet"
+    ".npm"
+    ".pki"
+    ".mozilla"
+    ".var" # Flatpak 的应用数据，靠 flatpak.nix 声明重建
+    ".xwechat"
+    ".vscode" # 扩展由上面单独一节查
+    ".vscode-shared"
+
+    # C 类：秘密，刻意不搬
+    ".ssh"
+    ".gnupg"
+    ".claude.json" # 里面有 .credentials 之外的会话凭据
+
+    # Nix 自己的
+    ".nix-defexpr"
+    ".nix-profile"
+    "result"
+
+    # XDG 用户目录
+    "Desktop"
+    "Documents"
+    "Downloads"
+    "Music"
+    "Pictures"
+    "Public"
+    "Templates"
+    "Videos"
+
+    # 工作目录与仓库
+    "Projects"
+    "nixos-config"
+    "dotfiles-state"
+
+    # 杂项
+    ".sys1og.conf"
+    ".icons"
+    ".themes"
+  ];
+
+  # ============================================
+  # migration-check 的白名单（~/.config 与 ~/.local/share）
+  # ============================================
+  # 这两个目录下已知不需要搬的条目。
   #
   # **home-manager 管的东西不用列** —— 它们是指向 /nix/store 的符号链接，
   # 脚本按这一点自动跳过。这里只列「真实存在、但确实不用搬」的：
@@ -169,6 +285,8 @@ let
 
   stateFilesList = listFile "state-files.txt" stateFiles;
   ignoredList = listFile "migration-ignored.txt" ignored;
+  ignoredHomeList = listFile "migration-ignored-home.txt" ignoredHome;
+  ignoredClaudeList = listFile "migration-ignored-claude.txt" ignoredClaude;
   vscodeList = listFile "vscode-extensions.txt" vscodeExtensions;
   extensionsList = listFile "gnome-extensions.txt" enabledExtensions;
   flatpakList = listFile "flatpak-apps.txt" flatpakApps;
@@ -384,40 +502,75 @@ let
       note "状态仓库还没建：$STATE_REPO（见 MIGRATION.md 第 7.1 节）"
     fi
 
-    # home-manager 管的都是指向 /nix/store 的符号链接，按这一点自动跳过，
-    # 所以白名单只需要列「真实存在、但确实不用搬」的。
-    printf '\n~/.config 和 ~/.local/share 里没人认领的\n'
-    ign=$(cat ${ignoredList})
-    for base in "$HOME/.config" "$HOME/.local/share"; do
-      [ -d "$base" ] || continue
+    # ============================================
+    # 判定「这东西有没有人管」
+    # ============================================
+    #   单个文件 -> 本身就是解析后落在 /nix/store 里的符号链接
+    #   一个目录 -> 目录**非空**，且里面每一个文件都是这样的符号链接
+    #
+    # 为什么目录要逐个文件看：home-manager 不会把整个目录软链过去，
+    # 它是**逐个文件**链的。只查顶层符号链接会把 ~/.config/bat、btop、
+    # ghostty、tmux 一大批全部误报（实测 14 个误报）。
+    #
+    # 为什么必须用 readlink -f 而不是 find -lname：
+    # `-lname` 匹配的是**链接里存的原始字符串**，不跟着解析。
+    # 而 ~/.agents/skills/<名> 指向的是 ~/.local/share/agent-skills/<名>，
+    # 那个才是指向 store 的链接 —— 两跳。用 -lname 的话这些
+    # skills sync 管得好好的目录会被报成「没人认领」。
+    #
+    # 空目录不算「已认领」—— 那通常是某个程序建了就没用的残留。
+    is_managed() {
+      p="$1"
+      if [ -L "$p" ]; then
+        case "$(readlink -f "$p")" in /nix/store/*) return 0 ;; esac
+        return 1
+      fi
+      [ -d "$p" ] || return 1
+      total=0
+      linked=0
+      while IFS= read -r f; do
+        total=$((total + 1))
+        if [ -L "$f" ]; then
+          case "$(readlink -f "$f")" in /nix/store/*) linked=$((linked + 1)) ;; esac
+        fi
+      done < <(find "$p" \( -type f -o -type l \) 2>/dev/null)
+      [ "$total" -gt 0 ] && [ "$total" -eq "$linked" ]
+    }
+
+    scan_dir() {
+      base="$1"
+      ign="$2"
+      [ -d "$base" ] || return 0
       for p in "$base"/*; do
         [ -e "$p" ] || continue
         b=$(basename "$p")
-        # home-manager 管的东西怎么认：
-        #
-        #   单个文件 -> 本身就是指向 /nix/store 的符号链接
-        #   一个目录 -> 目录**非空**，且里面每一个文件都是这样的符号链接
-        #              （HM 不会把整个目录软链过去，它是逐个文件链的，
-        #               所以只查顶层符号链接会把 ~/.config/bat、btop、
-        #               ghostty、tmux 这一大批全部误报成「没人认领」）
-        #
-        # 空目录不算「已认领」——那通常是某个程序建了就没用的残留。
-        if [ -L "$p" ]; then
-          case "$(readlink -f "$p")" in /nix/store/*) continue ;; esac
-        elif [ -d "$p" ]; then
-          total=$(find "$p" \( -type f -o -type l \) | wc -l)
-          linked=$(find "$p" -type l -lname '/nix/store/*' | wc -l)
-          if [ "$total" -gt 0 ] && [ "$total" -eq "$linked" ]; then
-            continue
-          fi
-        fi
+        # $HOME 根下的一堆随手记的 *.txt 笔记，不是配置
+        case "$b" in *.txt) continue ;; esac
+        is_managed "$p" && continue
         grep -qxF "$b" <<< "$ign" && continue
         rel=''${p#"$HOME"/}
         grep -qxF "$rel" <<< "$files" && continue
         grep -q "^$rel/" <<< "$files" && continue
         note "没人认领：~/$rel"
       done
-    done
+    }
+
+    # $HOME 根下。**这一层原先没扫**，~/.claude 这类开发工具的配置全在盲区。
+    # 用 shopt -s dotglob 让 * 也匹配点开头的条目。
+    printf '\n~/ 根下没人认领的\n'
+    shopt -s dotglob
+    scan_dir "$HOME" "$(cat ${ignoredHomeList})"
+    shopt -u dotglob
+
+    printf '\n~/.config 和 ~/.local/share 里没人认领的\n'
+    ign_xdg=$(cat ${ignoredList})
+    scan_dir "$HOME/.config" "$ign_xdg"
+    scan_dir "$HOME/.local/share" "$ign_xdg"
+
+    # ~/.claude 单独扫。整个目录加白名单的话，以后 Claude Code 在这里
+    # 新增一个该管的配置文件就发现不了了 —— 而那正是这工具要防的事。
+    printf '\n~/.claude 里没人认领的\n'
+    scan_dir "$HOME/.claude" "$(cat ${ignoredClaudeList})"
 
     echo
     if [ "$findings" -eq 0 ]; then

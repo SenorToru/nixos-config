@@ -1361,6 +1361,37 @@ in
   ];
 
   # ============================================
+  # Claude Code 的键位
+  # ============================================
+  # 只有键位进 Nix，**同目录的 settings.json 不进** —— 判据是
+  # 「谁在写这个文件」：
+  #
+  #   keybindings.json   手写的，Claude Code 运行时不碰    -> A 类，声明式
+  #   settings.json      /model、/effort、/config 都在改它  -> B 类，dotfiles-state
+  #
+  # 写成只读符号链接不影响键位（本来就没人改它），但会让 /model 和
+  # /effort 直接失效 —— 所以两个文件分开处理，不是按目录一刀切。
+  #
+  # home-manager 没有 programs.claude-code 模块，而 ~/.claude 不在
+  # XDG 路径下，所以用 home.file 而不是 xdg.configFile。
+  #
+  # Ctrl+Enter 和 Alt+Enter 都发送，Enter 留给换行 ——
+  # 和 VS Code 那边 claudeCode.useCtrlEnterToSend = true 是同一套手感。
+  home.file.".claude/keybindings.json".text = builtins.toJSON {
+    "$schema" = "https://www.schemastore.org/claude-code-keybindings.json";
+    "$docs" = "https://code.claude.com/docs/en/keybindings";
+    bindings = [
+      {
+        context = "Chat";
+        bindings = {
+          "ctrl+enter" = "chat:submit";
+          "alt+enter" = "chat:submit";
+        };
+      }
+    ];
+  };
+
+  # ============================================
   # Git
   # ============================================
   # 之前 ~/.gitconfig 是仓库外的一个手写文件，有两个问题：

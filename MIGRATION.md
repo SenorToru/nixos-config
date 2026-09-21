@@ -27,12 +27,15 @@
 验证菜单、图标、分辨率都做了，踩的五个坑记在
 [Lesson-Learn/0013](Lesson-Learn/0013_REFIND_BOOT.md)。
 
-**唯一没做的是把 `dotfiles-state` 推上 GitHub** —— 本地仓库已建好、
-内容已 `state-sync push` 过并人工看过，但远程仓库要你自己建（见 7.1）。
+`dotfiles-state` 私有仓库也已经建好并推上 GitHub。
 
-第 1-5 节和第 8 节是基于现有仓库和 NixOS 标准流程写的，可以照做，
-但**没有在一台全新机器上从头跑过** —— 下次真装新机器时按它走，
-对不上的地方要回来改。
+**唯一没验证过的是第 1-5 节（装机本身）。** 那部分基于现有仓库和
+NixOS 标准流程写成，逻辑上成立，但**没有在一台真正的新机器上从头跑过**。
+下次装新机器时按它走，对不上的地方回来改。
+
+> 在虚拟机里完整演练一遍是验证它的正确办法 ——
+> 尤其是 rEFInd 那部分，虚拟机的 OVMF 有独立的 NVRAM 存档，
+> `efibootmgr` 的行为和真机一致，而且搞坏了删掉重来就行。
 
 ---
 
@@ -67,6 +70,7 @@ neovim 配置、VS Code 的 `userSettings`、25 个 Agent Skill、zsh/tmux/stars
 | `~/.local/state/agent-skills/disabled` | 关掉了哪些 Agent Skill |
 | `~/.config/monitors.xml` | 多显示器布局（台式机上有用） |
 | `~/.config/user-dirs.dirs` | XDG 目录指向 |
+| `~/.claude/settings.json` | Claude Code 的模型 / effort / 主题偏好。**归 B 类是因为工具在运行时写它** |
 
 ### C 类 —— 不搬，新机器重新签发
 
@@ -656,11 +660,11 @@ state-sync restore
 `push` 会剔掉日志、锁文件和 `.session.ipc`。最后那个记的是**本机的
 套接字路径**，拷到新机器上是错的。
 
-> ### 这个仓库还没建到 GitHub 上
+> ### 这个仓库必须是 private
 >
-> 本地的 `~/dotfiles-state` 已经建好并 push 过一轮（480 KB，
-> 内容人工核对过，确认没混进 `~/.config/gh` 的 token 之类的东西）。
-> 但**远程仓库要你自己建**：
+> 里面有输入法的学习历史 —— 那是你打过的字的统计痕迹。
+>
+> 建的时候：
 >
 > ```bash
 > cd ~/dotfiles-state
@@ -668,8 +672,15 @@ state-sync restore
 > gh repo create SenorToru/dotfiles-state --private --source=. --push
 > ```
 >
-> **必须是 private。** 里面有输入法的学习历史 ——
-> 那是你打过的字的统计痕迹。
+> 推之前先看一眼收进来的是什么：
+>
+> ```bash
+> find ~/dotfiles-state -path '*/.git' -prune -o -type f -print
+> ```
+>
+> 应该只有 fcitx5 的三项、mozc 目录、以及四个零碎状态文件，
+> 一共十几个文件、几百 KB。**看到任何 `gh`、`keyrings`、`.ssh`
+> 相关的东西就停下来** —— 那是 C 类，不该在这里。
 
 ### 7.2 输入法
 
@@ -952,7 +963,7 @@ migration-check
 | 问题 | 状态 |
 |------|------|
 | `users.users.toru` 没有密码字段，新机器装完账户是锁定的 | **有意不改**。密码属 C 类，塞进仓库是倒退。第 5.4 节的 `nixos-enter … passwd toru` 是正解 |
-| `dotfiles-state` 还没推上 GitHub | 本地仓库已建、已 push 过一轮并人工核对。远程要你自己建，见 7.1 |
+| B 类清单是否还有该收未收的 | 加了新工具之后跑 `migration-check`，它会报出 `$HOME` 里没人认领的东西 |
 | 第 1-5 节没在全新机器上从头跑过 | 只能等下次真装新机器时验证，对不上的地方回来改 |
 | 独显探测判据未经多显卡机器验证 | AMD 的 APU 不在 PCI bus 00 上且也报显存，可能被误判成独显。真遇到直接改 `hwinfo.nix` |
 | VS Code 的四个扩展仍是手工装的 | nixpkgs 里的版本比实际装的旧（claude-code 会退到 2.1.223），声明进 Nix 等于降级。归手工清单，`migration-check` 盯着 |

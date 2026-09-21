@@ -590,7 +590,7 @@ migration-check
 | VS Code 扩展 | 和手工清单对不上 |
 | home-manager 的接管备份 | `*.hm-bak` 文件，并告诉你内容和现役是否一致 |
 | B 类状态 | 在 `$HOME` 里但还没 `state-sync push` |
-| `~/.config`、`~/.local/share` | 既不是 home-manager 管的，也不在白名单里 |
+| `~/`、`~/.config`、`~/.local/share`、`~/.claude` | 既不是 home-manager 管的，也不在白名单里 |
 
 最后一项的判据是：**home-manager 管的东西都是指向 `/nix/store` 的符号链接**
 （目录的话，是目录里每个文件都是这样的链接），按这一点自动跳过，
