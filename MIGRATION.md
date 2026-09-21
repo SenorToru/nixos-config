@@ -23,20 +23,21 @@
 | 二 | rEFInd 主题 derivation、`refind-sync`、`refind-hwinfo`、在 thinkpad 上实装验证 | **已完成** |
 | 三 | A 类配置补全、`migration-check`、`state-sync`、README/CLAUDE.md 同步 | **已完成** |
 
-**第 6、7、9 节都已在这台 thinkpad 上实际跑过。** rEFInd 那部分连重启
-验证菜单、图标、分辨率都做了，踩的五个坑记在
-[Lesson-Learn/0013](Lesson-Learn/0013_REFIND_BOOT.md)。
+**第 1-5 节已在虚拟机里完整跑通**（2026-09-21，Bluefin 上的 libvirt/KVM）。
+装完能进 GNOME，A 类复现逐条验证过：字体命中 `Sarasa Mono J` 不回退、
+登录 shell 是 zsh、`claude --version` 和 manifest 钉的版本一致、
+25 个 Agent Skill 全在。演练清单和沿途发现见
+[REHEARSAL.md](REHEARSAL.md)。
 
-`dotfiles-state` 私有仓库也已经建好并推上 GitHub。
+**第 6 节（rEFInd）在 thinkpad 上验过**，连重启看菜单、图标、分辨率都做了，
+踩的五个坑记在 [Lesson-Learn/0013](Lesson-Learn/0013_REFIND_BOOT.md)。
+但**在全新安装的语境下还没走过** —— 虚拟机演练的下一步就是它。
 
-**唯一没验证过的是第 1-5 节（装机本身）。** 那部分基于现有仓库和
-NixOS 标准流程写成，逻辑上成立，但**没有在一台真正的新机器上从头跑过**。
-下次装新机器时按它走，对不上的地方回来改。
+**第 7 节（搬用户状态）在 thinkpad 上验过**，`dotfiles-state` 私有仓库
+已经建好并推上 GitHub。
 
-> **演练清单在 [REHEARSAL.md](REHEARSAL.md)。**
-> 在虚拟机里完整演练一遍是验证它的正确办法 ——
-> 尤其是 rEFInd 那部分，虚拟机的 OVMF 有独立的 NVRAM 存档，
-> `efibootmgr` 的行为和真机一致，而且搞坏了删掉重来就行。
+三件虚拟机验证不了的，真机上还得重走：GOP 分辨率（OVMF 的模式和真机
+固件无关）、NTFS 脏状态（没有真 Windows 去弄脏它）、硬件探测的值。
 
 ---
 
@@ -612,6 +613,35 @@ nix-shell -p git --run "git add hosts/$HOST/"
 
 **这步不能跳。** flake 看不见未跟踪的文件，不 add 会直接报
 `Path 'hosts/xxx/default.nix' ... is not tracked by Git`，安装失败。
+
+#### 新机器没有 SSH，而且主机密钥是全新的
+
+**仓库里任何地方都没有开 `services.openssh`。** 装好的机器默认连不上 ——
+对笔记本来说这是对的（少一个暴露面），但如果你打算装完之后远程操作，
+得自己在 `hosts/<主机>/default.nix` 里加：
+
+```nix
+  # 放 hosts/ 而不是 modules/：要不要开 SSH 是**这台机器**的事。
+  # 笔记本通常不需要，服务器和虚拟机需要。
+  services.openssh.enable = true;
+```
+
+另外，**新机器的 SSH 主机密钥是全新生成的**。如果这台机器是**替换**旧机器、
+沿用同一个 IP 或主机名，你从别的机器连过来会撞上：
+
+```
+WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!
+```
+
+这不是攻击，是 SSH 在正确工作 —— 同一个地址后面换了台机器。在**连接方**清掉旧记录：
+
+```bash
+ssh-keygen -R <那台机器的 IP 或主机名>
+```
+
+> 主机密钥和第 0 节的 C 类是同一个道理：**一机一把，不该搬**。
+> 第 0 节的 C 类表里列的是用户的 `~/.ssh/id_ed25519`，
+> 主机密钥（`/etc/ssh/ssh_host_*`）同理 —— 让新机器自己生成。
 
 ### 5.3 装
 

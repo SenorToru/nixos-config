@@ -333,8 +333,67 @@ ls /sys/firmware/efi
 - [ ] `chown -R 1000:100 /mnt/home/toru`
 - [ ] 重启后能用 toru 登录进桌面
 
-> 第一次构建要下载整棵依赖树，慢是正常的。
+> 第一次构建要下载整棵依赖树（含 GNOME），慢是正常的。
 > 如果卡在某个包上超过十几分钟，贴回来看看。
+
+#### 装完先把 SSH 弄通，别对着虚拟机窗口手打
+
+仓库默认不开 sshd。在 `hosts/vm/default.nix` 里加上：
+
+```bash
+sudo sed -i 's|^  system.stateVersion = "26.05";|  services.openssh.enable = true;\n\n  system.stateVersion = "26.05";|' \
+  /home/toru/nixos-config/hosts/vm/default.nix
+nrb
+```
+
+- [ ] `nrb` 解析成 `--flake /home/toru/nixos-config#vm`（**不是 `#thinkpad`**）
+
+> 这顺带验证了别名不再写死主机名 —— 它从 `osConfig.custom.flakeHost`
+> 和 `config.home.homeDirectory` 推。跑去构建 thinkpad 的配置就是错的。
+
+在宿主机上拿 IP（`services.qemuGuest` 开着，宿主机能直接读到）：
+
+```bash
+virsh -c qemu:///system domifaddr nixos
+ssh toru@<那个IP>
+```
+
+> **每次重装虚拟机，主机密钥都会变**，SSH 会报
+> `REMOTE HOST IDENTIFICATION HAS CHANGED`。不是攻击 ——
+> 同一个 IP 后面换了台机器。清掉旧记录：
+>
+> ```bash
+> ssh-keygen -R 192.168.122.94
+> ```
+>
+> 演练要反复重装，嫌烦的话**只对 libvirt 的 NAT 网段**关掉严格检查
+> （不影响连 GitHub 或任何真实主机，演练完删掉）：
+>
+> ```
+> Host 192.168.122.*
+>     StrictHostKeyChecking no
+>     UserKnownHostsFile /dev/null
+>     LogLevel ERROR
+> ```
+
+#### 验证 A 类复现 —— 这是整次演练的正题
+
+```bash
+fc-match "Sarasa Mono J"; echo $SHELL; claude --version
+skills status | head -4
+migration-check
+```
+
+- [ ] `fc-match` 命中 **`Sarasa Mono J`**，不是回退到别的字体
+- [ ] `$SHELL` 是 zsh
+- [ ] `claude --version` 和 `modules/claude-code-manifest.json` 里钉的版本**一致**
+- [ ] `skills status` 显示 25 个，和 thinkpad 一样
+- [ ] `migration-check` 报「状态仓库还没建」—— 虚拟机里没有
+      `dotfiles-state`，**那是正确行为**
+
+> `claude --version` 那条最值得看。仓库用 manifest 覆写把它从
+> 26.05 冻住的 2.1.223 拉到了新版。虚拟机上原样复现，
+> 证明的不只是「装上了」，而是**版本覆写这套机制跨机器有效**。
 
 ### 3.6 装 rEFInd（文档第 6 节）
 
