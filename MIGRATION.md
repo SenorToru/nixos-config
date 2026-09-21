@@ -758,6 +758,10 @@ sudo nixos-rebuild switch --flake .#<主机>
 sudo refind-sync
 ```
 
+> **第一次在一台机器上配 rEFInd 要 `nrb` 两次** —— `refind-hwinfo`
+> 本身就是 `custom.refind.enable` 带进来的，开启之前它不存在。
+> 完整顺序见第 9.3 节。
+
 **中间那次 switch 不能省。** `refind-sync` 里的主题路径是**构建时烤死的
 store 路径**，不重新构建的话新图根本不存在，sync 拷的还是旧那份。
 
@@ -975,7 +979,38 @@ git remote set-url origin git@github.com:SenorToru/nixos-config.git
 - **GNOME keyring**：首次用到时解锁
 - **浏览器**：Zen / Brave / Firefox 各自登录账号，靠它们自己的同步拉回书签和扩展设置
 - **Proton Pass**：浏览器扩展里登录
-- **VS Code**：扩展由 `programs.vscode` 声明式装好了，只需登录 GitHub Copilot 账号
+- **VS Code**：登录 GitHub Copilot 账号。**扩展要手工装**，见下面 7.4。
+
+### 7.4 手工装的东西
+
+这几样**有意不进 Nix**，所以新机器上要自己装。
+`migration-check` 会盯着它们，少了会报「清单里有但没装」。
+
+#### VS Code 扩展（4 个）
+
+```
+anthropic.claude-code
+brettm12345.nixfmt-vscode
+jnoortheen.nix-ide
+shd101wyy.markdown-preview-enhanced
+```
+
+在 VS Code 里按 `Ctrl+P`，逐个输 `ext install <上面的 ID>`。
+
+> **为什么不声明进 Nix：** nixpkgs 里那几个版本比实际用的旧。
+> `anthropic.claude-code` 会退到 **2.1.223** —— 正是
+> [Lesson-Learn/0010](Lesson-Learn/0010_CLAUDE_CODE_VERSION_PINNING.md)
+> 记的那个被发布分支冻住的版本，而 CLI 那边已经用 manifest 覆写
+> 升上去了。装个旧扩展自相矛盾。
+>
+> `jnoortheen.nix-ide` 和 `shd101wyy.markdown-preview-enhanced` 同样偏旧。
+>
+> 权衡的结果是**宁可手工装、让 `migration-check` 盯着**，
+> 也不要为了声明式的纯度把常用工具拽回旧版本。
+>
+> 清单在 `home/migration.nix` 的 `vscodeExtensions`。
+> **改那里的同时要改这一节** —— 两处都是给人看的，漂移了就会互相矛盾。
+
 
 ---
 
@@ -1083,21 +1118,48 @@ sudo efibootmgr -b 0002 -B
 
 并把 `../../modules/refind.nix` 加进 `imports`。
 
-### 9.3 装上去
+### 9.3 装上去 —— 要 `nrb` 两次
+
+> ### 鸡生蛋：`refind-hwinfo` 要 `nrb` 之后才存在
+>
+> 那个命令来自 `modules/refind.nix`，只在 `custom.refind.enable = true`
+> **且构建生效之后**才进 PATH。所以**第一次**在一台机器上配 rEFInd 时，
+> 不能先跑它。
+>
+> 第一次 `nrb` 能过，是因为 `custom.refind.bootRows` 默认是空列表 ——
+> 主题照样生成，只是启动画面上只有内核那一行。第二次才补上硬件。
 
 ```bash
 cd ~/nixos-config
-sudo refind-hwinfo                                   # 生成 hwinfo.nix
-git add hosts/<主机>/hwinfo.nix modules/refind.nix   # 新文件必须 add
+
+# ① 先构建一次，把 refind-hwinfo / refind-sync 装进 PATH。
+#    此时 ./hwinfo.nix 还不存在，也不要 import 它。
+git add hosts/<主机>/                                # 新文件必须 add
 nixfmt $(git ls-files '*.nix' | grep -v hardware-config)
 nix build .#nixosConfigurations.<主机>.config.system.build.toplevel --out-link /tmp/res
 sudo nixos-rebuild switch --flake .#<主机>
+
+# ② 现在探测硬件
+sudo refind-hwinfo
+
+# ③ 把生成的文件让 git 看见，并加进 imports
+git add hosts/<主机>/hwinfo.nix
+#    在 hosts/<主机>/default.nix 的 imports 里 ./tuning.nix 下面加一行：
+#        ./hwinfo.nix
+
+# ④ 再构建一次，这次主题才带上 CPU / GPU / 内存 / 磁盘
+sudo nixos-rebuild switch --flake .#<主机>
+
+# ⑤ 写进 ESP
 sudo refind-sync
 ```
 
-**顺序不能反：先 switch 再 sync。** 反过来的话，那次 switch 还带着
-`canTouchEfiVariables = true`，systemd-boot 会把自己重新设回第一位，
-rEFInd 白装。
+**第 ⑤ 步必须在 switch 之后。** 反过来的话，那次 switch 会把
+`refind-sync` 里烤死的主题 store 路径换成新的，而 ESP 里还是旧的 ——
+等于白同步。
+
+> 已经配过 rEFInd 的机器（比如换了硬件要重新探测）没有这个问题，
+> 三步就够：`sudo refind-hwinfo` → `nrb` → `sudo refind-sync`。
 
 ### 9.4 重启验证
 

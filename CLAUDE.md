@@ -65,6 +65,9 @@ README 和本文件有意重叠。
 - 改变装机流程：分区方案、文件系统、ISO 选择、引导
 - 改变 A / B / C 三类的划分，或 `dotfiles-state` 收哪些路径
 - 改变 `refind-sync` / `refind-hwinfo` / `state-sync` / `migration-check` 的用法
+- 改变 `home/migration.nix` 的 `vscodeExtensions` 清单 —— 那份是给
+  `migration-check` 查的，MIGRATION.md 第 7.4 节那份是给人照着装的，
+  **两处都要改**
 
 **两边描述同一件事时，改了一边就要改另一边**，不要让它们漂移。
 漂移之后最糟的情况不是信息缺失，而是两份文档给出互相矛盾的指示 ——

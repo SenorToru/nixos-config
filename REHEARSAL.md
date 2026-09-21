@@ -411,11 +411,24 @@ nix shell nixpkgs#efibootmgr -c efibootmgr
 正好就是现在的情形）：
 
 - [ ] `hosts/vm/default.nix` 加 `boot.loader.efi.canTouchEfiVariables = false;`
+      （顺手把上面那行「首次安装保持 true」的注释也改掉，免得矛盾）
 - [ ] 加 `custom.refind.enable = true;` 和 `resolution`（先随便填，比如 1024x768）
-- [ ] `sudo refind-hwinfo` → `git add hosts/vm/hwinfo.nix` → `nrb`
+
+> **注意选项名是 `width` 不是 `wideth`。** 写错会报「选项不存在」
+> 而不是「拼写错误」，容易让人去怀疑模块本身。
+> 还有 `resolution = { ... };` 那个内层大括号后面的**分号别漏**。
+
+**然后 `nrb` 两次** —— `refind-hwinfo` 是 `custom.refind.enable`
+带进来的，开启之前它不存在（见文档第 9.3 节）：
+
+- [ ] `git add hosts/vm/` → `nrb`（第一次，把命令装进 PATH）
+- [ ] `sudo refind-hwinfo`（生成 `hosts/vm/hwinfo.nix`）
+- [ ] `git add hosts/vm/hwinfo.nix`，并在 `imports` 里加 `./hwinfo.nix`
+- [ ] `nrb`（第二次，主题这才带上硬件信息）
 - [ ] `sudo refind-sync`
 - [ ] `efibootmgr` 里 rEFInd 在 `BootOrder` 第一位
 - [ ] 重启，**rEFInd 菜单出现**
+- [ ] 背景图上有 CPU / GPU / 内存 / 磁盘 / 内核五行
 - [ ] 菜单里有 NixOS 图标（**不是约 32×32 的黄黑斜条方块**）
 - [ ] 选 NixOS 能进系统
 
