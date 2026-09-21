@@ -136,8 +136,22 @@ neovim 配置、VS Code 的 `userSettings`、25 个 Agent Skill、zsh/tmux/stars
 ### 决策点 C：Btrfs 压缩等级
 
 挂载选项写成 `compress=zstd:1` 还是 `zstd:3`。
-**这个决定在第 4.4 节落地，之后会被 `nixos-generate-config` 写进
-`hardware-configuration.nix`，改起来要重挂载 + 重新生成。**
+
+> ### 这个值不会被 `nixos-generate-config` 记录
+>
+> 那个脚本只往生成的文件里写四样：loop 设备的 `loop`、btrfs 的
+> `subvol=`、vfat 的 `fmask` / `dmask`、以及 stratis 相关的几项
+> （源码见 `nixos/modules/installer/tools/nixos-generate-config.pl`）。
+> **`compress`、`noatime`、`discard` 一律不记。**
+>
+> 所以安装时挂载用什么压缩等级，**只影响安装过程本身**。
+> 要让它持久生效，必须写进 `hosts/<机>/tuning.nix`，见第 5.2 节。
+>
+> 这也正好符合仓库的分层判据 —— 压缩等级是按这台机器的 CPU 定的调优，
+> 本来就该在 `tuning.nix`。而 `fileSystems.*.options` 是列表，
+> 多个模块的定义会**合并**：`hardware-configuration.nix` 出 `subvol=`，
+> `tuning.nix` 出 `compress` 和 `noatime`，两边各管各的，
+> 谁都不用去改对方。
 
 | 选 | 什么时候 |
 |----|----------|
@@ -238,6 +252,10 @@ ping -c3 nixos.org
 
 ## 4. 分区与格式化
 
+> **所有命令都要 root。** 新开的终端或 SSH 会话先 `sudo -i`。
+> 第 3 节提过一次，但那是假设你从头一路做下来 ——
+> **SSH 断线重连、或者换一个终端窗口，都会回到普通用户。**
+>
 > **这一节的每条命令都会不可逆地抹掉数据。**
 > 每次动手前先跑一遍 `lsblk -o NAME,SIZE,MODEL,SERIAL`，
 > 靠**型号和序列号**确认目标盘，不要靠 `/dev/nvme0n1` 这种会变的名字。
@@ -249,18 +267,21 @@ ping -c3 nixos.org
 ```bash
 parted /dev/nvme0n1 -- mklabel gpt
 
-# ESP：2 GiB。比常见的 512 MiB 大得多，是有理由的 ——
-# 每换一次内核，systemd-boot 就要在这里多存一份约 50-60 MiB 的
-# kernel + initrd。1 GiB 的 ESP 会把 configurationLimit 逼到 20 以下。
-parted /dev/nvme0n1 -- mkpart ESP fat32 1MiB 2GiB
+# 三个分区的起止位置是**连锁**的：后一个的起点 = 前一个的终点。
+# 所以用变量推，不要手写死数字 —— 改了 swap 大小却忘了改 root 的起点，
+# parted 不会报错，只会在中间留一段白白浪费的空隙。
+ESP_END=2      # GiB。比常见的 512 MiB 大得多是有理由的：每换一次内核，
+               # systemd-boot 就要在这里多存一份约 50-60 MiB 的
+               # kernel + initrd。1 GiB 的 ESP 撑不住几轮。
+SWAP_SIZE=16   # GiB。按决策点 D，取内存的 1-1.5 倍。
+SWAP_END=$((ESP_END + SWAP_SIZE))
+
+parted /dev/nvme0n1 -- mkpart ESP fat32 1MiB "${ESP_END}GiB"
 parted /dev/nvme0n1 -- set 1 esp on
+parted /dev/nvme0n1 -- mkpart swap linux-swap "${ESP_END}GiB" "${SWAP_END}GiB"
+parted /dev/nvme0n1 -- mkpart root btrfs "${SWAP_END}GiB" 100%
 
-# swap：按决策点 D，取内存的 1-1.5 倍。这里以 16 GiB 为例。
-# 不要磁盘 swap 的话跳过这两行，并把下面 root 分区的起点改成 2GiB。
-parted /dev/nvme0n1 -- mkpart swap linux-swap 2GiB 18GiB
-
-# root：剩下全部
-parted /dev/nvme0n1 -- mkpart root btrfs 18GiB 100%
+# 不要磁盘 swap 的话，跳过 swap 那行，并把 root 的起点改成 "${ESP_END}GiB"
 ```
 
 ### 4.2 格式化
@@ -294,10 +315,12 @@ mkfs.ntfs -Q -L share /dev/sdX1
 
 NixOS 侧的挂载配置在第 5.2 节写进 `hosts/<主机>/`。
 
-### 4.4 挂载 —— 压缩等级在这里定
+### 4.4 挂载
 
-**决策点 C 在这一步落地。** 这里用什么选项挂载，
-`nixos-generate-config` 就把什么选项写进 `hardware-configuration.nix`。
+这里挂载用的选项**只影响安装过程本身**。
+`nixos-generate-config` 只记 `subvol=`（btrfs）和 `fmask`/`dmask`（vfat），
+**`compress` 和 `noatime` 不记** —— 那两样要写进 `hosts/<机>/tuning.nix`，
+见第 5.2 节。
 
 ```bash
 # 先建 subvolume
@@ -310,7 +333,8 @@ umount /mnt
 ```
 
 ```bash
-# ！！改这一行就是改压缩等级：zstd:1 或 zstd:3 ！！
+# 安装期间的挂载选项。压缩等级在这里只影响安装过程 ——
+# 装完之后生效的那一份在 hosts/<机>/tuning.nix（第 5.2 节）。
 OPTS=compress=zstd:1,noatime
 
 mount -o subvol=@,$OPTS          /dev/nvme0n1p3 /mnt
@@ -374,70 +398,220 @@ nix-shell -p git --run '
   git clone https://github.com/SenorToru/nixos-config /mnt/home/toru/nixos-config
 '
 cd /mnt/home/toru/nixos-config
-```
 
-建新主机目录：
-
-```bash
-HOST=<新主机名>          # 例如 desktop
+HOST=<新主机名>          # 例如 desktop、asus、vm
 mkdir -p hosts/$HOST
 cp /mnt/etc/nixos/hardware-configuration.nix hosts/$HOST/
 ```
 
-然后写两个文件。**照抄 `hosts/thinkpad/` 的骨架，但 `tuning.nix` 必须重写** ——
-里面每一条都绑死在那台的硬件上（Intel 核显驱动、`vm.swappiness` 的数值、
-`thermald`），照抄到别的机器上是错的。
+> ISO 里全程是 root，所以这些文件的属主都是 root。
+> **第 5.5 节的 `chown` 会一次性修掉**，别提前做 ——
+> `nixos-install` 读 dirty 工作树时还可能往 `.git/objects` 里写东西。
+> 背景见 [Lesson-Learn/0011](Lesson-Learn/0011_ROOT_OWNED_FILES_IN_REPO.md)。
 
-`hosts/$HOST/default.nix` 要改的地方：
+#### 先定键盘布局
 
-| 位置 | 改成 |
-|------|------|
-| `networking.hostName` | 新主机名 |
-| `console.keyMap` / `services.xserver.xkb.layout` | 新机器的键盘布局（台式机接美式键盘就是 `us`） |
-| `boot.loader.systemd-boot.configurationLimit` | ESP 有 2 GiB 了，可以放宽到 50 |
-| `imports` 里的 `./tuning.nix` | 保留，但内容重写 |
+**`console.keyMap`（TTY）和 `services.xserver.xkb.layout`（图形界面）
+用的是两套命名**，不能想当然地填成一样：
 
-`hosts/$HOST/tuning.nix` 按新硬件写，参考判据见 [CLAUDE.md](CLAUDE.md)：
+| 键盘 | `console.keyMap` | `xkb.layout` | 一样吗 |
+|------|------------------|--------------|--------|
+| 美式 | `us` | `us` | 是 |
+| **日语 JIS** | **`jp106`** | **`jp`** | **否** |
+| 英式 | `uk` | `gb` | **否** |
+| 德语 | `de` | `de` | 是 |
+| 法语 | `fr` | `fr` | 是 |
 
-- 显卡驱动：AMD 用 `mesa` 系，NVIDIA 用 `nvidia` 系，别照抄 `intel-media-driver`
-- `vm.swappiness`：按实际内存大小和 swap 布局重算
-- `services.thermald`：**Intel 专用**，AMD 机器上去掉
-- NTFS 共享盘的挂载（如果有，见 4.3）：
+写错了 `console.keyMap` **不会报错**，只是 TTY 下按键映射不对 ——
+而平时都在图形界面里，只有真出事掉进 TTY 时才发现。
 
-```nix
-  # NTFS 共享盘。ntfs3 是内核态驱动，比 ntfs-3g 的 FUSE 快一个量级。
-  # UUID 用 blkid 查。挂载点和 UUID 是本机的事，所以写在这里而不是 modules/。
-  fileSystems."/mnt/share" = {
-    device = "/dev/disk/by-uuid/<blkid 查到的>";
-    fsType = "ntfs3";
-    options = [ "nofail" "uid=1000" "gid=100" "umask=0022" ];
-  };
+自己查一遍：
+
+```bash
+ls $(nix eval --raw nixpkgs#kbd)/share/keymaps/**/*.map.gz | xargs -n1 basename
 ```
 
-`nofail` 不能省 —— 拔掉那块盘时没有它会卡在开机。
+#### `hosts/<主机>/tuning.nix`
 
-最后在 `flake.nix` 的 `nixosConfigurations` 里加一条：
+**必须按新硬件重写，不能照抄 `hosts/thinkpad/`** —— 那里每一条都绑死在
+那台的硬件上。下面是骨架，按注释增删：
 
 ```nix
-        <新主机名> = nixpkgs.lib.nixosSystem {
+{ lib, pkgs, ... }:
+
+{
+  # ============================================
+  # 本机专属调优。判据：换一台机器这条还成立吗？
+  # ============================================
+
+  # --- Btrfs 挂载选项（决策点 C）---
+  # nixos-generate-config **不记** compress 和 noatime，
+  # 安装时挂载用的那份只作用于安装过程，持久生效必须在这里声明。
+  # fileSystems.*.options 是列表，会和 hardware-configuration.nix
+  # 里的 subvol= 自动合并，两边各管各的。
+  fileSystems."/".options = [ "compress=zstd:1" "noatime" ];
+  fileSystems."/home".options = [ "compress=zstd:1" "noatime" ];
+  fileSystems."/nix".options = [ "compress=zstd:1" "noatime" ];
+  fileSystems."/.snapshots".options = [ "compress=zstd:1" "noatime" ];
+
+  # --- zram ---
+  # 内存里的压缩 swap，和磁盘 swap 互补（zram 优先级高，压满了才落盘）。
+  zramSwap.enable = true;
+
+  boot.kernel.sysctl = {
+    # 按**这台机器**的内存大小和 swap 布局定，别照抄。
+    # 100 是「7.6 GiB 内存 + 有磁盘 swap 兜底」算出来的。
+    "vm.swappiness" = 100;
+    "vm.page-cluster" = 0;   # zram 没有寻道，预读纯属浪费
+  };
+
+  # --- 显卡：三选一，删掉不适用的 ---
+  #
+  # Intel 核显：
+  #   hardware.graphics.extraPackages = with pkgs; [
+  #     intel-media-driver   # Gen9 及以后走 iHD
+  #     intel-vaapi-driver   # 旧的 i965，留给个别只认它的程序
+  #   ];
+  #   environment.sessionVariables.LIBVA_DRIVER_NAME = "iHD";
+  #
+  # AMD：mesa 自带 radeonsi，通常什么都不用加
+  #
+  # NVIDIA：
+  #   services.xserver.videoDrivers = [ "nvidia" ];
+  #   hardware.nvidia.open = true;   # Turing 及以后
+  #
+  # 验证：nix shell nixpkgs#libva-utils -c vainfo
+  # 应看到驱动名和一串 VAProfile，不是 "no driver"。
+  # **配错只会静默软解，不报错。**
+
+  # --- 温控：按 CPU 厂商 ---
+  # services.thermald.enable = true;   # **Intel 专用**，AMD 上删掉
+
+  # --- 虚拟机才需要的 ---
+  # services.qemuGuest.enable = true;
+  # services.spice-vdagentd.enable = true;
+
+  # --- NTFS 共享盘（见 4.3）---
+  # UUID 用 blkid 查。nofail 不能省 —— 拔掉那块盘时没有它会卡在开机。
+  # fileSystems."/mnt/share" = {
+  #   device = "/dev/disk/by-uuid/<blkid 查到的>";
+  #   fsType = "ntfs3";
+  #   options = [ "nofail" "uid=1000" "gid=100" "umask=0022" ];
+  # };
+}
+```
+
+#### `hosts/<主机>/default.nix`
+
+这份是**本机身份 + 模块拼装**，骨架对所有机器都一样，照抄改四处即可：
+
+```nix
+{ pkgs, inputs, ... }:
+
+{
+  imports = [
+    # 本机专属（跟着这台硬件走）
+    ./hardware-configuration.nix
+    ./tuning.nix
+
+    # 共用模块（任何机器都能直接 import）
+    ../../modules/common.nix
+    ../../modules/desktop.nix
+    ../../modules/desktop-gnome.nix
+    ../../modules/localization.nix
+    ../../modules/development.nix
+    ../../modules/flatpak.nix
+    ../../modules/apps.nix
+    ../../modules/browsers.nix
+    ../../modules/shell.nix
+    ../../modules/stylix.nix
+    ../../modules/refind.nix
+
+    inputs.home-manager.nixosModules.home-manager
+
+    # stylix 的 NixOS 模块必须排在 home-manager 之后
+    inputs.stylix.nixosModules.stylix
+  ];
+
+  # ① 主机名（网络上显示的那个）
+  networking.hostName = "<主机名>";
+
+  # ② 仓库里的名字：hosts/<这个>/ 目录名 + flake 属性名。
+  #    **不一定等于上面的 hostName** —— thinkpad 那台就是
+  #    hosts/thinkpad/ 配 thinkpad-nixos。
+  custom.flakeHost = "<hosts 目录名>";
+
+  # ③ 键盘布局，两套命名见上面的表
+  console.keyMap = "us";
+  services.xserver.xkb = {
+    layout = "us";
+    variant = "";
+  };
+
+  boot.loader.systemd-boot.enable = true;
+  boot.loader.systemd-boot.configurationLimit = 20;
+  boot.kernelPackages = pkgs.linuxPackages_latest;
+
+  # **首次安装保持 true**，让 systemd-boot 建好自己的 NVRAM 项 ——
+  # 那一项是后面装 rEFInd 时的安全网。
+  # 装 rEFInd 时（第 6.2 节）再改成 false。
+  boot.loader.efi.canTouchEfiVariables = true;
+
+  # ④ 用户账户。登录 shell 的指派放这里而不是 modules/ ——
+  #    用户名是本机的事，不该把共用模块钉死在一个用户上。
+  users.users."toru" = {
+    isNormalUser = true;
+    description = "Toru Sugihara";
+    shell = pkgs.zsh;
+    extraGroups = [
+      "networkmanager"
+      "wheel"
+    ];
+  };
+
+  home-manager.useGlobalPkgs = true;
+  home-manager.useUserPackages = true;
+  home-manager.extraSpecialArgs = { inherit inputs; };
+  home-manager.users.toru = import ../../home/toru.nix;
+
+  # home-manager 接管已存在的文件时，把原文件改名成 <原名>.hm-bak
+  # 再继续，而不是整个激活失败。见 Lesson-Learn/000B。
+  home-manager.backupFileExtension = "hm-bak";
+
+  system.stateVersion = "26.05";
+}
+```
+
+> **`custom.refind` 先不要加。** 它要读 `hwinfo.nix`，而那个文件要等
+> 系统装好、能跑 `refind-hwinfo` 之后才生成。第 6 节再回来加。
+
+#### `flake.nix` 加一个条目
+
+```bash
+cat > /tmp/entry.txt <<'EOF'
+
+        # <这台机器是什么>
+        <主机名> = nixpkgs.lib.nixosSystem {
           system = "x86_64-linux";
           specialArgs = { inherit inputs; };
           modules = [
             nix-flatpak.nixosModules.nix-flatpak
-            ./hosts/<新主机名>/default.nix
+            ./hosts/<主机名>/default.nix
           ];
         };
+EOF
+sed -i '/将来华硕笔记本/r /tmp/entry.txt' flake.nix
+sed -n '/nixosConfigurations/,/^    };/p' flake.nix    # 看一眼结构对不对
 ```
 
-> ### 别忘了 `git add`
->
-> ```bash
-> nix-shell -p git --run 'git add hosts/'$HOST'/'
-> ```
->
-> **flake 看不见未跟踪的文件。** 不 add 就会
-> `Path 'hosts/xxx/default.nix' ... is not tracked by Git`，安装直接失败。
-> 每个新文件只需 add 一次，之后再改不用重复。
+#### 让 flake 看见新文件
+
+```bash
+nix-shell -p git --run "git add hosts/$HOST/"
+```
+
+**这步不能跳。** flake 看不见未跟踪的文件，不 add 会直接报
+`Path 'hosts/xxx/default.nix' ... is not tracked by Git`，安装失败。
 
 ### 5.3 装
 

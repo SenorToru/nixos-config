@@ -42,11 +42,71 @@ ujust dx-group                       # 加进 libvirt / docker / incus / dialout
 - [ ] 镜像名带 `-dx`
 - [ ] 跑完 `ujust dx-group` 后**注销重新登录**（组成员身份要新会话才生效）
 - [ ] `groups | tr ' ' '\n' | grep libvirt` 有输出
-- [ ] `systemctl is-active libvirtd` 或 `virtqemud` 是 active
-- [ ] `df -h /var/lib/libvirt/images` 剩余空间 ≥ 60 GB
 
+### 1.1 查虚拟化栈 —— 查套接字，不是查服务
+
+```bash
+for u in virtqemud.socket virtnetworkd.socket virtstoraged.socket; do
+  printf '%-24s enabled=%-10s active=%s\n' "$u" \
+    "$(systemctl is-enabled $u 2>&1)" "$(systemctl is-active $u 2>&1)"
+done
+virsh -c qemu:///system list --all
+```
+
+- [ ] 三个 `.socket` 都是 `enabled` + `active`
+- [ ] `virsh list --all` 能列出来（空列表，因为还没建虚拟机）
+
+> **不要去查 `systemctl is-active libvirtd`。**
+> 现代 libvirt 是**套接字激活的模块化守护进程**：`.service` 平时就是
+> `inactive`，直到有程序连它的套接字才被拉起来。查 `.service` 会得到
+> 一个吓人但完全正常的 `inactive`。
+>
+> `libvirtd.socket`（老的单体守护进程）显示 `disabled` 也是**对的** ——
+> 它和上面那三个模块化的互斥。
+>
+> **真正的测试是 `virsh -c qemu:///system list --all`** ——
+> 它会主动去连套接字，连得上就说明整套通了。
+
+### 1.2 建存储池
+
+```bash
+virsh pool-list --all
+virsh net-list --all
+```
+
+- [ ] `default` **网络**是「活动 + 自动启动」
+- [ ] `default` **存储池**存在且是「活动 + 自动启动」
+
+存储池不存在的话建一个（**Bluefin 上默认没有**，实测是空的）：
+
+```bash
+sudo virsh pool-define-as default dir --target /var/lib/libvirt/images
+sudo sh -c 'virsh pool-build default && virsh pool-start default && virsh pool-autostart default'
+virsh pool-list --all
+```
+
+- [ ] 建完 `default` 是「活动 + 自动启动」
+- [ ] `df -h /var/lib/libvirt/images` 剩余 ≥ 60 GB
+
+> **`/var/lib/libvirt/images` 要等池建好才存在**，所以查空间必须放在建池之后。
+>
 > 三块虚拟盘标称 128 + 8 + 16 = 152 GB，但 qcow2 是**稀疏分配**，
-> 实际占用远小于标称。装完一套带桌面的 NixOS 大约 15-25 GB。
+> 实际占用远小于标称。第一步装完一套带 GNOME 的 NixOS 约 15-25 GB。
+> 不足 60 GB 就把主盘调小。
+
+> ### 不要用 `&&` 串多条 sudo 命令
+>
+> 实测（在这台 Bluefin 上，通过 Claude Code 的 `!` 提示符）：
+> **`&&` 串起来只有第一条生效，而且不报错。**
+> 更宽一点说，sudo 命令后面跟的整条 `&&` 链都会被吞掉，
+> 连不需要 sudo 的部分也一样。
+>
+> 这比写错命令危险得多，因为它**静默失败** —— 前面的看起来成功了，
+> 后面的凭空消失。建存储池那次就是：`pool-define-as` 成功了，
+> 后面三条没跑，而 `virsh pool-list` 显示池确实"存在"，
+> 只是「停止状態 / 自動起動 いいえ」。不主动去查根本发现不了。
+>
+> 要么**一条一条跑**，要么 `sudo sh -c '...'` 把链塞进**单次** sudo 里面。
 
 下载 ISO：
 
@@ -61,6 +121,12 @@ ujust dx-group                       # 加进 libvirt / docker / incus / dialout
 （不是 `QEMU/KVM 用户会话`）。
 
 新建：Local install media → 选刚下的 ISO。
+
+> **NixOS 的 ISO 多半检测不出操作系统类型。** 第二页会报
+> "Failed to detect..."，把 **Automatically detect from the installation
+> media / source** 的勾去掉，手动选一个 **Generic Linux**（或
+> Generic default）即可。这个选项只影响 virt-manager 给的默认硬件配置，
+> 下一步我们会全部手动改掉，选错不影响。
 
 ### 2.1 这一步错了要重建整台虚拟机
 
@@ -77,6 +143,7 @@ ujust dx-group                       # 加进 libvirt / docker / incus / dialout
 
 | 位置 | 设成 | 为什么 |
 |------|------|--------|
+| Overview → Chipset | **Q35** | UEFI 要配 Q35，i440FX 不支持 |
 | Overview → Firmware | **UEFI x86_64**（不带 secboot 的那个） | NixOS 和 rEFInd 都不签名，Secure Boot 会挡 |
 | CPUs → Model | `host-passthrough` | 虚拟机里跑构建，直通快得多 |
 | CPUs → vCPU | 8 | 留一半给宿主机 |
@@ -92,9 +159,97 @@ ujust dx-group                       # 加进 libvirt / docker / incus / dialout
 
 点 **Begin Installation**。
 
-### 2.2 确认真的是 UEFI
+### 2.2 ISO 必须放进存储池
 
-虚拟机起来、进到 ISO 的 shell 之后：
+**不要把 ISO 留在 `~/Downloads`。** 实测两个问题：
+
+- `/var/lib/libvirt/images` 是 `drwx--x--x root root`，普通用户
+  **能穿过但不能列目录**，virt-manager 的「Browse Local」文件选择器
+  显示为空
+- 家目录里的 ISO 带着 `user_home_t` 之类的 SELinux 标签，qemu 读不了
+
+```bash
+sudo mv ~/Downloads/nixos-minimal-*.iso /var/lib/libvirt/images/
+sudo restorecon -v /var/lib/libvirt/images/nixos-minimal-*.iso
+```
+
+- [ ] ISO 在 `/var/lib/libvirt/images/` 下
+- [ ] **重启 virt-manager**（它只在启动时枚举存储池；池是后建的就看不见）
+- [ ] 在向导里用 **Browse** 的存储池列表选 ISO，不要用 Browse Local
+
+### 2.3 开机前用 virsh 核一遍 —— 这一步能省掉几轮返工
+
+**图形界面看不全。** 建完虚拟机、**第一次开机之前**，跑这一条：
+
+```bash
+virsh -c qemu:///system dumpxml <虚拟机名> \
+  | grep -E "enabled=|boot |loader|nvram|\.iso|machine="
+```
+
+对照四点：
+
+| 看哪 | 对的样子 | 错了会怎样 |
+|------|----------|------------|
+| `machine=` | 含 `q35` | i440FX 配 UEFI 不支持 |
+| `secure-boot` / `enrolled-keys` | `enabled='no'` | 装到引导那步必炸，NixOS 和 rEFInd 都不签名 |
+| `loader` | `OVMF_CODE_4M.qcow2`，**不带 `secboot`** | 同上 |
+| `.iso` 路径 | `/var/lib/libvirt/images/...` | 光驱是空的，报「找不到启动盘」 |
+
+启动顺序有**两套互斥的机制**，看清楚用的是哪套：
+
+```xml
+<!-- 按设备（virt-manager 生成的是这套） -->
+<disk device='cdrom'> ... <boot order='1'/> </disk>
+<disk device='disk'>  ... <boot order='2'/> </disk>
+
+<!-- 全局（手写 XML 常见的是这套） -->
+<os> <boot dev='cdrom'/> <boot dev='hd'/> </os>
+```
+
+> **两套混用 libvirt 会直接拒绝 define**：
+> `unsupported configuration: per-device boot elements cannot be used
+> together with os/boot elements`。
+>
+> virt-manager 建出来的是**按设备**那套，别去 `<os>` 里加 `<boot dev>`。
+
+- [ ] 四点全对
+- [ ] 启动顺序只用了一套机制
+
+> ### 实测教训：只看片段就改，会修出不存在的问题
+>
+> 这一节第一次走的时候，症状是「找不到启动盘」。真实原因只有一个 ——
+> **ISO 被挪走了，光驱指着不存在的路径**。
+>
+> 但因为只 grep 了几行就下判断，先后误诊成「启动顺序没有光驱」
+> （其实按设备那套一直是对的）、又因为往 `<os>` 里加 `<boot dev>`
+> 撞上互斥限制，**多绕了三轮**。
+>
+> 所以这一步要的是**完整 dumpxml 看全貌**，不是 grep 自己关心的那几行。
+
+### 2.4 固件错了怎么办
+
+固件**只能在第一次启动前改**。选错了（比如选到 secboot 那个）有两条路：
+
+**删掉重建** —— 清爽，但要重走一遍向导。
+
+**改 XML** —— 快，但顺序不能错：
+
+```bash
+virsh -c qemu:///system dumpxml <名> > /tmp/vm.xml
+sed -i "s|enabled='yes' name='enrolled-keys'|enabled='no' name='enrolled-keys'|; \
+        s|enabled='yes' name='secure-boot'|enabled='no' name='secure-boot'|; \
+        /<loader /d; /<nvram /d" /tmp/vm.xml
+virsh -c qemu:///system define /tmp/vm.xml
+sudo rm -f /var/lib/libvirt/qemu/nvram/<名>_VARS.qcow2
+```
+
+- 删掉 `<loader>` 和 `<nvram>` 两行是让 libvirt 按新的 feature 重新挑固件
+- **删 NVRAM 必须在 `define` 之后** —— 反了的话 libvirt 会按旧模板
+  （还指着 secboot）把文件重新建回来，等于白删
+
+### 2.5 开机，确认真的是 UEFI
+
+点 **Begin Installation**。虚拟机起来、进到 ISO 的 shell 之后：
 
 ```bash
 ls /sys/firmware/efi
@@ -102,10 +257,10 @@ ls /sys/firmware/efi
 
 - [ ] 有输出（目录存在）
 
-> **没有这个目录就是 BIOS 引导**，说明 2.1 那一步漏了。
-> 关机、删掉这台虚拟机、从 2.1 重来 —— 固件改不了。
-
----
+> **没有这个目录就是 BIOS 引导**，说明固件没设对。
+> 按 2.4 改 XML，或者删掉重建 —— 固件在第一次启动后改不了。
+>
+> 在这里抓住只损失几分钟；装完系统才发现，损失的是整轮安装。
 
 ## 3. 第一步：单盘，走完 MIGRATION.md 第 2-6 节
 
