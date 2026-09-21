@@ -104,6 +104,19 @@
       ripgrep
       fd
       tree
+
+      # 分区与文件系统工具。
+      #
+      # 加进来而不是靠 nix shell 临时取，理由是**需要它们的时候往往在
+      # 处理硬盘问题** —— 可能刚救回来一个系统、可能没网，
+      # 那时候再去下载最不合时宜。三个包都很小。
+      #
+      # 而且 MIGRATION.md 第 4.3 节（加 NTFS 共享盘）明确让人跑
+      # parted 和 mkfs.ntfs，而加共享盘正常是**装好之后**才做的事 ——
+      # 文档里让跑的命令，不该在目标系统上不存在。
+      parted
+      gptfdisk # sgdisk，脚本里比 parted 好用
+      ntfs3g # mkfs.ntfs；内核态驱动是 ntfs3，但格式化要这个
     ];
 
     # 字体与 fontconfig 统一在 modules/localization.nix 中配置。

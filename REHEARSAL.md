@@ -457,41 +457,102 @@ nix shell nixpkgs#efibootmgr -c efibootmgr
 
 ## 4. 第二步：加第二块盘，验双 ESP
 
-- [ ] 虚拟机关机状态下，virt-manager → Add Hardware → Storage
-- [ ] 8 GB，qcow2，VirtIO（会成为 `/dev/vdb`）
+**已验证。** 下面是实际走通的顺序。
 
-在这块盘上造一个**假的 Windows ESP**（不用真装 Windows，
-rEFInd 只需要能扫到一个 `.efi`）：
+### 4.1 加盘并造一个假的 Windows ESP
+
+虚拟机**关机状态**下，virt-manager → Add Hardware → Storage：
+
+- [ ] 8 GB，qcow2，**VirtIO**（会成为 `/dev/vdb`）
+
+> ### 不要用 virt-manager 的快照
+>
+> 它默认建的是 **external** 快照：新建一个 overlay 文件，原 qcow2 变成
+> 只读的 backing file，磁盘源路径也跟着变成
+> `/var/lib/libvirt/images/<域名>.<快照名>`。
+>
+> **问题是 libvirt 基本不支持回滚 external 快照** ——
+> `virsh snapshot-revert` 多半直接报 "not supported yet"。
+> 也就是说你做的快照，**在真需要它的时候用不了**。
+>
+> 演练要反复重来，用文件拷贝当检查点更可靠（关机状态下）：
+>
+> ```bash
+> cp --reflink=auto /var/lib/libvirt/images/nixos.qcow2 \
+>                   /var/lib/libvirt/images/step1.qcow2
+> ```
+>
+> 要回退就拷回来。`--reflink=auto` 在 Btrfs/XFS 上是写时复制，
+> 几乎不占空间也几乎不花时间。
+>
+> 已经建了 external 快照要拆掉：`virsh snapshot-delete <域> --snapshotname
+> <名> --metadata`，然后 `qemu-img commit <overlay>`，
+> 再把域 XML 的磁盘路径改回原文件、删掉 overlay。
+
+开机，SSH 进虚拟机，`sudo -i`，然后：
 
 ```bash
-sudo parted /dev/vdb -- mklabel gpt
-sudo parted /dev/vdb -- mkpart ESP fat32 1MiB 100%
-sudo parted /dev/vdb -- set 1 esp on
-sudo mkfs.fat -F 32 -n WINESP /dev/vdb1
-sudo mkdir -p /mnt/winesp && sudo mount /dev/vdb1 /mnt/winesp
-sudo mkdir -p /mnt/winesp/EFI/Microsoft/Boot
-# 拿 rEFInd 自己的二进制冒充 bootmgfw.efi，只是为了让 rEFInd 有东西可指
-sudo cp $(nix eval --raw nixpkgs#refind)/share/refind/refind_x64.efi \
-        /mnt/winesp/EFI/Microsoft/Boot/bootmgfw.efi
+nix shell nixpkgs#parted nixpkgs#dosfstools
+parted /dev/vdb -- mklabel gpt
+parted /dev/vdb -- mkpart ESP fat32 1MiB 100%
+parted /dev/vdb -- set 1 esp on
+mkfs.fat -F 32 -n WINESP /dev/vdb1
+exit
 ```
 
-然后按 **MIGRATION.md 第 6.5 节**：
+> **装好的系统里没有 `parted`**（ISO 里才有）。
+> 这个仓库现在把 `parted` / `gptfdisk` / `ntfs3g` 加进了
+> `modules/common.nix`，所以新装的机器会自带 ——
+> 但这台虚拟机是加之前装的，还得 `nix shell`。
 
-- [ ] `hosts/vm/default.nix` 的 `custom.refind.espMountPoints` 加上 `/mnt/winesp`
-- [ ] `custom.refind.extraEntries` 加一条 Windows 的 `menuentry`，
-      **带 `volume WINESP`**（在另一块盘上，不写 volume 找不到）
-- [ ] `nrb` + `sudo refind-sync`
-- [ ] `sudo ls /mnt/winesp/EFI/refind/` 里有东西（两个 ESP 各装了一份）
+```bash
+mkdir -p /mnt/winesp && mount /dev/vdb1 /mnt/winesp
+mkdir -p /mnt/winesp/EFI/Microsoft/Boot
+cp $(nix eval --raw nixpkgs#refind)/share/refind/refind_x64.efi \
+   /mnt/winesp/EFI/Microsoft/Boot/bootmgfw.efi
+blkid /dev/vdb1
+```
+
+拿 rEFInd 的二进制冒充 `bootmgfw.efi`，只是为了让 rEFInd 有个能指的东西。
+
+- [ ] `blkid` 显示 `TYPE="vfat"`，UUID 是 **`XXXX-XXXX` 八位短格式**
+
+> **FAT32 的 UUID 不是 36 位那种。** 抄错了配上 `nofail` 会**静默失败** ——
+> 不报错、不阻止开机，你只会在后面发现 rEFInd 没写进第二个 ESP。
+
+### 4.2 改配置
+
+按 **MIGRATION.md 第 6.5 节**改两个文件：
+
+- [ ] `hosts/vm/tuning.nix` 加 `fileSystems."/mnt/winesp"`（带 `nofail`）
+- [ ] `hosts/vm/default.nix` 的 `custom.refind` 加 `espMountPoints` 和 `extraEntries`
+
+> **`espMountPoints` 和 `extraEntries` 是 `custom.refind` 的子项**，
+> 写在它外面会报「选项不存在」。实测踩过。
+
+```bash
+nixfmt hosts/vm/*.nix
+```
+
+> **改完 nix 文件先跑 `nixfmt`。** 它抓语法错误比 `nrb` 快得多，
+> 而且指得准 —— 少个分号、括号配不上，它当场就报，
+> 不用等构建跑一半。
+
+- [ ] `nrb`
+- [ ] `sudo refind-sync`
+
+### 4.3 验证
+
+```bash
+sudo ls /boot/EFI/refind/
+sudo ls /mnt/winesp/EFI/refind/
+```
+
+- [ ] **两个都有内容** —— 这是这一节的核心
 - [ ] 重启，rEFInd 菜单里**两个图标都在**
 - [ ] 选那个假 Windows，能进（会进到 rEFInd 自己，说明链路通了）
 
-> `extraEntries` 里 `icon` 必须写**从 ESP 卷根算起的绝对路径**
-> （`/EFI/refind/themes/finn-term/icons/os_win.png`），
-> 不能按 `banner` 的规则写相对路径。见 Lesson-Learn/0013 坑 1。
-
-- [ ] 关机，做快照 `第二步完成`
-
----
+- [ ] 关机，`cp --reflink=auto` 存一份检查点
 
 ## 5. 第三步：加 NTFS 共享盘
 

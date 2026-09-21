@@ -797,26 +797,90 @@ store 路径**，不重新构建的话新图根本不存在，sync 拷的还是�
 > **F10 截图 rEFInd 自己从不清理**，每张 11 MB，攒几张就吃掉 ESP 一块。
 > 看完删掉：`sudo rm -f /boot/screenshot_*.bmp`
 
-### 6.5 双启动：Windows 侧的防御
+### 6.5 双启动：两个 ESP 各装一份
 
-Windows 的功能更新会擅自把 UEFI 启动顺序第一位重置成
-`Windows Boot Manager`。对策是让 Windows 自己的引导入口也指向 rEFInd：
+**已在虚拟机里验证过**（造一块盘、格 FAT32、放一个假的 `bootmgfw.efi`）。
+
+#### 为什么要两份
+
+`bcdedit` 的 path 是**相对于 Windows 自己所在的那个 ESP** 的，
+指不到另一块盘的 ESP 里去。所以：
+
+- **NixOS 盘的 ESP**：日常走这条，NVRAM 第一顺位指它
+- **Windows 盘的 ESP**：`bcdedit` 劫持用，Windows 抢回第一顺位时的兜底
+
+两条路都通到 rEFInd，怎么冲都坏不了。代价是升级 rEFInd 时两份都要更新
+（`refind-sync` 一条命令写两个，不用手动）。
+
+#### 第二个 ESP 必须挂载并声明进配置
+
+**这一步最容易漏。** `refind-sync` 要往那个 ESP 里写东西，所以它得挂着；
+而手工 `mount` 的重启就掉了。写进 `hosts/<主机>/tuning.nix`：
+
+```bash
+blkid /dev/<Windows 盘的 ESP 分区>
+```
+
+> **FAT32 的 UUID 是 8 位短格式**（`1D5C-9F1B` 这样），
+> 不是 ext4/btrfs 那种 36 位的。抄错了配上 `nofail` 会**静默失败** ——
+> 不报错、不阻止开机，你只会在后面发现 rEFInd 没写进第二个 ESP，
+> 然后跑去怀疑 refind 模块。
+
+```nix
+  # Windows 盘的 ESP。nofail 不能省 —— 拔掉那块盘时没有它会卡在开机。
+  fileSystems."/mnt/winesp" = {
+    device = "/dev/disk/by-uuid/XXXX-XXXX";
+    fsType = "vfat";
+    options = [ "nofail" "fmask=0077" "dmask=0077" ];
+  };
+```
+
+#### 然后告诉 rEFInd 这两件事
+
+```nix
+  custom.refind = {
+    enable = true;
+    resolution = { width = 1920; height = 1080; };
+
+    # 两个 ESP 各装一份。**NVRAM 项只为第一个建。**
+    espMountPoints = [ "/boot" "/mnt/winesp" ];
+
+    extraEntries = ''
+      menuentry "Windows 10" {
+          icon   /EFI/refind/themes/finn-term/icons/os_win.png
+          volume WINESP
+          loader /EFI/Microsoft/Boot/bootmgfw.efi
+      }
+    '';
+  };
+```
+
+两个细节：
+
+- **`icon` 必须是从 ESP 卷根算起的绝对路径**，不能写相对 rEFInd 目录的。
+  写错不报错，只显示一个约 32×32 的内置占位方块。见
+  [Lesson-Learn/0013](Lesson-Learn/0013_REFIND_BOOT.md) 坑 1。
+- **`volume` 不能省**。那个 `.efi` 在**另一块盘**上，不写 volume 的话
+  rEFInd 只在自己所在的 ESP 里找。`WINESP` 是 `mkfs.fat -n` 设的卷标，
+  也可以用分区 GUID。
+
+`nrb` 之后 `sudo refind-sync`，然后确认两份都写进去了：
+
+```bash
+sudo ls /boot/EFI/refind/
+sudo ls /mnt/winesp/EFI/refind/
+```
+
+#### Windows 侧的防御
 
 ```powershell
 # 管理员 PowerShell
 bcdedit /set {bootmgr} path \EFI\refind\refind_x64.efi
 ```
 
-> **前提：Windows 所在盘的 ESP 里也得有一份 rEFInd。**
-> `bcdedit` 的 path 是**相对于 Windows 自己所在的那个 ESP** 的，
-> 它指不到另一块盘的 ESP 里去。
->
-> 所以双盘双启动时**两个 ESP 各装一份**：
->
-> - NixOS 盘的 ESP：日常走这条，NVRAM 第一顺位指它
-> - Windows 盘的 ESP：`bcdedit` 劫持用，Windows 抢回第一顺位时的兜底
->
-> 两条路都通到 rEFInd，怎么冲都坏不了。代价是升级 rEFInd 时两份都要更新。
+Windows 的功能更新会擅自把 UEFI 启动顺序第一位重置成
+`Windows Boot Manager`。这条让 Windows 自己的引导入口也指向 rEFInd，
+于是它抢回第一顺位也没用 —— 开机照样先进 rEFInd。
 
 ### 6.6 开不了机怎么办
 
