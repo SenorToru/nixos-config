@@ -556,21 +556,155 @@ sudo ls /mnt/winesp/EFI/refind/
 
 ## 5. 第三步：加 NTFS 共享盘
 
-- [ ] 关机状态下加第三块盘，16 GB，qcow2，VirtIO（`/dev/vdc`）
-- [ ] 按 MIGRATION.md 第 4.3 节格 NTFS
-- [ ] 按第 5.2 节把挂载配置写进 `hosts/vm/tuning.nix`（`ntfs3` + `nofail`）
-- [ ] `nrb`
-- [ ] `findmnt /mnt/share` 显示 `ntfs3`
-- [ ] 能往里写文件
-- [ ] **测 `nofail`**：关机、在 virt-manager 里把第三块盘移除、开机，
-      系统**仍然能正常启动**
+每一步都标了**在哪执行**。虚拟机里的命令都要 root（`sudo -i`）。
 
-> 最后那条是 `nofail` 唯一真正的用途。不测的话，
-> 真机上拔掉共享盘会卡在开机。
+### 5.1 加盘（在 Bluefin 上）
 
-- [ ] 把盘加回去，确认又能挂上
+虚拟机**关机状态**下，virt-manager → Add Hardware → Storage：
 
----
+- [ ] 16 GB，qcow2，**VirtIO**
+
+### 5.2 确认盘在（在虚拟机里）
+
+开机，从 Bluefin `ssh toru@<虚拟机IP>`，然后 `sudo -i`：
+
+```bash
+lsblk -o NAME,SIZE,TYPE
+```
+
+- [ ] 看到 `vdc`，16G，`disk`，**没有分区**
+
+> 盘名按添加顺序排：`vda` 主盘、`vdb` 假 Windows ESP、`vdc` 这块。
+> 对不上的话先 `lsblk` 看清楚再往下，**格错盘是不可逆的**。
+
+### 5.3 分区并格式化（在虚拟机里）
+
+```bash
+nix shell nixpkgs#parted nixpkgs#ntfs3g
+```
+
+进去之后：
+
+```bash
+parted /dev/vdc -- mklabel gpt
+parted /dev/vdc -- mkpart share ntfs 1MiB 100%
+mkfs.ntfs -Q -L share /dev/vdc1
+exit
+```
+
+- [ ] `mkfs.ntfs` 跑完没报错
+
+> `-Q` 是快速格式化（不做全盘坏道扫描）。16 GB 的虚拟盘不加要等很久。
+>
+> **装好的系统里没有 `parted` 和 `mkfs.ntfs`**，所以要 `nix shell`。
+> 仓库现在已经把它们加进 `modules/common.nix`，**新装的机器会自带** ——
+> 但这台虚拟机是加之前装的。
+
+### 5.4 拿 UUID（在虚拟机里）
+
+```bash
+blkid /dev/vdc1
+```
+
+- [ ] `TYPE="ntfs"`
+- [ ] UUID 是 **16 位十六进制、不带横杠**，形如 `1A2B3C4D5E6F7890`
+
+> 三种文件系统的 UUID 格式**互不相同**，抄错了配上 `nofail` 会静默失败：
+>
+> | | 格式 | 例 |
+> |---|---|---|
+> | vfat | 8 位带一个横杠 | `1D5C-9F1B` |
+> | **ntfs** | **16 位无横杠** | `1A2B3C4D5E6F7890` |
+> | ext4 / btrfs | 36 位带横杠 | `9c0d998c-ccad-4d12-...` |
+
+### 5.5 写进配置（在虚拟机里）
+
+编辑 `hosts/vm/tuning.nix`，加：
+
+```nix
+  # NTFS 共享盘。ntfs3 是内核态驱动，比 ntfs-3g 的 FUSE 快一个量级。
+  #
+  # NTFS 不是 POSIX 文件系统，没有属主概念 —— uid/gid/umask 是**挂载时
+  # 指定**的，整个文件系统统一用这一套权限。1000:100 是 toru:users。
+  #
+  # nofail 不能省：拔掉这块盘时没有它，开机会卡在等待挂载。
+  fileSystems."/mnt/share" = {
+    device = "/dev/disk/by-uuid/<5.4 查到的>";
+    fsType = "ntfs3";
+    options = [
+      "nofail"
+      "uid=1000"
+      "gid=100"
+      "umask=0022"
+    ];
+  };
+```
+
+```bash
+cd ~/nixos-config
+nixfmt hosts/vm/*.nix
+nrb
+```
+
+- [ ] `nixfmt` 没报错（它抓语法问题比 `nrb` 快得多）
+- [ ] `nrb` 成功
+
+### 5.6 验证挂载（在虚拟机里）
+
+```bash
+findmnt /mnt/share
+touch /mnt/share/hello && ls -l /mnt/share/
+```
+
+- [ ] `findmnt` 显示 `ntfs3`
+- [ ] 能写进去，文件属主是 `toru users`
+
+> 挂载点目录不用手工建，systemd 会按 `fileSystems` 的声明自动创建。
+
+### 5.7 测 nofail —— 这一节真正的目的（在 Bluefin 上）
+
+**前面几步只是把盘挂上，这一步才是要验的东西。**
+
+```bash
+# 在虚拟机里
+poweroff
+```
+
+在 Bluefin 的 virt-manager 里：
+
+- [ ] 选中虚拟机 → 齿轮图标 → 左侧选那块 16G 的盘 → **Remove**
+- [ ] 开机
+
+```bash
+# 盘拔了之后，在虚拟机里
+systemctl is-system-running
+findmnt /mnt/share
+```
+
+- [ ] **系统正常启动**，能登录
+- [ ] `systemctl is-system-running` 是 `running` 或 `degraded`，**不是卡住**
+- [ ] `findmnt /mnt/share` 无输出（没挂上，符合预期）
+
+> **这是 `nofail` 唯一真正的用途。** 没有它，systemd 会等那个设备出现，
+> 等到超时（默认 90 秒）才放行，而且会掉进 emergency shell。
+>
+> 真机上哪天拔掉共享盘、或者那块盘坏了，就会卡在开机 ——
+> 而那时候你根本不会想到是挂载选项的问题。
+> **不在这里测一次，就等于没配。**
+
+把盘加回去：
+
+- [ ] virt-manager → Add Hardware → Storage → 选已有的那个 qcow2 文件
+- [ ] 开机，`findmnt /mnt/share` 又挂上了
+
+### 5.8 验证不了的那一条
+
+**NTFS 的脏状态**：Windows 开着快速启动或休眠时，关机不真正卸载文件系统，
+NTFS 留在「脏」状态，Linux 侧要么只读挂载要么写坏。
+
+虚拟机里**没有真 Windows 去把它弄脏**，复现不了。
+真机上配共享盘时，必须去 Windows 里关掉快速启动和休眠 ——
+见 [MIGRATION.md](MIGRATION.md) 第 4.3 节。
 
 ## 6. 收尾
 
