@@ -1061,6 +1061,18 @@ Settings → SSH and GPG keys，但是两个独立的条目：
 #    （`git log --show-signature` 报 no principal matched）。
 #
 #    改完要 nrb，并且这个改动要推回去让其它机器也拿到。
+#
+#    注意这里是**不对称**的，第一次撞上会以为坏了（2026-09 实测）：
+#
+#      加钥匙的那台机器    清单里立刻两行都有，能验所有人的提交
+#      其它机器            要 pull 到这个提交、**再重建一次**才验得了它
+#
+#    所以新机器签的第一个提交，在老机器上会显示
+#    `Good "git" signature ... No principal matched.` ——
+#    签名本身是有效的，只是那台机器还不认识这把钥匙。
+#    这是鸡生蛋，不是故障：钥匙只能跟着它自己的提交进来。
+#    想确认签它的确实是要加的那把，比对指纹即可：
+#    `ssh-keygen -lf ~/.ssh/id_ed25519.pub` 和报错里那串 SHA256 对一下。
 
 # 3. GitHub CLI
 gh auth login
