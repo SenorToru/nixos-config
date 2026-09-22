@@ -288,6 +288,73 @@ find . ! -user toru -printf '%u  %p\n'
 换了硬件三步：`sudo refind-hwinfo` → `nrb` → `sudo refind-sync`，**少一步不生效**。
 
 ---
+---
+
+## DNS：加密解析，且没有静默降级
+
+`modules/dns.nix`，systemd-resolved + DNS-over-TLS 严格模式。
+来龙去脉见 [Lesson-Learn/0014](Lesson-Learn/0014_DNS_HIJACK_AND_DOT.md)。
+
+改这块之前必须知道的四件事：
+
+1. **挡住 DHCP 下发的 DNS 要关两个开关，缺一个就静默失效。**
+
+   ```nix
+   networking.networkmanager = {
+     dns = lib.mkForce "none";           # 不写 /etc/resolv.conf
+     settings.main.systemd-resolved = false;  # 不推给 resolved 的 D-Bus
+   };
+   ```
+
+   不挡住的话，NM 会把 DHCP 给的 DNS 注册成 resolved 的**链路级**服务器，
+   而链路级优先于 `resolved.conf` 的全局设置 —— 实际解析走的是路由器给的
+   那两个，不是配置里那四个带主机名的。它们不支持 DoT 就整机解析失败；
+   **恰好支持的话更糟**，看着一切正常，实际没做证书主机名校验。
+
+   **这一条我连错两次，两条弯路都别再走：**
+
+   - 只写 `dns = "none"` —— 那只关了 resolv.conf，D-Bus 照推：
+     `wlp4s0: Bus client set DNS server list to: 9.9.9.9, 8.8.8.8`
+   - 把 `ipv4.ignore-auto-dns` 写进 `connectionConfig` ——
+     **那个属性不在 NM 的 `[connection]` 默认值支持列表里**，
+     不报错也不生效，`nmcli con show <名字>` 里仍是 `no`。
+     它只能配在具体连接上。
+
+   **验证只有一个地方作数：`resolvectl status` 里每个 Link 段的
+   `DNS Servers` 必须是空的。** 光看 Global 段看不出问题 ——
+   Global 一直显示得好好的，而解析走的是链路级。
+   查询结果末尾那句 `-- link: wlp4s0` 也是信号。
+   改完还要**重连一次网络**。
+
+2. **`FallbackDNS = ""` 是故意的，别「修」掉它。**
+   留着 systemd 编译进去的后备服务器，意味着加密服务器连不上时
+   resolved 会**悄悄用明文**去问后备 —— 「我开了加密 DNS」这句话
+   恰好在最需要它的时候不成立，而且没有任何提示。
+   同理 `DNSOverTLS` 不写 `"opportunistic"`、`DNSSEC` 不写
+   `"allow-downgrade"`：那两个都是「看起来开了、实际能被对端关掉」。
+
+3. **动这块之前先确认 853 端口通得了**，否则切换完就是整机没有 DNS：
+
+   ```bash
+   nix shell nixpkgs#dnsutils -c dig +tls +tls-hostname=cloudflare-dns.com \
+     +time=5 +tries=1 A example.org @1.1.1.1
+   ```
+
+   服务器列表里的每一个都要过。证书也要验（`openssl s_client -connect
+   1.1.1.1:853 -servername cloudflare-dns.com -verify_return_error`），
+   `DNSOverTLS=true` 会因为证书不过而拒绝连接。
+
+4. **判断「是不是被劫持了」只要一条命令。**
+
+   ```bash
+   nix shell nixpkgs#dnsutils -c dig +time=3 +tries=1 A example.org @192.0.2.1
+   ```
+
+   `192.0.2.1` 是 RFC 5737 的 TEST-NET-1，全球不可路由，**正常必须超时**。
+   能拿到应答就是有中间设备在截 UDP/53。
+   排查 DNS 问题时**先跑这一条**，它十秒就能排除掉一整类原因 ——
+   0014 那次就是因为没先跑它，绕了四个错误假设。
+
 
 ## 用户状态：state-sync 与 migration-check
 
@@ -433,3 +500,30 @@ bash 保持完全可用，两者配的是同一套基线。
    **配外部工具的配置格式时先去查它自带的样例文件**（`refind.conf-sample`
    就在 `${pkgs.refind}/share/refind/` 里，查一眼十秒，比实机试错便宜得多）；
    **动引导之前先把退路实际走一遍**，别信「理论上能回退」。
+
+7. **「网络通」不等于「解析对」——中间设备会伪造 DNS 应答。**
+   iKuai 路由器一个「禁止 AAAA 记录（IPv6）解析」的勾选框，
+   最终表现成「虚拟机里 Claude Code 报连不上 Anthropic」，中间隔了五层。
+   它伪造的 NODATA 包不合规（SOA 字段为空、OPT 记录跑到 authority 段），
+   **glibc 宽容照收，systemd-resolved 严格拒收** —— 于是同一个网络里
+   一台机器正常、另一台坏掉。详见
+   [Lesson-Learn/0014](Lesson-Learn/0014_DNS_HIJACK_AND_DOT.md)。
+
+   三条可迁移的做法：
+
+   **排查 DNS 先跑这一条**，十秒排除一整类原因：
+
+   ```bash
+   nix shell nixpkgs#dnsutils -c dig +time=3 +tries=1 A example.org @192.0.2.1
+   ```
+
+   `192.0.2.1` 是 RFC 5737 的 TEST-NET-1，全球不可路由，**正常必须超时**；
+   能拿到应答就是有中间设备在截 UDP/53。
+
+   **对照实验要控制变量。** 那次我用两次 A 查询的 `dig` 结果论证
+   「DNS 服务器没问题」，而坏的是 AAAA —— 换了记录类型结论就不成立。
+   同理别换域名（缓存状态不同）、别换工具（解析路径不同）。
+
+   **不确定就 strace。** 猜了四轮都没中，
+   `strace -tt -T -e trace=network` 一次就看出「A 应答 1 毫秒回、
+   AAAA 应答从未到达」。猜的成本比测的成本高得多。

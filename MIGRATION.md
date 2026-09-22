@@ -1150,6 +1150,13 @@ ssh -T git@github.com                         # Hi SenorToru! ...（认证用的
 git -C ~/nixos-config log --show-signature -1 # Good "git" signature for dev@toru-leathers.com
 cat ~/.config/git/allowed_signers             # 每台机器一行，本机那行在不在
 
+# DNS：加密解析生效了没有（modules/dns.nix）
+resolvectl status | head -20                  # DNS Servers 是四个带 # 主机名的
+resolvectl query --type=AAAA lwn.net          # 拿到地址，不是 SERVFAIL
+nix shell nixpkgs#dnsutils -c dig +time=3 +tries=1 A example.org @192.0.2.1
+# 上面这条**必须超时**。192.0.2.1 全球不可路由，能拿到应答就是
+# 有中间设备在截 UDP/53，见 Lesson-Learn/0014
+
 # 服务
 systemctl is-active fwupd
 systemctl --failed                            # 应该是 0 loaded units listed

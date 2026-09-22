@@ -80,6 +80,7 @@
 | `desktop-gnome.nix` | GNOME 扩展包；**只开 `programs.dconf`，不声明任何设置** —— dconf 的单一真相在 `home/toru.nix` |
 | `localization.nix` | 字体（全系统唯一的 `fonts` 声明处，含 `stylix.fonts`）与 fcitx5 输入法 |
 | `shell.nix` | 系统层 zsh、`PAGER`（**不含**用户名指派） |
+| `dns.nix` | 加密 DNS：systemd-resolved + DNS-over-TLS（严格模式）、`dns-plain` / `dns-dot` 逃生舱（见下面「DNS」一节） |
 | `development.nix` | 编辑器与工具链、claude-code 版本覆写 overlay |
 | `browsers.nix` | Zen / Brave 与 chromium 扩展策略 |
 | `apps.nix` | 桌面应用 |
@@ -379,6 +380,60 @@ sudo rm -f /boot/screenshot_*.bmp
 > 真的进一次系统。「理论上有退路」和「亲手走过一遍」是两回事。
 
 ---
+
+---
+
+## DNS
+
+解析走 **systemd-resolved + DNS-over-TLS**，配置在
+[`modules/dns.nix`](modules/dns.nix)。所有机器共用，不绑硬件。
+
+为什么不用明文 DNS：**中间设备可以伪造应答，而伪造得不规范时症状极难定位。**
+这个仓库为此付过一整天 —— 路由器上一个「禁止 AAAA 记录」的勾选框，
+表现成「虚拟机里 Claude Code 连不上」。全过程见
+[Lesson-Learn/0014](Lesson-Learn/0014_DNS_HIJACK_AND_DOT.md)。
+
+日常什么都不用做。要知道的只有三件事：
+
+**一、严格模式，没有静默降级。**
+`DNSOverTLS=true` 且 `FallbackDNS=` 是空的。连不上加密服务器时**不解析**，
+而不是偷偷退回明文。宁可立刻报错，也不要「以为开着其实没开」。
+
+**二、DHCP 下发的 DNS 一律不用。**
+NetworkManager 那边要关**两个独立的开关**：`dns=none`（不写 `resolv.conf`）
+和 `systemd-resolved=false`（不通过 D-Bus 推给 resolved）。只关一个不够。
+代价是**内网域名解析不了** —— 公司内网、某些 VPN 靠 DHCP 下发的 DNS
+解析主机名，那些名字会失败。
+
+**三、captive portal 要手动降级。**
+酒店 / 机场 / 咖啡馆的认证页面会拦掉 853 端口，这时候 DNS 全挂、
+连认证页都打不开。两条命令：
+
+```bash
+sudo dns-plain    # 临时切回网关的明文 DNS，去过认证
+sudo dns-dot      # 认证完切回加密
+```
+
+只改运行时状态，不动配置文件 —— 忘了切回来的话，重连网络或重启就自动回到 DoT。
+
+### 验证
+
+```bash
+resolvectl status                             # Global 段是那四个带 # 主机名的；
+                                              # **每个 Link 段的 DNS Servers 必须是空的**
+resolvectl statistics                         # Cache Hits 在涨
+resolvectl query --type=AAAA lwn.net          # 拿到地址，不是 SERVFAIL
+sudo ss -tnp 'dport = :853'                   # 有到 1.1.1.1:853 的连接
+```
+
+判断有没有被劫持，最快的一条是**问一个不存在的 DNS 服务器**：
+
+```bash
+nix shell nixpkgs#dnsutils -c dig +time=3 +tries=1 A example.org @192.0.2.1
+```
+
+`192.0.2.1` 是 RFC 5737 的 TEST-NET-1，全球不可路由。
+**正常必须超时**；能拿到应答就说明有中间设备在截 UDP/53。
 
 ## 清理旧的编译版本
 

@@ -22,6 +22,7 @@
     ../../modules/apps.nix
     ../../modules/browsers.nix
     ../../modules/shell.nix
+    ../../modules/dns.nix
     ../../modules/stylix.nix
     ../../modules/refind.nix
 
