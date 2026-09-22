@@ -321,9 +321,15 @@ find . ! -user toru -printf '%u  %p\n'
      它只能配在具体连接上。
 
    **验证只有一个地方作数：`resolvectl status` 里每个 Link 段的
-   `DNS Servers` 必须是空的。** 光看 Global 段看不出问题 ——
-   Global 一直显示得好好的，而解析走的是链路级。
-   查询结果末尾那句 `-- link: wlp4s0` 也是信号。
+   `Current Scopes` 不含 `DNS`、且没有 `DNS Servers:` 那一行。**
+   光看 Global 段看不出问题 —— Global 一直显示得好好的，
+   而解析走的是链路级。
+
+   **不要拿 `resolvectl query` 末尾的 `-- link: <网卡>` 当判据**，
+   那是走过的弯路：它标的是**这次查询的出口网卡**，走全局 DNS 时照样
+   出现（实测配置正确的机器上也有），只有答案来自缓存时才没有。
+   拿它当信号会把正常状态误判成故障，反过来也会。
+
    改完还要**重连一次网络**。
 
 2. **`FallbackDNS = ""` 是故意的，别「修」掉它。**

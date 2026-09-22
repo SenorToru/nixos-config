@@ -1151,7 +1151,10 @@ git -C ~/nixos-config log --show-signature -1 # Good "git" signature for dev@tor
 cat ~/.config/git/allowed_signers             # 每台机器一行，本机那行在不在
 
 # DNS：加密解析生效了没有（modules/dns.nix）
-resolvectl status | head -20                  # DNS Servers 是四个带 # 主机名的
+resolvectl status                             # Global 段是四个带 # 主机名的；
+                                              # 每个 Link 段的 Current Scopes 不含 DNS、
+                                              # 且没有 DNS Servers: 那一行。别加 head，
+                                              # Link 段在后面，截断就看不见了
 resolvectl query --type=AAAA lwn.net          # 拿到地址，不是 SERVFAIL
 nix shell nixpkgs#dnsutils -c dig +time=3 +tries=1 A example.org @192.0.2.1
 # 上面这条**必须超时**。192.0.2.1 全球不可路由，能拿到应答就是

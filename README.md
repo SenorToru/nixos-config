@@ -420,11 +420,21 @@ sudo dns-dot      # 认证完切回加密
 
 ```bash
 resolvectl status                             # Global 段是那四个带 # 主机名的；
-                                              # **每个 Link 段的 DNS Servers 必须是空的**
+                                              # **每个 Link 段的 Current Scopes 不含 DNS、
+                                              # 且没有 DNS Servers: 那一行**
 resolvectl statistics                         # Cache Hits 在涨
 resolvectl query --type=AAAA lwn.net          # 拿到地址，不是 SERVFAIL
-sudo ss -tnp 'dport = :853'                   # 有到 1.1.1.1:853 的连接
+ss -tn 'dport = :853'                         # 有到 1.1.1.1:853 的 ESTAB 连接
 ```
+
+两条容易误判的：
+
+- **`ss` 那条空了不算失败。** resolved 会关掉空闲的 DoT 连接。
+  想坐实就先 `sudo resolvectl flush-caches` 再查一个新域名，然后立刻看。
+  不需要 `sudo`——不带 `-p` 时它读的是 `/proc/net/tcp`，只是少了进程名。
+- **不要拿 `resolvectl query` 末尾的 `-- link: <网卡>` 当判据。**
+  那标的是这次查询的**出口网卡**，走全局 DNS 时照样出现，
+  只有答案来自缓存才没有。判据只有 Link 段那一条。
 
 判断有没有被劫持，最快的一条是**问一个不存在的 DNS 服务器**：
 
