@@ -81,7 +81,7 @@ neovim 配置、VS Code 的 `userSettings`、25 个 Agent Skill、zsh/tmux/stars
 
 | 东西 | 新机器上怎么办 |
 |------|----------------|
-| `~/.ssh/id_ed25519` | 新生成一把，公钥加到 GitHub |
+| `~/.ssh/id_ed25519` | 新生成一把。公钥在 GitHub 登记**两次**（认证 + 签名），再加进 `home/toru.nix` 的 `signingKeys` |
 | `~/.gnupg/` | 需要时新生成 |
 | `~/.config/gh/` | `gh auth login` |
 | `~/.claude.json`、`~/.claude/` | `claude` 首次启动时登录 |
@@ -1019,22 +1019,52 @@ migration-check        # 它会列出所有 .hm-bak 并告诉你内容和现役�
 
 ### 7.3 C 类：重新签发清单
 
-按顺序做，每条都是一次性的：
+**顺序有意义。** SSH 密钥排在第一条不只是因为推仓库要用它 ——
+仓库配了 `commit.gpgsign = true`（用 SSH 密钥签提交），
+密钥不存在时 `git commit` 会**直接失败**。
+先克隆、先 `nrb`、最后才想起来生成密钥的话，第一次提交就会撞上这个。
 
 ```bash
-# 1. SSH key（之后才能用 git@github.com 推仓库）
+# 1. SSH key。一台机器一把，不要从旧机器拷。
 ssh-keygen -t ed25519 -C "<新机器标识>"
-cat ~/.ssh/id_ed25519.pub        # 贴到 GitHub → Settings → SSH keys
+cat ~/.ssh/id_ed25519.pub
+```
 
-# 2. GitHub CLI
+**这把公钥要在 GitHub 上登记两次**，位置都在
+Settings → SSH and GPG keys，但是两个独立的条目：
+
+| 登记成 | 干什么用 | 不登记的症状 |
+|--------|----------|--------------|
+| **Authentication key** | `git push` / `git clone` 走 SSH | 推不上去，`Permission denied (publickey)` |
+| **Signing key** | 提交显示 Verified 徽章 | 能推，但 GitHub 上显示 Unverified |
+
+两种症状完全不像，所以**容易只登记一个然后查错方向**。
+加的时候页面上有个 Key type 下拉框，选对再提交。
+
+```bash
+# 2. 把这台机器的公钥加进仓库的验签清单。
+#    home/toru.nix 开头的 signingKeys，键名用 hosts/ 下的目录名，
+#    值是裸公钥（去掉 ssh-keygen 加在末尾的那段 comment）。
+#
+#    不加的话签名照样能打、GitHub 照样显示 Verified，
+#    但**别的机器**验不了这台机器签的提交
+#    （`git log --show-signature` 报 no principal matched）。
+#
+#    改完要 nrb，并且这个改动要推回去让其它机器也拿到。
+
+# 3. GitHub CLI
 gh auth login
 
-# 3. Claude Code
+# 4. Claude Code
 claude          # 首次启动会引导登录
 
-# 4. 把 nixos-config 的 remote 从 https 换成 ssh
+# 5. 把 nixos-config 的 remote 从 https 换成 ssh
 cd ~/nixos-config
 git remote set-url origin git@github.com:SenorToru/nixos-config.git
+
+# 6. 验证整条链路通了
+ssh -T git@github.com                     # 应该回 "Hi SenorToru! You've successfully authenticated"
+git -C ~/nixos-config log --show-signature -1   # 应该看到 Good "git" signature
 ```
 
 剩下的靠图形界面：
@@ -1104,6 +1134,11 @@ echo $SHELL                                   # /run/current-system/sw/bin/zsh
 claude --version
 skills status                                 # 三个目录各能看见多少个 skill
 skills list | tail -3                         # 数量要和每个 AI 工具里实际看到的对上
+
+# git 身份与签名
+ssh -T git@github.com                         # Hi SenorToru! ...（认证用的那把登记好了）
+git -C ~/nixos-config log --show-signature -1 # Good "git" signature for dev@toru-leathers.com
+cat ~/.config/git/allowed_signers             # 每台机器一行，本机那行在不在
 
 # 服务
 systemctl is-active fwupd
@@ -1257,6 +1292,7 @@ sudo refind-sync
 | 新的 GUI 程序 | 它的配置在 `~/.config/` 下，看是该进 Nix（A 类）还是进 `dotfiles-state`（B 类）|
 | 新的 Flatpak | 加进 `modules/flatpak.nix`，**别只装不声明** |
 | 新硬件类别（独显、无线网卡） | 第 5.2 节的 `tuning.nix` 要点里补一条 |
+| **新机器本身** | 公钥加进 `home/toru.nix` 的 `signingKeys`，否则别的机器验不了它签的提交 |
 
 **判据永远是第 0 节那三类。** 能进 Nix 就进 Nix（A 类），
 进不了但能版本化就进 `dotfiles-state`（B 类），

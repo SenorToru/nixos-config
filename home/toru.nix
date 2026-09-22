@@ -11,6 +11,41 @@ let
   repoPath = "${config.home.homeDirectory}/nixos-config";
   flakeHost = osConfig.custom.flakeHost;
 
+  # ============================================
+  # 提交签名：git 身份与各机器的公钥
+  # ============================================
+  # 每台机器**自己生成** SSH 密钥（C 类，不搬，见 MIGRATION.md 第 0 节），
+  # 但**公钥是公开信息**，可以进版本库 —— 而且必须进，否则
+  # `git log --show-signature` 在这台机器上验不了别的机器签的提交。
+  #
+  # 加新机器时这里加一行，键名用 hosts/ 下的目录名。存**裸公钥**
+  # （类型 + base64，不带 ssh-keygen 生成的那段 comment），
+  # 下面会把键名接到行尾当 comment，这样清单里一眼看得出哪行是哪台机器。
+  #
+  # 同一把公钥要在 GitHub 上登记**两次**，这是两个独立的条目：
+  #
+  #   Authentication key  -> 用来 push，不登记就根本推不上去
+  #   Signing key         -> 用来显示 Verified 徽章，不登记只是没徽章
+  #
+  # 只登记一个是最常见的错法，而且两种症状完全不像，容易查错方向。
+  gitEmail = "dev@toru-leathers.com";
+
+  signingKeys = {
+    thinkpad = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIN3eXGsLq+JC/KMkovt51bjryIFvTw/LOlk65VjsyMNv";
+  };
+
+  # allowed_signers 的格式：<身份> namespaces="git" <公钥> [comment]
+  #
+  # 身份必须和提交里的 committer email 对得上，所以直接用 gitEmail，
+  # 不要在这里另写一个字符串 —— 两处漂移的表现是验签报
+  # 「no principal matched」，而错误信息里完全不提是 email 对不上。
+  #
+  # namespaces="git" 把这把钥匙限定在 git 这个用途里。不加的话它对
+  # `ssh-keygen -Y verify` 的任何命名空间都算数，等于凭空扩大授权范围。
+  allowedSigners = lib.concatStringsSep "\n" (
+    lib.mapAttrsToList (host: key: "${gitEmail} namespaces=\"git\" ${key} ${host}") signingKeys
+  );
+
   baseExtensionPolicies = {
     ExtensionUpdate = true;
     ExtensionSettings = {
@@ -1426,7 +1461,35 @@ in
     # 打弃用警告（`nrb` 的输出里多两行噪音，久了就没人看警告了）。
     settings = {
       user.name = "SenorToru";
-      user.email = "dev@toru-leathers.com";
+      user.email = gitEmail;
+
+      # ---- 提交签名 ----
+      # 用 SSH 密钥签，不用 GPG。理由是密钥只有一套要管：
+      # 同一把 ~/.ssh/id_ed25519 既用来 push 又用来签名，
+      # 没有第二个密钥环、第二个过期时间、第二个口令要记。
+      # GitHub 原生支持 SSH 签名，Verified 徽章一样出。
+      gpg.format = "ssh";
+
+      # 写绝对路径而不是 `~/...`：git 对这个值的处理是
+      # 「以 ssh- 开头就当字面公钥，否则当文件路径」，
+      # 而它**不保证**展开 ~。homeDirectory 所有机器都一样，
+      # 每台机器的密钥内容不同（C 类，各自签发），路径不变。
+      user.signingKey = "${config.home.homeDirectory}/.ssh/id_ed25519.pub";
+
+      # 默认就签，不靠每次记得加 -S。
+      #
+      # 代价要知道：**密钥不存在时 `git commit` 会直接失败。**
+      # 装新机器时如果先克隆仓库、先 nrb、然后才想起来生成密钥，
+      # 第一次提交就会撞上这个。MIGRATION.md 第 7 节把生成密钥
+      # 排在第一次提交之前，就是为了这个。
+      commit.gpgsign = true;
+      tag.gpgsign = true;
+
+      # 本机验签用的公钥清单，内容见文件开头的 allowedSigners。
+      # 不配的话签名照样能打、GitHub 照样显示 Verified，
+      # 但 `git log --show-signature` 会报
+      # 「gpg.ssh.allowedSignersFile needs to be configured」。
+      gpg.ssh.allowedSignersFile = "${config.xdg.configHome}/git/allowed_signers";
 
       pull.rebase = false;
 
@@ -1444,6 +1507,13 @@ in
       };
     };
   };
+
+  # 验签用的公钥清单。放 xdg.configFile 而不是和 gitconfig 挤在一起，
+  # 是因为 git 只接受**文件路径**，没法把清单内容直接写进配置项。
+  #
+  # 和 ~/.config/git/config 同目录，但那个由 programs.git 生成、
+  # 这个由这里生成，两者互不干涉（home-manager 是逐文件链接的）。
+  xdg.configFile."git/allowed_signers".text = allowedSigners + "\n";
 
   # ============================================
   # Neovim 配置 (HomeManager)
