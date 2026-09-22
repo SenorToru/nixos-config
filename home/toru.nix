@@ -32,6 +32,7 @@ let
 
   signingKeys = {
     thinkpad = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIN3eXGsLq+JC/KMkovt51bjryIFvTw/LOlk65VjsyMNv";
+    vm = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJTtTxB/hGjBI556MZohBsITtonP+WmVrgsWmdiM1jRJ";
   };
 
   # allowed_signers 的格式：<身份> namespaces="git" <公钥> [comment]
