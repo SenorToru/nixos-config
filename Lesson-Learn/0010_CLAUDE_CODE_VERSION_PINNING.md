@@ -1,6 +1,6 @@
 # 在 NixOS 上升级 claude-code：发布分支冻结与 manifest 覆写
 
-> 日期：2026-09-18　|　相关配置：`modules/development.nix`、`modules/claude-code-manifest.json`
+> 日期：2026-09-18　|　最后更新：2026-09-23　|　相关配置：`modules/development.nix`、`modules/claude-code-manifest.json`
 >
 > 触发场景：想用 Claude Code 的会话管理功能（`/rename`、会话选择器的 `Ctrl+R`、
 > agent view、`claude attach`），发现本机 2.1.223 全都没有。
@@ -111,6 +111,52 @@ nvim wrapper 里的 claude → /nix/store/0g2jlr4...-claude-code-2.1.276
 ```
 
 同一个 store path，确认只有一个版本。
+
+## 以后每次升级怎么做（可复用的四步）
+
+这一节是操作清单，`模块本身一个字都不用改`，只换 manifest。
+
+```bash
+cd /home/toru/nixos-config
+
+# 1. 拉 manifest。要不带 .zst 的那份，原因见「后续注意事项」第一条。
+#    想装 latest：
+V=$(curl -fsSL https://downloads.claude.ai/claude-code-releases/latest)
+#    想钉某个具体版本就直接写，例如 V=2.1.280
+curl -fsSL "https://downloads.claude.ai/claude-code-releases/$V/manifest.json" \
+  -o modules/claude-code-manifest.json
+
+# 2. 用户态构建两层（约 233 MB，不走 cache.nixos.org，实测半分钟）
+nix build .#nixosConfigurations.thinkpad.config.system.build.toplevel --out-link /tmp/res
+nix build .#nixosConfigurations.thinkpad.config.home-manager.users.toru.home.activationPackage \
+  --out-link /tmp/hm
+
+# 3. 切换之前先验「只有一个版本」—— 这是这条路线最容易坏的地方
+nix path-info -r /tmp/res /tmp/hm | grep claude-code | sort -u
+#    **必须只输出一行。** 两行就是系统层和 nvim wrapper 装出了两个版本，
+#    别 switch，先回去查 overlay 有没有同时覆盖到两处。
+
+# 4. 切换并实机验证
+sudo nixos-rebuild switch --flake /home/toru/nixos-config#thinkpad
+claude --version
+```
+
+第 3 步比 0010 原文里「分别 readlink 两处再肉眼比对」更可靠：
+`nix path-info -r` 扫的是**整个闭包**，任何一个角落漏掉覆写都会多出一行，
+而肉眼比对只查了你想到要查的那两个位置。
+
+Neovide 那边不用做任何事。overlay 覆写的是 `pkgs.claude-code` 本身，
+`systemPackages` 和 `programs.neovim.extraPackages` 两处同时生效
+（`home-manager.useGlobalPkgs = true`，home 层用的就是系统的 `pkgs`）。
+nvim 里的 claudecode.nvim 是从 Neovim 内部 spawn `claude`、走 wrapper 的
+PATH（见 [000D](000D_CLAUDE_CODE_IN_NEOVIM.md)），拿到的是同一个 store path。
+
+## 升级记录
+
+| 日期 | 从 | 到 | 备注 |
+|------|----|----|------|
+| 2026-09-18 | 2.1.223 | 2.1.276 | 首次引入 manifest 覆写；2.1.223 是 `nixos-26.05` 分支上的版本 |
+| 2026-09-23 | 2.1.276 | 2.1.280 | 常规升级，`latest` 恰好就是 2.1.280；闭包里只有一个 claude-code 派生，验证通过 |
 
 ## 后续注意事项
 
