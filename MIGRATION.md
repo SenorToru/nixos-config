@@ -84,7 +84,8 @@ neovim 配置、VS Code 的 `userSettings`、25 个 Agent Skill、zsh/tmux/stars
 | `~/.ssh/id_ed25519` | 新生成一把。公钥在 GitHub 登记**两次**（认证 + 签名），再加进 `home/toru.nix` 的 `signingKeys` |
 | `~/.gnupg/` | 需要时新生成 |
 | `~/.config/gh/` | `gh auth login` |
-| `~/.claude.json`、`~/.claude/` | `claude` 首次启动时登录 |
+| `~/.claude.json`、`~/.claude/` 里的凭据 | `claude` 首次启动时登录。**但 `~/.claude/projects/` 下的会话记录要搬**，那不是凭据，见 7.5 |
+| `~/.config/.wrangler/`（Cloudflare 的 OAuth 令牌） | 在用到的项目目录里 `pnpm exec wrangler login`。wrangler 是项目的 devDependency，不是全局命令 |
 | GNOME keyring（`~/.local/share/keyrings/`） | 重新解锁各服务 |
 | WiFi 密码 | 重新输 |
 | 浏览器 cookie / 登录态 | 靠浏览器自己的账号同步 |
@@ -1079,12 +1080,19 @@ gh auth login
 
 # 4. Claude Code
 claude          # 首次启动会引导登录
+#    会话记录要在「第一次在项目目录里启动 claude」之前放回去，见 7.5
 
-# 5. 把 nixos-config 的 remote 从 https 换成 ssh
+# 5. Cloudflare（wrangler）。它是项目的 devDependency，要先 clone 项目、
+#    direnv allow、pnpm install，然后在项目目录里登录。
+#    旧机器的令牌不要拷 —— 那是能直接部署到生产的凭据。
+cd ~/Projects/dev/craft-crm && pnpm exec wrangler login
+#    项目自己的完整步骤（带哪些文件、自检 pnpm run doctor）在 craft-crm 的 README §2.1
+
+# 6. 把 nixos-config 的 remote 从 https 换成 ssh
 cd ~/nixos-config
 git remote set-url origin git@github.com:SenorToru/nixos-config.git
 
-# 6. 验证整条链路通了
+# 7. 验证整条链路通了
 ssh -T git@github.com                     # 应该回 "Hi SenorToru! You've successfully authenticated"
 git -C ~/nixos-config log --show-signature -1   # 应该看到 Good "git" signature
 ```
@@ -1127,6 +1135,61 @@ shd101wyy.markdown-preview-enhanced
 > 清单在 `home/migration.nix` 的 `vscodeExtensions`。
 > **改那里的同时要改这一节** —— 两处都是给人看的，漂移了就会互相矛盾。
 
+### 7.5 Claude Code 的会话记录
+
+和各项目里 Claude Code 的全部对话、以及它攒下的记忆（`memory/`），都在
+`~/.claude/projects/<目录名>/` 下。**目录名就是项目的绝对路径把 `/` 换成 `-`**：
+
+    /home/toru/Projects/dev/craft-crm  ->  -home-toru-Projects-dev-craft-crm
+    /home/toru/nixos-config            ->  -home-toru-nixos-config
+
+所以只要新机器上项目放在**同一个路径**（用户名 toru、目录一致），原样拷过去就能用，
+不需要改写里面的路径。换了路径的话，Claude Code 会当成另一个项目，历史和记忆都看不见。
+
+**它含密钥明文**（对话里贴过、命令输出里出现过的 token 和 secret），处理规格等同 `.env`：
+**只走 U 盘，用完删掉 U 盘上的副本；绝不进任何 git 仓库，包括 `dotfiles-state`，也不进云同步。**
+
+搬的只有 `projects/` 下这两个目录（连同里面的 `memory/` 和 `<会话id>/subagents/`）。
+`.credentials.json`、`sessions`、`file-history`、`shell-snapshots` 这些是本机的凭据
+和运行时状态，不搬（`migration-check` 的 `ignoredClaude` 也是这么分的）。
+`~/.claude.json` 里的项目条目不用手工合并：它记的 `allowedTools` 等目前都是空的，
+新机器上第一次打开项目时点一次「信任」即可。
+
+**一次性搬、单向搬。** 搬完之后旧机器不再在这两个项目里开 Claude Code，
+不做两台机器之间的同步 —— `memory/` 里是许多小文件，两边都写的话会互相覆盖，
+而且覆盖掉的是哪条记忆事后很难发现。
+
+```bash
+# ---- 旧机器 ----
+# 1. 先确认没有 Claude Code 在跑。运行中的实例会继续往 jsonl 和 memory/ 里写，
+#    拷到一半的快照可能缺掉最后一段。
+pgrep -af claude || echo "没有在跑的 claude"
+
+# 2. 拷到 U 盘（<U盘> 换成实际挂载点，lsblk 或 ls /run/media/toru 查）
+USB=/run/media/toru/<U盘>
+mkdir -p "$USB/claude-projects"
+cp -a ~/.claude/projects/-home-toru-Projects-dev-craft-crm \
+      ~/.claude/projects/-home-toru-nixos-config \
+      "$USB/claude-projects/"
+
+# ---- 新机器 ----
+# 3. 放回去。最好在「第一次在这两个项目目录里启动 claude」之前做；
+#    已经启动过也没关系，cp 是合并，只是 memory/MEMORY.md 会被旧机器那份覆盖（通常正是想要的）。
+mkdir -p ~/.claude/projects
+cp -a "$USB/claude-projects/." ~/.claude/projects/
+
+# 4. 校验：会话数和记忆数与旧机器上一致
+for d in -home-toru-Projects-dev-craft-crm -home-toru-nixos-config; do
+  echo "$d: $(ls ~/.claude/projects/$d/*.jsonl | wc -l) 个会话, $(ls ~/.claude/projects/$d/memory 2>/dev/null | wc -l) 个记忆文件"
+done
+#    再到项目目录里 `claude --resume`，应该能列出旧机器上的会话。
+
+# 5. 删掉 U 盘上的副本
+rm -rf "$USB/claude-projects"
+```
+
+U 盘是闪存，`rm` 之后数据在物理上不一定马上消失。这份归档里的密钥如果在意，
+搬完之后把 U 盘整个格式化一次；最稳妥的是把归档里出现过的那几把钥匙轮换掉。
 
 ---
 
