@@ -236,7 +236,7 @@ find . ! -user toru -printf '%u  %p\n'    # 应该没有任何输出（坑 5）
 > **别手改**，改动会被下一次生成覆盖；要改就去改生成逻辑
 > （`home/agent-skills.nix` 里的 `cmd_doc`）。
 >
-> 对应的 skill 池：`/nix/store/f0aalgngcycbq7fgbfikfgqlrw5s65w7-agent-skills`
+> 对应的 skill 池：`/nix/store/1kpx8drqf6yvyall7vd03i55s9lwljy9-agent-skills`
 
 | Skill | 调用方式 | 常驻 tok | 调用 tok | 附属 tok | 用途（作者原文 description，这也是模型看到的触发条件） |
 |---|---|---:|---:|---:|---|
