@@ -31,6 +31,14 @@ let
   gitEmail = "dev@toru-leathers.com";
 
   signingKeys = {
+    # bluefin 是 2026-09 迁移期间的 Asus（当时跑 Bluefin + Toolbox，不是 NixOS），
+    # 所以 hosts/ 下没有同名目录，是「键名 = hosts/ 目录名」这条规则的例外。
+    # 那台机器之后会重装成 NixOS、生成新密钥并按规则另加一行，
+    # 但**这一行不要删**：它签过的提交是永久的，公钥不在 allowed_signers 里
+    # 就永远验不了那些签名。allowed_signers 记的是「谁曾被允许签名」，
+    # 退役机器的公钥应该留着。（GitHub 上它的 Authentication / Signing 两个条目
+    # 倒是可以在抹机时删掉 —— 那是凭据，这里是档案。）
+    bluefin = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIH1xdLp1BDLpF6RvP3hOiWlX87cP10uZo47oNGdPFBa8";
     thinkpad = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIN3eXGsLq+JC/KMkovt51bjryIFvTw/LOlk65VjsyMNv";
     vm = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJTtTxB/hGjBI556MZohBsITtonP+WmVrgsWmdiM1jRJ";
   };
