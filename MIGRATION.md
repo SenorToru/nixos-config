@@ -85,6 +85,7 @@ neovim 配置、VS Code 的 `userSettings`、25 个 Agent Skill、zsh/tmux/stars
 | `~/.gnupg/` | 需要时新生成 |
 | `~/.config/gh/` | `gh auth login` |
 | `~/.claude.json`、`~/.claude/` 里的凭据 | `claude` 首次启动时登录。**但 `~/.claude/projects/` 下的会话记录要搬**，那不是凭据，见 7.5 |
+| `~/.grok/` 里的凭据（Grok Build） | `grok login`。`~/.grok/` 里其余东西（`config.toml`、会话、memory）怎么分类，见文末「还没解决的问题」 |
 | `~/.config/.wrangler/`（Cloudflare 的 OAuth 令牌） | 在用到的项目目录里 `pnpm exec wrangler login`。wrangler 是项目的 devDependency，不是全局命令 |
 | GNOME keyring（`~/.local/share/keyrings/`） | 重新解锁各服务 |
 | WiFi 密码 | 重新输 |
@@ -1082,6 +1083,10 @@ gh auth login
 claude          # 首次启动会引导登录
 #    会话记录要在「第一次在项目目录里启动 claude」之前放回去，见 7.5
 
+# 4b. Grok Build（xAI 的终端 agent，需要 SuperGrok / X Premium+ 订阅）
+grok login
+#    不要跑 `grok update` —— 它会在 ~/.grok/bin/ 另装一份不归 Nix 管的 grok
+
 # 5. Cloudflare（wrangler）。它是项目的 devDependency，要先 clone 项目、
 #    direnv allow、pnpm install，然后在项目目录里登录。
 #    旧机器的令牌不要拷 —— 那是能直接部署到生产的凭据。
@@ -1428,6 +1433,7 @@ migration-check
 | B 类清单是否还有该收未收的 | 加了新工具之后跑 `migration-check`，它会报出 `$HOME` 里没人认领的东西 |
 | 第 1-5 节没在全新机器上从头跑过 | 只能等下次真装新机器时验证，对不上的地方回来改 |
 | 独显探测判据未经多显卡机器验证 | AMD 的 APU 不在 PCI bus 00 上且也报显存，可能被误判成独显。真遇到直接改 `hwinfo.nix` |
+| `~/.grok/` 的 A / B / C 划分 | 2026-09-23 刚装，还没登录用过，目录里会有什么未实测。凭据先按 C 类记；登录并用过几天后跑 `migration-check`，它会把 `~/.grok` 报成没人认领，届时逐项分类、补进 `ignoredHome` 或 `stateFiles`，再改这一行 |
 | VS Code 的四个扩展仍是手工装的 | nixpkgs 里的版本比实际装的旧（claude-code 会退到 2.1.223），声明进 Nix 等于降级。归手工清单，`migration-check` 盯着 |
 
 **已解决**（原先列在这里）：

@@ -42,11 +42,63 @@
   # （后者是必需的，插件从 nvim 内部 spawn claude，走的是 wrapper PATH）。
   # 覆写 pkgs.claude-code 可以让两处同时生效，不会漏掉一边而装出两个版本 ——
   # 那正是 000A 记过的坑。
+  #
+  # ============================================
+  # grok-build 版本覆写
+  # ============================================
+  # 同一个处境、同一个解法：26.05 上的 grok-build 停在 0.2.93，
+  # 而上游已经 1.0.x（v1.0 在 2026-08 正式发布，stable 频道每周一版）。
+  # nixpkgs 的包定义同样只是按版本号去 x.ai 下预编译二进制再
+  # autoPatchelf，所以只换「版本号 + 哈希」，包定义照用。
+  #
+  # 和 claude-code 的区别：上游没有现成的 manifest 可拉，
+  # 版本号和哈希得自己算，存在 grok-build-version.json 里。刷新办法：
+  #
+  #   V=$(curl -fsSL https://x.ai/cli/stable)
+  #   H=$(nix hash convert --hash-algo sha256 \
+  #     "$(nix-prefetch-url "https://x.ai/cli/grok-$V-linux-x86_64")")
+  #   printf '{\n  "version": "%s",\n  "hashes": {\n    "x86_64-linux": "%s"\n  }\n}\n' \
+  #     "$V" "$H" > modules/grok-build-version.json
+  #
+  # 目前只有 x86_64-linux 一个哈希。加 ARM 机器时补一个
+  # aarch64-linux（文件名后缀是 linux-aarch64），否则求值时直接报缺键。
+  #
+  # **自更新必须关掉。** grok 启动时会检查更新，并把新版装进
+  # ~/.grok/bin/grok（它所谓的 managed install）—— 于是机器上出现
+  # 两个 grok，一个 Nix 管、一个它自己管，版本还不一样。
+  # 官方给的开关里 GROK_DISABLE_AUTOUPDATER=1 是进程级的，
+  # 用 wrapProgram 钉在二进制上，从哪里启动（终端、Neovide、脚本）都生效，
+  # 不依赖 shell 环境。手动敲 `grok update` 仍然会装，别敲。
   nixpkgs.overlays = [
     (_final: prev: {
       claude-code = prev.claude-code.override {
         manifest = lib.importJSON ./claude-code-manifest.json;
       };
+
+      grok-build = prev.grok-build.overrideAttrs (
+        old:
+        let
+          pin = lib.importJSON ./grok-build-version.json;
+          inherit (prev.stdenv.hostPlatform) system;
+          platform =
+            {
+              x86_64-linux = "linux-x86_64";
+              aarch64-linux = "linux-aarch64";
+            }
+            .${system};
+        in
+        {
+          inherit (pin) version;
+          src = prev.fetchurl {
+            url = "https://x.ai/cli/grok-${pin.version}-${platform}";
+            hash = pin.hashes.${system};
+          };
+          nativeBuildInputs = old.nativeBuildInputs ++ [ prev.makeWrapper ];
+          postFixup = (old.postFixup or "") + ''
+            wrapProgram $out/bin/grok --set GROK_DISABLE_AUTOUPDATER 1
+          '';
+        }
+      );
     })
   ];
 
@@ -61,6 +113,10 @@
     # Claude Code CLI（unfree，已由 common.nix 的 allowUnfree 放行）
     # nixpkgs 版本经过 auto-patchelf 处理，不依赖 nix-ld
     claude-code
+
+    # Grok Build（xAI 的终端 coding agent，unfree）。命令名是 grok，
+    # 另有一个同指向的 agent 链接。版本覆写见上面的 overlay
+    grok-build
   ];
 
   # ============================================

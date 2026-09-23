@@ -8,7 +8,7 @@
   想知道某个配置是怎么演变成现在这样的，从小到大读一遍即可。
 - **编号是 4 位大写十六进制**：`0000` → `0009` → `000A` → `000F` → `0010` → …
   一直到 `FFFF`。注意 `0009` 的下一个是 `000A` 而不是 `0010`。
-- **新增文档接着当前最大编号加一**。当前最大是 `0015`，**下一个是 `0016`**。
+- **新增文档接着当前最大编号加一**。当前最大是 `0016`，**下一个是 `0017`**。
   不要插空、不要复用编号。
 - 编号一旦分配就不再变动。文档作废时**加废弃横幅并指向新文档**，不删除、不重排 ——
   历史记录本身有价值，而且重排会让已有的交叉引用全部失效。
@@ -41,11 +41,13 @@
 | `0013` | [REFIND_BOOT](0013_REFIND_BOOT.md) | rEFInd 叠在 systemd-boot 之上做顶层引导入口；`icon` 路径基准、GOP 模式、vfat chmod 等五个实机坑 | ✅ 有效 |
 | `0014` | [DNS_HIJACK_AND_DOT](0014_DNS_HIJACK_AND_DOT.md) | 路由器伪造 AAAA 应答导致虚拟机里 Claude Code 连不上；抓包定位 + 改用 DNS-over-TLS。含不预设网络知识的完整讲解 | ✅ 有效 |
 | `0015` | [CLAUDE_CODE_NEOVIDE_WORKFLOW](0015_CLAUDE_CODE_NEOVIDE_WORKFLOW.md) | Neovide 里用 Claude Code 的完整教程：会话的新开/切换/分叉/改名/删除、三层模式、面板跳转与调宽、Enter 换行、剪贴板统一；`Space a r` 参数被静默丢弃的根因 | 📖 常读 |
+| `0016` | [GROK_BUILD_VERSION_PINNING](0016_GROK_BUILD_VERSION_PINNING.md) | 装 xAI 的 Grok Build：发布分支停在 0.2.93，`overrideAttrs` 换版本号 + 哈希；用 `GROK_DISABLE_AUTOUPDATER` 挡住自更新另装一份 | ✅ 有效 |
 
 ## 按主题快速定位
 
 - **Neovim / Copilot** —— `0000`（用法）、`0001`、`0002`、`0003`、`0005`、`0006`、`0007`、`0009`、`000E`、`0015`
 - **Agent Skills（跨工具）** —— `0012`
+- **其它 AI agent（Grok Build）** —— `0016`
 - **Claude Code** —— `000C`、`000D`、`0010`、`0012`、`0014`、`0015`（日常用法）
 - **字体** —— `0002`、`0004`、`000A`
 - **NixOS / home-manager 机制** —— `0003`、`000A`、`000B`、`000C`、`000F`、`0012`
@@ -79,7 +81,7 @@
    必须放 `hosts/<主机>/`。判据：换一台机器还成立吗？
 8. **`nix flake update` 没让某个包动，不等于它已是最新**（`0010`）——
    `nixos-26.05` 是发布分支，不跟上游滚。先去查该包在发布分支上的版本，
-   而不是怀疑 flake 没更新成功。
+   而不是怀疑 flake 没更新成功。grok-build 是同样的处境、同样的解法（`0016`）。
 9. **仓库里混进 root 拥有的文件**（`0011`）—— `sudo nixos-rebuild --flake .`
    会以 root 身份写 `flake.lock`，读 dirty 工作树时还可能写 `.git/objects`。
    症状极具迷惑性：`git add` 只对**某一个**文件报
