@@ -5,6 +5,10 @@
 > 目标：在 Neovide 里获得和 VSCode 扩展基本对等的 Claude Code 体验 ——
 > 选区上下文、`@` 引用文件、修改以 diff 形式送回编辑器审阅。
 
+> ⚠️ **2026-09-23 更新：会话操作和面板键位以 [0015](0015_CLAUDE_CODE_NEOVIDE_WORKFLOW.md) 为准。**
+> 本文的 `<Space>ar` / `<Space>aR` / `<Space>aC` 已从配置中删除（原因见本文第 6 条坑和 0015），
+> 下面表格里保留原记录并划掉。插件的接入过程（本文主体）仍然有效。
+
 ## 方案选择
 
 Claude Code 在编辑器里有三种用法，差别很大：
@@ -109,9 +113,12 @@ leader 是空格。
 |------|------|------|
 | `<Space>ac` | `:ClaudeCode` | 开关 Claude 面板 |
 | `<Space>af` | `:ClaudeCodeFocus` | 聚焦面板 |
-| `<Space>ar` | `:ClaudeCode --resume` | 列出本目录的历史会话，交互选择 |
-| `<Space>aR` | `:ClaudeCode --resume --fork-session` | 从某个历史会话岔出一条新会话 |
-| `<Space>aC` | `:ClaudeCode --continue` | 直接进最近一次会话，不问 |
+| ~~`<Space>ar`~~ | ~~`:ClaudeCode --resume`~~ | **已删除**，改用面板里的 `/resume` |
+| ~~`<Space>aR`~~ | ~~`:ClaudeCode --resume --fork-session`~~ | **已删除**，改用面板里的 `/branch 名字` |
+| ~~`<Space>aC`~~ | ~~`:ClaudeCode --continue`~~ | **已删除** |
+| `<Space>az` | —— | 面板最大化 ⇄ 还原（2026-09-23 新增） |
+| `Ctrl+L` / `Ctrl+H` | —— | 代码区 → 面板 / 面板 → 代码区（2026-09-23 新增） |
+| `Ctrl+Shift+H` / `Ctrl+Shift+L` | —— | 分界线左移 / 右移 5%（2026-09-23 新增） |
 | `<Space>am` | `:ClaudeCodeSelectModel` | 选模型 |
 | `<Space>ab` | `:ClaudeCodeAdd %` | 把当前文件加入上下文 |
 | `<Space>as`（**可视模式**） | `:ClaudeCodeSend` | 把选中的代码发给 Claude |
@@ -137,10 +144,10 @@ Claude Code 的会话是**按目录**存的，路径按 cwd 编码：
 
 | 方式 | 行为 |
 |------|------|
-| `<Space>ar` | 列出**本目录**的历史会话，交互选择 |
-| `<Space>aR` | 同上，但选中后岔出一条新会话，不续写原记录 |
-| `<Space>aC` | 直接进最近一次，不弹选择器 |
-| 会话内输入 `/resume` | CLI 自带的斜杠命令，同样弹选择器 |
+| ~~`<Space>ar`~~ | ~~列出**本目录**的历史会话，交互选择~~（已删除） |
+| ~~`<Space>aR`~~ | ~~同上，但选中后岔出一条新会话，不续写原记录~~（已删除） |
+| ~~`<Space>aC`~~ | ~~直接进最近一次，不弹选择器~~（已删除） |
+| 会话内输入 `/resume` | CLI 自带的斜杠命令，同样弹选择器。**现在唯一的入口**，见 0015 |
 
 CLI 侧的对应选项：
 
@@ -215,6 +222,9 @@ claude --version          # 应输出 2.1.223 (Claude Code)
    两者不抢按键也不抢补全菜单。
 
 6. **面板里已有活会话时，`<Space>ar` 的 `--resume` 会被静默丢弃。**
+   > **已修复（2026-09-23）**：三个键已从配置中删除，不再只是记录在这里。
+   > 教训见 [0015](0015_CLAUDE_CODE_NEOVIDE_WORKFLOW.md)「根本原因分析」第一条：记下一个坑但不拆掉它，等于没记。
+
    这个很容易误判成「按键没绑上」。实际是插件的 toggle 逻辑：
 
    ```lua

@@ -184,4 +184,5 @@ PATH（见 [000D](000D_CLAUDE_CODE_IN_NEOVIM.md)），拿到的是同一个 stor
 - [000A_NIXOS_CONFIG_AUDIT.md](000A_NIXOS_CONFIG_AUDIT.md) —— 同一个程序被装出两份的历史教训
 - [000C_NIX_LD_PREBUILT_BINARIES.md](000C_NIX_LD_PREBUILT_BINARIES.md) —— nixpkgs 版 claude-code 经 auto-patchelf，不依赖 nix-ld
 - [000D_CLAUDE_CODE_IN_NEOVIM.md](000D_CLAUDE_CODE_IN_NEOVIM.md) —— 为什么 extraPackages 那一份是必需的
+- [0015_CLAUDE_CODE_NEOVIDE_WORKFLOW.md](0015_CLAUDE_CODE_NEOVIDE_WORKFLOW.md) —— 升级后在 Neovide 里怎么用：会话、面板、键位、剪贴板
 - [000E_LAZY_NVIM_SLOW_NETWORK_CLONE.md](000E_LAZY_NVIM_SLOW_NETWORK_CLONE.md) —— 「本机网络慢」那条结论的出处与适用范围

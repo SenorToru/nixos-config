@@ -8,7 +8,7 @@
   想知道某个配置是怎么演变成现在这样的，从小到大读一遍即可。
 - **编号是 4 位大写十六进制**：`0000` → `0009` → `000A` → `000F` → `0010` → …
   一直到 `FFFF`。注意 `0009` 的下一个是 `000A` 而不是 `0010`。
-- **新增文档接着当前最大编号加一**。当前最大是 `0014`，**下一个是 `0015`**。
+- **新增文档接着当前最大编号加一**。当前最大是 `0015`，**下一个是 `0016`**。
   不要插空、不要复用编号。
 - 编号一旦分配就不再变动。文档作废时**加废弃横幅并指向新文档**，不删除、不重排 ——
   历史记录本身有价值，而且重排会让已有的交叉引用全部失效。
@@ -32,7 +32,7 @@
 | `000A` | [NIXOS_CONFIG_AUDIT](000A_NIXOS_CONFIG_AUDIT.md) | `nvim`/`vim` 双派生、5 个无效字体名、默认浏览器 | ✅ 有效 |
 | `000B` | [HOME_MANAGER_ACTIVATION_CONFLICT](000B_HOME_MANAGER_ACTIVATION_CONFLICT.md) | `Existing file would be clobbered` 与「半成功」状态 | ✅ 有效 |
 | `000C` | [NIX_LD_PREBUILT_BINARIES](000C_NIX_LD_PREBUILT_BINARIES.md) | 预编译二进制的 ELF 解释器写死 `/lib64/...`，靠 nix-ld 转接 | ✅ 有效 |
-| `000D` | [CLAUDE_CODE_IN_NEOVIM](000D_CLAUDE_CODE_IN_NEOVIM.md) | 用 claudecode.nvim 在 Neovide 里接入 Claude Code | ✅ 有效 |
+| `000D` | [CLAUDE_CODE_IN_NEOVIM](000D_CLAUDE_CODE_IN_NEOVIM.md) | 用 claudecode.nvim 在 Neovide 里接入 Claude Code | ⚠️ 接入过程有效；会话操作与键位已被 `0015` 取代 |
 | `000E` | [LAZY_NVIM_SLOW_NETWORK_CLONE](000E_LAZY_NVIM_SLOW_NETWORK_CLONE.md) | 慢网下部分克隆装不上插件；`.cloning` 残留标记导致反复重装 | ✅ 有效 |
 | `000F` | [LAPTOP_TUNING_AND_AI_FRIENDLY_SHELL](000F_LAPTOP_TUNING_AND_AI_FRIENDLY_SHELL.md) | zram / thermald / VAAPI；zsh + atuin 环境与「不遮蔽标准命令」的 AI 友好约定；`modules/` 与 `hosts/` 的分界 | ✅ 有效 |
 | `0010` | [CLAUDE_CODE_VERSION_PINNING](0010_CLAUDE_CODE_VERSION_PINNING.md) | 发布分支冻结在旧版，`nix flake update` 空操作；覆写 manifest 升级 claude-code | ✅ 有效 |
@@ -40,12 +40,13 @@
 | `0012` | [AGENT_SKILLS](0012_AGENT_SKILLS.md) | Agent Skills 全局安装：一份 skill 喂给 Claude Code / Copilot / Zed / Gemini；开关命令与 token 成本（持续更新） | 📖 常读 |
 | `0013` | [REFIND_BOOT](0013_REFIND_BOOT.md) | rEFInd 叠在 systemd-boot 之上做顶层引导入口；`icon` 路径基准、GOP 模式、vfat chmod 等五个实机坑 | ✅ 有效 |
 | `0014` | [DNS_HIJACK_AND_DOT](0014_DNS_HIJACK_AND_DOT.md) | 路由器伪造 AAAA 应答导致虚拟机里 Claude Code 连不上；抓包定位 + 改用 DNS-over-TLS。含不预设网络知识的完整讲解 | ✅ 有效 |
+| `0015` | [CLAUDE_CODE_NEOVIDE_WORKFLOW](0015_CLAUDE_CODE_NEOVIDE_WORKFLOW.md) | Neovide 里用 Claude Code 的完整教程：会话的新开/切换/分叉/改名/删除、三层模式、面板跳转与调宽、Enter 换行、剪贴板统一；`Space a r` 参数被静默丢弃的根因 | 📖 常读 |
 
 ## 按主题快速定位
 
-- **Neovim / Copilot** —— `0000`（用法）、`0001`、`0002`、`0003`、`0005`、`0006`、`0007`、`0009`、`000E`
+- **Neovim / Copilot** —— `0000`（用法）、`0001`、`0002`、`0003`、`0005`、`0006`、`0007`、`0009`、`000E`、`0015`
 - **Agent Skills（跨工具）** —— `0012`
-- **Claude Code** —— `000C`、`000D`、`0010`、`0012`、`0014`
+- **Claude Code** —— `000C`、`000D`、`0010`、`0012`、`0014`、`0015`（日常用法）
 - **字体** —— `0002`、`0004`、`000A`
 - **NixOS / home-manager 机制** —— `0003`、`000A`、`000B`、`000C`、`000F`、`0012`
 - **git 与仓库状态** —— `0011`

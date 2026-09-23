@@ -1411,8 +1411,22 @@ in
   # home-manager 没有 programs.claude-code 模块，而 ~/.claude 不在
   # XDG 路径下，所以用 home.file 而不是 xdg.configFile。
   #
-  # Ctrl+Enter 和 Alt+Enter 都发送，Enter 留给换行 ——
+  # Enter 只换行，Ctrl+Enter / Alt+Enter 提交 ——
   # 和 VS Code 那边 claudeCode.useCtrlEnterToSend = true 是同一套手感。
+  # 用中日文输入法时 Enter 容易误触，这样误触最多多一个空行，不会把半句话发出去。
+  #
+  # 以前这里只**加**了 ctrl+enter / alt+enter，没把 enter 解绑，注释却写着
+  # 「Enter 留给换行」—— 实际上 chat:submit 的默认键就是 Enter，一直在提交。
+  # 加绑定不会顶掉默认绑定，必须显式把 enter 改绑成 chat:newline。
+  #
+  # 为什么两个提交键都要：Ctrl+Enter 能不能和 Enter 区分，取决于终端有没有开
+  # kitty 键盘协议。实测 nvim 0.12 的终端会回应 Claude 的协议查询（CSI ? u →
+  # ESC[?0u），开了之后 Ctrl+Enter 是 ESC[13;5u，能区分；但没开时它就是个
+  # 普通回车。Alt+Enter 在传统模式下也是 ESC CR，任何情况下都分得开，留作兜底。
+  # 数据和测试方法见 Lesson-Learn/0015。
+  #
+  # 副作用：斜杠命令也要用 Ctrl+Enter 执行（打完 /resume 按 Enter 只会换行）。
+  # 权限确认框、/resume 选择器不受影响 —— 它们是别的 context，Enter 照常是确认。
   home.file.".claude/keybindings.json".text = builtins.toJSON {
     "$schema" = "https://www.schemastore.org/claude-code-keybindings.json";
     "$docs" = "https://code.claude.com/docs/en/keybindings";
@@ -1420,6 +1434,7 @@ in
       {
         context = "Chat";
         bindings = {
+          "enter" = "chat:newline";
           "ctrl+enter" = "chat:submit";
           "alt+enter" = "chat:submit";
         };
@@ -1651,6 +1666,26 @@ in
         vim.opt.relativenumber = true
         vim.opt.wrap = false
         vim.opt.signcolumn = "yes"
+
+        -- 剪贴板：统一成终端风格（Ctrl+Shift+C / Ctrl+Shift+V），见 Lesson-Learn/0015。
+        --
+        -- 之前没设 clipboard，代码区的 y/p 只在 nvim 内部寄存器里转，和系统剪贴板
+        -- 完全隔离；而 Claude 面板是终端，走的又是另一条路 —— 两边逻辑必然不一致。
+        -- unnamedplus 让 y/p 直通系统剪贴板（提供者是 wl-copy，Wayland 下已验证可用）。
+        -- 代价：d / x / c 删掉的内容也会进系统剪贴板，覆盖掉你从外面复制的东西。
+        --
+        -- 不能用 Ctrl+C / Ctrl+V：在 Claude 面板里 Ctrl+C 是打断、Ctrl+V 是粘贴图片，
+        -- 在代码区 Ctrl+V 是块选择。硬映射会废掉这三个功能。
+        vim.opt.clipboard = "unnamedplus"
+        vim.keymap.set("v", "<C-S-c>", [["+y]], { desc = "复制到系统剪贴板" })
+        vim.keymap.set("n", "<C-S-v>", [["+p]], { desc = "从系统剪贴板粘贴" })
+        vim.keymap.set("i", "<C-S-v>", "<C-r><C-o>+", { desc = "从系统剪贴板粘贴（不触发自动缩进）" })
+        vim.keymap.set("c", "<C-S-v>", "<C-r>+", { desc = "从系统剪贴板粘贴" })
+        -- 终端模式（Claude 面板）：走 nvim_paste，会自动用 bracketed paste 包起来，
+        -- 多行内容进 Claude 输入框不会被逐行当成提交。
+        vim.keymap.set("t", "<C-S-v>", function()
+          vim.api.nvim_paste(vim.fn.getreg("+"), true, -1)
+        end, { desc = "粘贴进终端（Claude 面板）" })
 
         -- Neovide 特定配置
         --
@@ -2040,6 +2075,92 @@ in
         -- 它是从 Neovim 内部 spawn `claude` 可执行文件的，因此 `claude` 必须在
         -- nvim 的 wrapper PATH 里 —— 见上面 programs.neovim.extraPackages。
         -- 不需要设 terminal_cmd，默认值 "claude" 正好能从 PATH 找到。
+        --
+        -- 面板操作的完整教程见 Lesson-Learn/0015。
+
+        -- 找到 Claude 面板所在的窗口；面板没开或被藏起来时返回 nil。
+        local function claude_win()
+          local ok, term = pcall(require, "claudecode.terminal")
+          if not ok then
+            return nil
+          end
+          local buf = term.get_active_terminal_bufnr()
+          if not buf then
+            return nil
+          end
+          for _, win in ipairs(vim.api.nvim_list_wins()) do
+            if vim.api.nvim_win_get_buf(win) == buf then
+              return win
+            end
+          end
+          return nil
+        end
+
+        -- 最大化之前的宽度；nil 表示当前没在最大化状态。
+        local zoom_saved = nil
+
+        local function unzoom()
+          local win = claude_win()
+          if zoom_saved and win then
+            vim.api.nvim_win_set_width(win, zoom_saved)
+          end
+          zoom_saved = nil
+        end
+
+        -- 移动分界线。pct > 0：分界线左移，Claude 面板变宽；pct < 0：变窄。
+        -- 两边都至少留 20 列，免得一不小心把某一边挤没了找不回来。
+        local function resize(pct)
+          local win = claude_win()
+          if not win then
+            return
+          end
+          zoom_saved = nil
+          local total = vim.o.columns
+          local step = math.floor(total * math.abs(pct) / 100 + 0.5)
+          local w = vim.api.nvim_win_get_width(win)
+          local new = pct > 0 and (w + step) or (w - step)
+          new = math.max(20, math.min(total - 20, new))
+          vim.api.nvim_win_set_width(win, new)
+        end
+
+        -- 最大化 ⇄ 还原。最大化时顺手把焦点放进面板 —— 最大化就是为了读长回复，
+        -- 焦点留在被挤成一条缝的代码区里毫无意义。
+        local function zoom()
+          local win = claude_win()
+          if not win then
+            return
+          end
+          if zoom_saved then
+            unzoom()
+          else
+            zoom_saved = vim.api.nvim_win_get_width(win)
+            vim.api.nvim_win_set_width(win, vim.o.columns)
+            vim.api.nvim_set_current_win(win)
+            vim.cmd.startinsert()
+          end
+        end
+
+        -- 面板里 → 代码区。等价于 <C-\><C-n><C-w>h，外加：如果面板正最大化着，
+        -- 先还原 —— 回代码区当然是要看代码，不该落进一条缝里。
+        --
+        -- Ctrl+H 在 Claude 那边是保留键（发退格字节），但这里被 nvim 在终端模式这一层
+        -- 先截走，根本到不了 Claude。实测 Backspace 仍以 0x7f 原样送进终端，不受影响。
+        local function leave_panel()
+          unzoom()
+          vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes("<C-\\><C-n><C-w>h", true, false, true), "n", false)
+        end
+
+        -- 代码区 → 面板。用 ClaudeCodeFocus：面板藏着就显示、开着就聚焦、
+        -- 没开过就新建。它唯一的「隐藏」分支只在你已身处面板时触发，所以
+        -- 身在面板（终端普通模式）时单独处理成「回到输入状态」。
+        local function enter_panel()
+          local win = claude_win()
+          if win and win == vim.api.nvim_get_current_win() then
+            vim.cmd.startinsert()
+          else
+            vim.cmd("ClaudeCodeFocus")
+          end
+        end
 
         return {
           {
@@ -2076,17 +2197,24 @@ in
                 open_in_new_tab = false,
               },
             },
+            -- 以前这里有 <leader>ar / aR / aC（--resume / --fork-session / --continue），
+            -- 已删除。面板里只要已有会话在跑，插件的 toggle 逻辑就会把这些参数
+            -- 静默丢掉，按下去只是开关面板 —— 让人误以为必须重启 Neovide 才能换会话。
+            -- 换会话、分叉、改名一律在面板里用 /resume、/branch 名字、/rename 名字。
+            -- 见 Lesson-Learn/0015。
             keys = {
               { "<leader>a", nil, desc = "AI / Claude Code" },
               { "<leader>ac", "<cmd>ClaudeCode<cr>", desc = "开关 Claude 面板" },
               { "<leader>af", "<cmd>ClaudeCodeFocus<cr>", desc = "聚焦 Claude 面板" },
-              { "<leader>ar", "<cmd>ClaudeCode --resume<cr>", desc = "恢复历史会话（选择器）" },
-              {
-                "<leader>aR",
-                "<cmd>ClaudeCode --resume --fork-session<cr>",
-                desc = "从历史会话岔出新会话",
-              },
-              { "<leader>aC", "<cmd>ClaudeCode --continue<cr>", desc = "继续上一次会话" },
+              { "<leader>az", zoom, desc = "Claude 面板最大化 ⇄ 还原" },
+              -- 一左一右：Ctrl+H 从面板回代码区，Ctrl+L 从代码区进面板。
+              -- J/K/L 在 Claude 那边都有用（换行 / 删到行尾 / 重绘），所以只在
+              -- 终端模式映射 H —— 面板在右边，从面板出发只需要往左这一个方向。
+              { "<C-h>", leave_panel, mode = "t", desc = "离开 Claude 面板，回代码区" },
+              { "<C-l>", enter_panel, mode = "n", desc = "进入 Claude 面板" },
+              -- 分界线每次移 5%。两边都能按，在面板里打字时也不用先退出终端模式。
+              { "<C-S-h>", function() resize(5) end, mode = { "n", "t" }, desc = "分界线左移（Claude 变宽）" },
+              { "<C-S-l>", function() resize(-5) end, mode = { "n", "t" }, desc = "分界线右移（Claude 变窄）" },
               { "<leader>am", "<cmd>ClaudeCodeSelectModel<cr>", desc = "选择模型" },
               { "<leader>ab", "<cmd>ClaudeCodeAdd %<cr>", desc = "把当前文件加入上下文" },
               { "<leader>as", "<cmd>ClaudeCodeSend<cr>", mode = "v", desc = "把选区发给 Claude" },
