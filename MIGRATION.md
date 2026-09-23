@@ -52,7 +52,7 @@
 
 系统与桌面、GNOME 扩展、20 套 stylix 主题、字体、
 fcitx5 的插件组合（白霜拼音含那个 lua 补丁、mozc-ut 的 8 套词典）、
-neovim 配置、VS Code 的 `userSettings`、25 个 Agent Skill、zsh/tmux/starship
+neovim 配置、VS Code 的 `userSettings`、20 个 Agent Skill、zsh/tmux/starship
 那一整套交互环境。
 
 **这一类不需要你做任何事**，跑一遍构建就有了。

@@ -691,7 +691,8 @@ STATE_SYNC_BIN=$(command -v state-sync) bash home/migration-tests.sh   # 手动�
 
 ## Agent Skills
 
-装了 [mattpocock/skills](https://github.com/mattpocock/skills) 的 25 个 skill，
+装了 [mattpocock/skills](https://github.com/mattpocock/skills) 的 20 个 skill（源里另有 5 个用不上，
+在 `home/agent-skills.nix` 的 `exclude` 里排除），
 **全局**安装 —— Claude Code、GitHub Copilot、Zed、Gemini CLI 共用同一份。
 配置在 [`home/agent-skills.nix`](home/agent-skills.nix)。
 
@@ -723,7 +724,7 @@ Zed 和 Gemini CLI 读 `~/.agents/skills/`，Copilot 三个都读。
 |------|------|
 | `skills list` | 全部 skill：调用方式、token 估算、开关状态 |
 | `skills status` | pool 指向哪个 store 路径、三个目录的链接健不健康 |
-| `skills off <名>` / `skills off --all` | 临时禁用，立刻对所有工具生效 |
+| `skills off <名>` / `skills off --all` | **临时**禁用，立刻对所有工具生效。长期不要的写进 `exclude`，别靠它 |
 | `skills on <名>` / `skills on --all` | 启用 |
 | `skills sync` | 按开关状态重建链接（`nrb` 时自动跑，平时用不到） |
 | `skills doc` | 重新生成指南里的表（`nrb` 时自动跑） |
@@ -788,7 +789,7 @@ readlink -f ~/.local/share/agent-skills   # 应落在 /nix/store 里
 然后在 Claude Code 里打一次 `/tdd`，在 VS Code 的 Copilot 里问一个该触发
 `diagnosing-bugs` 的问题 —— 构建通过不等于工具真的认这些符号链接。
 
-**再数一遍数量。** `skills list` 说 25 个，就去每个工具的 skill 列表里数，
+**再数一遍数量。** `skills list` 说 20 个，就去每个工具的 skill 列表里数，
 少了就是撞了那个工具的内建 skill（见上面「和工具内建 skill 撞名」）。
 
 ---

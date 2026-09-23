@@ -75,7 +75,22 @@ let
         "engineering"
         "productivity"
       ];
-      exclude = [ ];
+      # 不用的 skill（2026-09-23 Toru 逐个定的）。要用回来时从这里删掉再重建。
+      #
+      # 长期不要的一律写在这里，不用 `skills off`：那是存在 ~/.local/state 里的
+      # 可变状态，换机器要跟着 dotfiles-state 搬；写在这里的话，
+      # 任何机器 build 完就是这个样子。`skills off` 只留给「临时关一下」。
+      #
+      # 写的是**源仓库里的原名**（构建时先比 exclude、后做 rename）。
+      # to-spec / to-tickets / triage / wayfinder 都以 issue tracker 为前提，
+      # 这个环境不用 issue tracker（计划写在各项目的 plans/*.md）。
+      exclude = [
+        "to-questionnaire"
+        "to-spec"
+        "to-tickets"
+        "triage"
+        "wayfinder"
+      ];
       rename = {
         # Claude Code 自带一个内建的 code-review（`/code-review`，云端多
         # agent 审查），同名时内建赢：文件装上了，但在 Claude Code 里

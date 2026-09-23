@@ -1,6 +1,6 @@
 # Agent Skills 使用指南
 
-装的是 [mattpocock/skills](https://github.com/mattpocock/skills) 的 25 个
+装的是 [mattpocock/skills](https://github.com/mattpocock/skills) 的 20 个
 skill，全局安装，**Claude Code、GitHub Copilot、Zed、Gemini CLI 共用同一份**。
 
 配置在 [`home/agent-skills.nix`](../home/agent-skills.nix)，
@@ -25,7 +25,8 @@ skill，全局安装，**Claude Code、GitHub Copilot、Zed、Gemini CLI 共用�
 | 附属 | 正文里指向的 `.md` / `.sh` / `.yaml` | 正文让它读的时候才花 |
 
 所以「多装几个 skill」的代价不是正文那几千 token，而是**常驻的那一行描述**。
-25 个加起来常驻约 1k token —— 基本可以忽略，这也是「干脆全装」成立的理由。
+20 个加起来常驻约 1k token —— 基本可以忽略，所以**不必为了省 token 精简**。
+源里另外 5 个没装，是因为用不上（`home/agent-skills.nix` 的 `exclude` 注释里写了理由），不是为了省钱。
 
 想看实时数字：
 
@@ -120,6 +121,7 @@ rename = {
 skills list             # 全部 skill：调用方式、token 估算、开关状态
 skills status           # pool 指向哪个 store 路径、三个目录的链接健不健康
 skills off tdd          # 临时关掉一个，四个工具同时生效，活得过 nixos-rebuild
+                        # 长期不要的写进 home/agent-skills.nix 的 exclude，不靠这个
 skills off --all        # 全关（想做个干净的对照实验时）
 skills on --all         # 全开
 skills sync             # 按开关状态重建链接（rebuild 时自动跑，平时用不到）
@@ -222,7 +224,7 @@ find . ! -user toru -printf '%u  %p\n'    # 应该没有任何输出（坑 5）
 然后在 Claude Code 里打 `/tdd`，在 VS Code Copilot 里问一个该触发
 `diagnosing-bugs` 的问题，各验一次。
 
-**还要数一遍数量。** `skills list` 说 25 个，就去每个工具的 skill 列表里数，
+**还要数一遍数量。** `skills list` 说 20 个，就去每个工具的 skill 列表里数，
 少了就是和该工具的内建撞了名（见第四节）。`code-review` 就是这么发现的 ——
 它在 Claude Code 里既不报错也不出现，只是静悄悄地少一个。
 
@@ -236,7 +238,7 @@ find . ! -user toru -printf '%u  %p\n'    # 应该没有任何输出（坑 5）
 > **别手改**，改动会被下一次生成覆盖；要改就去改生成逻辑
 > （`home/agent-skills.nix` 里的 `cmd_doc`）。
 >
-> 对应的 skill 池：`/nix/store/1kpx8drqf6yvyall7vd03i55s9lwljy9-agent-skills`
+> 对应的 skill 池：`/nix/store/w2hin50lfs8dqlkqiqcbij3a3lhz1zdx-agent-skills`
 
 | Skill | 调用方式 | 常驻 tok | 调用 tok | 附属 tok | 用途（作者原文 description，这也是模型看到的触发条件） |
 |---|---|---:|---:|---:|---|
@@ -257,16 +259,11 @@ find . ! -user toru -printf '%u  %p\n'    # 应该没有任何输出（坑 5）
 | `setup-matt-pocock-skills` | 打 `/setup-matt-pocock-skills` | 52 | 1644 | 3145 | "Configure this repo for the engineering skills: set up its issue tracker, triage label vocabulary, and domain doc layout. Run once before first use of the other engineering skills." |
 | `tdd` | 模型自动 / 也可手打 | 38 | 840 | 946 | Test-driven development. Use when the user wants to build features or fix bugs test-first, mentions "red-green-refactor", or wants integration tests. |
 | `teach` | 打 `/teach` | 17 | 2332 | 2118 | Teach the user a new skill or concept, within this workspace. |
-| `to-questionnaire` | 打 `/to-questionnaire` | 26 | 685 | 42 | Turn a decision you can't fully answer into a questionnaire for someone else to fill in. |
-| `to-spec` | 打 `/to-spec` | 40 | 707 | 34 | "Turn the current conversation into a spec and publish it to the project issue tracker: no interview, just synthesis of what you've already discussed." |
-| `to-tickets` | 打 `/to-tickets` | 65 | 1337 | 37 | Break a plan, spec, or the current conversation into a set of tracer-bullet tickets, each declaring its blocking edges, published to the configured tracker (edges as text in one file per ticket locally, or native blocking links on a real tracker). |
-| `triage` | 打 `/triage` | 36 | 1589 | 3186 | Move issues and external PRs through a state machine of triage roles, categorise, verify, grill if needed, and write agent-ready briefs. |
 | `wait-what` | 打 `/wait-what` | 16 | 69 | 40 | "Stop. That last message did not land: re-pitch it." |
-| `wayfinder` | 打 `/wayfinder` | 52 | 2911 | 36 | Plan a huge chunk of work (more than one agent session can hold) as a shared map of decision tickets on your issue tracker, and resolve them one at a time until the way to the destination is clear. |
 | `wizard` | 模型自动 / 也可手打 | 80 | 942 | 2166 | Generate an interactive bash wizard that walks a human through steps only they can perform. Use when provisioning infrastructure, setting up credentials or CI secrets, walking an unfamiliar third-party dashboard, or running a one-off migration or cutover. Don't invoke this for steps the agent can perform itself. |
 | `writing-for-agents` | 模型自动 / 也可手打 | 31 | 2683 | 683 | Writing documents for agents. Use when creating or editing skills, or modifying AGENTS.md or CLAUDE.md. |
 
-合计 **25** 个 skill：常驻 ≈ **1032 tokens**（每个会话都付），正文全加起来 ≈ 27514 tokens，附属文件另计 ≈ 21702 tokens。
+合计 **20** 个 skill：常驻 ≈ **815 tokens**（每个会话都付），正文全加起来 ≈ 20288 tokens，附属文件另计 ≈ 18368 tokens。
 
 token 数是字符数 ÷ 4 的英文经验估算，误差约 ±15%。
 

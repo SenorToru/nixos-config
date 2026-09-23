@@ -221,7 +221,9 @@ find . ! -user toru -printf '%u  %p\n'
 ## Agent Skills
 
 `home/agent-skills.nix` 把 [mattpocock/skills](https://github.com/mattpocock/skills)
-的 25 个 skill 装成**全局**的，Claude Code / Copilot / Zed / Gemini 共用一份。
+的 20 个 skill 装成**全局**的，Claude Code / Copilot / Zed / Gemini 共用一份。
+长期不要的 skill 写进 `skillSources.<源>.exclude`（构建时就不装），**不用 `skills off`** ——
+后者是 `~/.local/state` 里的可变状态，换机器要搬，只适合临时关一下。
 完整说明见 [Lesson-Learn/0012_AGENT_SKILLS.md](Lesson-Learn/0012_AGENT_SKILLS.md)
 和 [README.md](README.md) 的「Agent Skills」一节。
 
