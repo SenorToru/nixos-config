@@ -213,6 +213,8 @@ zram 一压满就会把压力整个甩给 NVMe，反而更卡。100 是个折中
    全部 `enableBashIntegration` 和 `enableZshIntegration` 双开，
    别名两边共用同一份 `commonAliases`。
    AI 用哪个 shell 结果都一样。
+   当前 11 条各自展开成什么，见 [README.md](../README.md) 的
+   「交互 shell 里的别名」。
 
 ### `PAGER` 用 `sessionVariables` 而不是 `variables`
 

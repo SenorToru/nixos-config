@@ -443,7 +443,11 @@ bash 保持完全可用，两者配的是同一套基线。
 **在这台机器上跑命令（人或 AI）都按下面几条来：**
 
 - **只用 PATH 上的真二进制，不要依赖 alias。**
-  `ll`、`gs`、`nrb`、`ncheck` 这些只存在于交互 shell，
+  交互 shell 一共 11 条，定义在 `home/toru.nix` 的 `commonAliases`，
+  展开式在 [README.md](README.md)「交互 shell 里的别名」。
+  重建 5 条：`nrb` `nrt` `ncheck` `nhm` `ngen`。
+  目录和 git 6 条：`ll` `la` `lt` `gs` `gd` `gl`。
+  格式化是 PATH 上的 `nixfmt`，没有名叫 `nfmt` 的别名。
   `zsh -c 'll'` / `bash -c 'll'` 一律 command not found。
   `eza` `bat` `fzf` `zoxide` `atuin` `btop` `lazygit` `tmux` `dua` `duf` `direnv` `starship`
   `skills` `skills-update` `state-sync` `migration-check`

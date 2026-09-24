@@ -137,7 +137,8 @@ nix build .#nixosConfigurations.thinkpad.config.home-manager.users.toru.home.act
   --out-link /tmp/hm
 ```
 
-交互 shell 里有别名：`ncheck`（系统层）、`nhm`（home 层）。
+交互 shell 里这一步是 `ncheck`（系统层）和 `nhm`（home 层）。
+全部 11 条别名见 [交互 shell 里的别名](#交互-shell-里的别名)。
 脚本和 AI 用完整命令 —— 别名只存在于交互 shell。
 
 > ### ⚠️ 这一步是防止 git 被 root 锁死的关键，不能跳
@@ -206,6 +207,54 @@ git push origin master
 
 提交注释固定写在 `GIT_COMMIT_MESSAGE.txt`（已 gitignore），
 格式要求见 [CLAUDE.md](CLAUDE.md)。
+
+---
+
+## 交互 shell 里的别名
+
+一共 **11 条**。定义在 `home/toru.nix` 的 `commonAliases`，
+zsh 和 bash 各写一份。激活后出现在 `~/.zshrc` 和 `~/.bashrc`，
+这两个文件都是指向 `/nix/store` 的符号链接。
+
+只在**交互 shell** 里生效。脚本、`zsh -c`、AI 助手都 source 不到
+`.zshrc` / `.bashrc`，那些场合写完整命令。改完别名要新开一个终端。
+
+仓库路径和 flake 属性名都不写死：路径从家目录推，属性名从
+`custom.flakeHost` 取。本机展开后是
+`/home/toru/nixos-config#thinkpad`；vm 上同一条别名展开成 `#vm`。
+
+### 重建
+
+| 别名 | 本机展开 | 作用 |
+|------|----------|------|
+| `nrb` | `sudo nixos-rebuild switch --flake /home/toru/nixos-config#thinkpad` | 激活并写入引导菜单。日常切换 |
+| `nrt` | `sudo nixos-rebuild test --flake /home/toru/nixos-config#thinkpad` | 激活但不写引导。重启回到旧 generation。改内核参数、显卡驱动、引导时用 |
+| `ncheck` | `nix build /home/toru/nixos-config#nixosConfigurations.thinkpad.config.system.build.toplevel --out-link /tmp/res` | 只构建系统层。不改系统，不用 sudo |
+| `nhm` | `nix build /home/toru/nixos-config#nixosConfigurations.thinkpad.config.home-manager.users.toru.home.activationPackage --out-link /tmp/hm` | 只构建 home 层。不改系统，不用 sudo |
+| `ngen` | `nixos-rebuild list-generations` | 列出 generation，带构建日期、内核版本和 Current 标记。不用 sudo |
+
+`nixos-rebuild boot`（只写引导、下次重启才生效）没有对应别名。
+
+格式化没有 `nfmt` 这个别名。用的是 nixpkgs 的 `nixfmt`，真二进制，
+由 `modules/development.nix` 装在 `/run/current-system/sw/bin/nixfmt`。
+六步流程第 2 步直接写这个名字。
+
+`ncheck` / `nhm` 用的是仓库绝对路径，不依赖当前目录。
+上面第 3 步写的 `.#nixosConfigurations...` 要在仓库根目录跑，两套等价。
+
+### 目录和 git
+
+| 别名 | 展开成 | 作用 |
+|------|--------|------|
+| `ll` | `eza -l --group-directories-first --git` | 长列表，目录在前，带 git 状态 |
+| `la` | `eza -la --group-directories-first --git` | 同上，含隐藏文件 |
+| `lt` | `eza --tree --level=2` | 两层目录树 |
+| `gs` | `git status -sb` | 短状态 |
+| `gd` | `git diff` | 工作区差异 |
+| `gl` | `git log --oneline --graph --decorate -20` | 最近 20 条提交图 |
+
+`ls` / `cat` / `grep` / `find` 保持 coreutils 原样，没有别名。
+要彩色分栏显式写 `eza` / `bat`。
 
 ---
 
@@ -814,6 +863,7 @@ readlink -f ~/.local/share/agent-skills   # 应落在 /nix/store 里
 
 ### shell 环境约定
 
+11 条别名的清单在上面 [交互 shell 里的别名](#交互-shell-里的别名)。
 `ls` / `cat` / `grep` / `find` **没有被 alias 遮蔽**，输出就是 coreutils 的
 原始格式。要彩色分栏请显式写 `eza` / `bat`。
 这是硬约定 —— 人看到的输出和 AI 看到的输出必须是同一个东西。
