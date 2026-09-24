@@ -1,6 +1,6 @@
 # 在 NixOS 上升级 claude-code：发布分支冻结与 manifest 覆写
 
-> 日期：2026-09-18　|　最后更新：2026-09-23　|　相关配置：`modules/development.nix`、`modules/claude-code-manifest.json`
+> 日期：2026-09-18　|　最后更新：2026-09-24　|　相关配置：`modules/development.nix`、`modules/claude-code-manifest.json`
 >
 > 触发场景：想用 Claude Code 的会话管理功能（`/rename`、会话选择器的 `Ctrl+R`、
 > agent view、`claude attach`），发现本机 2.1.223 全都没有。
@@ -157,6 +157,7 @@ PATH（见 [000D](000D_CLAUDE_CODE_IN_NEOVIM.md)），拿到的是同一个 stor
 |------|----|----|------|
 | 2026-09-18 | 2.1.223 | 2.1.276 | 首次引入 manifest 覆写；2.1.223 是 `nixos-26.05` 分支上的版本 |
 | 2026-09-23 | 2.1.276 | 2.1.280 | 常规升级，`latest` 恰好就是 2.1.280；闭包里只有一个 claude-code 派生，验证通过 |
+| 2026-09-24 | 2.1.280 | 2.1.281 | 常规升级，`latest` 恰好就是 2.1.281；闭包里只有一个 claude-code 派生，验证通过 |
 
 ## 后续注意事项
 
