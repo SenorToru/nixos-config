@@ -81,7 +81,7 @@
 | `localization.nix` | 字体（全系统唯一的 `fonts` 声明处，含 `stylix.fonts`）与 fcitx5 输入法 |
 | `shell.nix` | 系统层 zsh、`PAGER`（**不含**用户名指派） |
 | `dns.nix` | 加密 DNS：systemd-resolved + DNS-over-TLS（严格模式）、`dns-plain` / `dns-dot` 逃生舱（见下面「DNS」一节） |
-| `development.nix` | 编辑器与工具链、claude-code 与 grok-build 的版本覆写 overlay |
+| `development.nix` | 编辑器与工具链、claude-code、grok-build 与 dbeaver-bin 的版本覆写 overlay |
 | `browsers.nix` | Zen / Brave 与 chromium 扩展策略 |
 | `apps.nix` | 桌面应用 |
 | `flatpak.nix` | Flatpak 与 Flathub 自动安装 |
@@ -89,6 +89,7 @@
 | `refind.nix` | rEFInd 顶层引导入口：主题 derivation、`refind.conf`、`refind-sync`、`refind-hwinfo`（见下面「引导」一节） |
 | `claude-code-manifest.json` | 数据文件，供 `development.nix` 的 overlay 读取 |
 | `grok-build-version.json` | 数据文件：grok-build 的版本号与哈希，供同一个 overlay 读取 |
+| `dbeaver-version.json` | 数据文件：dbeaver-bin 的版本号与哈希，供同一个 overlay 读取 |
 
 ### `home/` 各文件职责
 

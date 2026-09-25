@@ -24,5 +24,12 @@
     "eu.betterbird.Betterbird"
     "com.baidu.NetDisk"
     "fr.handbrake.ghb"
+
+    # Bruno 用官方 AppImage，不钉 commit。要新版时不用重建：
+    #   sudo flatpak update com.usebruno.Bruno
+    # 不要为此打开 update.onActivation / update.auto。
+    # 那两个开关是全局的，会把这张表里的其它应用一起滚走。
+    # Flathub 这份目前只有 x86_64。加 ARM 机器前先确认有对应架构。
+    "com.usebruno.Bruno"
   ];
 }

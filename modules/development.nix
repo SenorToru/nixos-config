@@ -69,6 +69,28 @@
   # 官方给的开关里 GROK_DISABLE_AUTOUPDATER=1 是进程级的，
   # 用 wrapProgram 钉在二进制上，从哪里启动（终端、Neovide、脚本）都生效，
   # 不依赖 shell 环境。手动敲 `grok update` 仍然会装，别敲。
+  #
+  # ============================================
+  # dbeaver-bin 版本覆写
+  # ============================================
+  # 26.05 上的 dbeaver-bin 是官方 tar 加系统 OpenJDK 21，布局稳定，
+  # 但发布分支不会跟着两周一个的上游小版本走。和 grok-build 同一招：
+  # 包定义照用，只换版本号和哈希，数据在 dbeaver-version.json。
+  #
+  # 刷新办法（看 github.com/dbeaver/dbeaver/releases 最新的版本号）：
+  #
+  #   V=26.2.1
+  #   H=$(nix hash convert --hash-algo sha256 \
+  #     "$(nix-prefetch-url \
+  #       "https://github.com/dbeaver/dbeaver/releases/download/$V/dbeaver-ce-$V-linux-x86_64.tar.gz")")
+  #   printf '{\n  "version": "%s",\n  "hashes": {\n    "x86_64-linux": "%s"\n  }\n}\n' \
+  #     "$V" "$H" > modules/dbeaver-version.json
+  #
+  # 目前只有 x86_64-linux 一个哈希。加 ARM 机器时补 aarch64-linux
+  # （文件名后缀是 linux-aarch64），否则求值时直接报缺键。
+  #
+  # 应用内的「检查更新」会下载一个安装包，那个包装不进 Nix store。
+  # 看到提示就关掉，改上面的 json。上游没有可以钉死的自更新开关。
   nixpkgs.overlays = [
     (_final: prev: {
       claude-code = prev.claude-code.override {
@@ -99,6 +121,27 @@
           '';
         }
       );
+
+      dbeaver-bin = prev.dbeaver-bin.overrideAttrs (
+        _old:
+        let
+          pin = lib.importJSON ./dbeaver-version.json;
+          inherit (prev.stdenv.hostPlatform) system;
+          suffix =
+            {
+              x86_64-linux = "linux-x86_64";
+              aarch64-linux = "linux-aarch64";
+            }
+            .${system};
+        in
+        {
+          inherit (pin) version;
+          src = prev.fetchurl {
+            url = "https://github.com/dbeaver/dbeaver/releases/download/${pin.version}/dbeaver-ce-${pin.version}-${suffix}.tar.gz";
+            hash = pin.hashes.${system};
+          };
+        }
+      );
     })
   ];
 
@@ -117,6 +160,9 @@
     # Grok Build（xAI 的终端 coding agent，unfree）。命令名是 grok，
     # 另有一个同指向的 agent 链接。版本覆写见上面的 overlay
     grok-build
+
+    # DBeaver CE。命令名是 dbeaver。版本覆写见上面的 overlay
+    dbeaver-bin
   ];
 
   # ============================================

@@ -87,11 +87,17 @@ neovim 配置、VS Code 的 `userSettings`、20 个 Agent Skill、zsh/tmux/stars
 | `~/.claude.json`、`~/.claude/` 里的凭据 | `claude` 首次启动时登录。**但 `~/.claude/projects/` 下的会话记录要搬**，那不是凭据，见 7.5 |
 | `~/.grok/` 里的凭据（Grok Build） | `grok login`。`~/.grok/` 里其余东西（`config.toml`、会话、memory）怎么分类，见文末「还没解决的问题」 |
 | `~/.config/.wrangler/`（Cloudflare 的 OAuth 令牌） | 在用到的项目目录里 `pnpm exec wrangler login`。wrangler 是项目的 devDependency，不是全局命令 |
+| `~/.local/share/DBeaverData` | DBeaver 的连接、密码和 JDBC 驱动。整目录不搬，新机器重新建连接；驱动会自己重新下载 |
 | GNOME keyring（`~/.local/share/keyrings/`） | 重新解锁各服务 |
 | WiFi 密码 | 重新输 |
 | 浏览器 cookie / 登录态 | 靠浏览器自己的账号同步 |
 
 具体清单见第 7.3 节。
+
+Bruno 是 Flatpak（`com.usebruno.Bruno`）。运行时数据在
+`~/.var/app/com.usebruno.Bruno`，`.var` 整棵不搬，换机器靠
+`modules/flatpak.nix` 重装后再登录。集合是项目目录里的普通文件，
+跟着项目走，不进 `dotfiles-state`。
 
 ### 不属于任何一类的三样东西
 
@@ -1109,6 +1115,11 @@ git -C ~/nixos-config log --show-signature -1   # 应该看到 Good "git" signat
 - **浏览器**：Zen / Brave / Firefox 各自登录账号，靠它们自己的同步拉回书签和扩展设置
 - **Proton Pass**：浏览器扩展里登录
 - **VS Code**：登录 GitHub Copilot 账号。**扩展要手工装**，见下面 7.4。
+- **DBeaver**：连接和密码在 `~/.local/share/DBeaverData`，不搬，重新建。
+  应用里弹出的更新提示会下载安装包，那个包装不进 Nix store，关掉即可。
+  版本在 `modules/dbeaver-version.json`。
+- **Bruno**：Flatpak，状态在 `~/.var`，不搬。集合放在项目目录里。
+  要新版：`sudo flatpak update com.usebruno.Bruno`。
 
 ### 7.4 手工装的东西
 
@@ -1434,6 +1445,7 @@ migration-check
 | 第 1-5 节没在全新机器上从头跑过 | 只能等下次真装新机器时验证，对不上的地方回来改 |
 | 独显探测判据未经多显卡机器验证 | AMD 的 APU 不在 PCI bus 00 上且也报显存，可能被误判成独显。真遇到直接改 `hwinfo.nix` |
 | `~/.grok/` 的 A / B / C 划分 | 2026-09-23 刚装，还没登录用过，目录里会有什么未实测。凭据先按 C 类记；登录并用过几天后跑 `migration-check`，它会把 `~/.grok` 报成没人认领，届时逐项分类、补进 `ignoredHome` 或 `stateFiles`，再改这一行 |
+| `~/.local/share/DBeaverData` 还没进 `migration-check` 的忽略清单 | 目录要等第一次打开 DBeaver 才出现。出现后 `migration-check` 会把它报成没人认领，再补进 `home/migration.nix` 的 `ignored`。分类已经定了：整目录是 C 类，不搬 |
 | VS Code 的四个扩展仍是手工装的 | nixpkgs 里的版本比实际装的旧（claude-code 会退到 2.1.223），声明进 Nix 等于降级。归手工清单，`migration-check` 盯着 |
 
 **已解决**（原先列在这里）：
