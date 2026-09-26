@@ -88,6 +88,7 @@ neovim 配置、VS Code 的 `userSettings`、20 个 Agent Skill、zsh/tmux/stars
 | `~/.grok/` 里的凭据（Grok Build） | `grok login`。`~/.grok/` 里其余东西（`config.toml`、会话、memory）怎么分类，见文末「还没解决的问题」 |
 | `~/.config/.wrangler/`（Cloudflare 的 OAuth 令牌） | 在用到的项目目录里 `pnpm exec wrangler login`。wrangler 是项目的 devDependency，不是全局命令 |
 | `~/.local/share/DBeaverData` | DBeaver 的连接、密码和 JDBC 驱动。整目录不搬，新机器重新建连接；驱动会自己重新下载 |
+| `~/.local/state/syncthing/`（旧布局可能在 `~/.config/syncthing/`） | 设备身份证（`cert.pem`、`key.pem`）和文件夹列表。**不要拷**。拷过去两台会变成同一台，同步直接坏掉。新机器生成新 ID，在网页里重新配对 |
 | GNOME keyring（`~/.local/share/keyrings/`） | 重新解锁各服务 |
 | WiFi 密码 | 重新输 |
 | 浏览器 cookie / 登录态 | 靠浏览器自己的账号同步 |
@@ -1120,6 +1121,9 @@ git -C ~/nixos-config log --show-signature -1   # 应该看到 Good "git" signat
   版本在 `modules/dbeaver-version.json`。
 - **Bruno**：Flatpak，状态在 `~/.var`，不搬。集合放在项目目录里。
   要新版：`sudo flatpak update com.usebruno.Bruno`。
+- **Syncthing**：服务跟着 `home/syncthing.nix` 装上。设备 ID 是新的，
+  打开 `http://127.0.0.1:8384/`，和旧机器互相同意配对，再把要同步的
+  文件夹加回去。初始密码在 `journalctl --user -u syncthing` 里。
 
 ### 7.4 手工装的东西
 
@@ -1446,6 +1450,7 @@ migration-check
 | 独显探测判据未经多显卡机器验证 | AMD 的 APU 不在 PCI bus 00 上且也报显存，可能被误判成独显。真遇到直接改 `hwinfo.nix` |
 | `~/.grok/` 的 A / B / C 划分 | 2026-09-23 刚装，还没登录用过，目录里会有什么未实测。凭据先按 C 类记；登录并用过几天后跑 `migration-check`，它会把 `~/.grok` 报成没人认领，届时逐项分类、补进 `ignoredHome` 或 `stateFiles`，再改这一行 |
 | `~/.local/share/DBeaverData` 还没进 `migration-check` 的忽略清单 | 目录要等第一次打开 DBeaver 才出现。出现后 `migration-check` 会把它报成没人认领，再补进 `home/migration.nix` 的 `ignored`。分类已经定了：整目录是 C 类，不搬 |
+| `~/.config/obsidian` 还没分类 | 只是这台机器打开过哪些库。第一次打开 Obsidian 后 `migration-check` 若报没人认领，再决定忽略还是收进 B 类。库本身是普通文件夹，要跨设备就用 Syncthing 同步那个目录 |
 | VS Code 的四个扩展仍是手工装的 | nixpkgs 里的版本比实际装的旧（claude-code 会退到 2.1.223），声明进 Nix 等于降级。归手工清单，`migration-check` 盯着 |
 
 **已解决**（原先列在这里）：

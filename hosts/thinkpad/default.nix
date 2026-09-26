@@ -23,6 +23,7 @@
     ../../modules/browsers.nix
     ../../modules/shell.nix
     ../../modules/dns.nix
+    ../../modules/syncthing.nix
     ../../modules/stylix.nix
     ../../modules/refind.nix
 

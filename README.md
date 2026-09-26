@@ -81,6 +81,7 @@
 | `localization.nix` | 字体（全系统唯一的 `fonts` 声明处，含 `stylix.fonts`）与 fcitx5 输入法 |
 | `shell.nix` | 系统层 zsh、`PAGER`（**不含**用户名指派） |
 | `dns.nix` | 加密 DNS：systemd-resolved + DNS-over-TLS（严格模式）、`dns-plain` / `dns-dot` 逃生舱（见下面「DNS」一节） |
+| `syncthing.nix` | Syncthing 的防火墙端口（22000、21027）。服务在 `home/syncthing.nix`，网页只听本机 8384 |
 | `development.nix` | 编辑器与工具链、claude-code、grok-build 与 dbeaver-bin 的版本覆写 overlay |
 | `browsers.nix` | Zen / Brave 与 chromium 扩展策略 |
 | `apps.nix` | 桌面应用 |
@@ -99,6 +100,7 @@
 | `agent-skills.nix` | Agent Skills 的安装、开关命令和使用指南生成（见下面「Agent Skills」一节） |
 | `skills-tests.sh` | `skills` 命令的回归测试，由 `agent-skills.nix` 在构建期执行 |
 | `migration.nix` | `state-sync`（搬 B 类用户状态）和 `migration-check`（查漂移）；B 类清单的单一真相 |
+| `syncthing.nix` | Syncthing 用户服务。界面是本机网页，不装托盘 |
 | `migration-tests.sh` | `state-sync` 的回归测试，由 `migration.nix` 在构建期执行 |
 
 `hosts/thinkpad/default.nix` 的 `imports` 按

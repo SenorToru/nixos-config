@@ -590,6 +590,9 @@ in
     # state-sync（搬 B 类用户状态）和 migration-check（查漂移）。
     # 同样自带命令和构建期测试，拆出去。见 MIGRATION.md 第 7 和第 10 节。
     ./migration.nix
+
+    # Syncthing 用户服务。防火墙在 modules/syncthing.nix。
+    ./syncthing.nix
   ];
 
   home.username = "toru";
