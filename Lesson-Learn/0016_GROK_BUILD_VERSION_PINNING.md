@@ -1,6 +1,6 @@
 # 在 NixOS 上装最新的 Grok Build：版本覆写与关掉自更新
 
-> 日期：2026-09-23　|　相关配置：`modules/development.nix`、`modules/grok-build-version.json`
+> 日期：2026-09-23　|　最后更新：2026-09-29　|　相关配置：`modules/development.nix`、`modules/grok-build-version.json`
 >
 > 触发场景：想在终端里用 xAI 的 coding agent 帮忙配 NixOS。
 > nixpkgs 里有 `grok-build`，但版本旧得离谱。
@@ -10,7 +10,7 @@
 | 渠道 | 版本 |
 |------|------|
 | `nixos-26.05`（本机 nixpkgs `1e8bc65`） | **0.2.93** |
-| 官方 stable 频道（`https://x.ai/cli/stable`） | **1.0.41** |
+| 官方 stable 频道（`https://x.ai/cli/stable`） | **1.0.41**（2026-09-23 当天；2026-09-29 已刷新到 1.0.44） |
 
 隔着整整一个大版本：v1.0 在 2026-08 才正式发布，stable 频道每周一版。
 AI agent 这类工具的能力几乎全在新版本里，装 0.2.93 基本等于没装。
@@ -100,12 +100,14 @@ grok-build = prev.grok-build.overrideAttrs (
 
 ```json
 {
-  "version": "1.0.41",
+  "version": "1.0.44",
   "hashes": {
-    "x86_64-linux": "sha256-nOA+0j4W6gEHK0SWJj1iE6J4meHj4QfwCNNu34LnBAc="
+    "x86_64-linux": "sha256-92Qxhz78XIpQiS0eEkfq7iP2ZkvKOF+9VaBqjn08rtw="
   }
 }
 ```
+
+第一次写入是 2026-09-23 的 1.0.41。2026-09-29 按 stable 频道刷新到 1.0.44。
 
 `grok-build` 加进 `environment.systemPackages`，和 `claude-code` 放在一起。
 
@@ -135,6 +137,18 @@ $ nix path-info -r /tmp/res /tmp/hm | grep grok-build | sort -u
 ```
 
 闭包里只有一个 grok-build 派生，zsh 补全 `_grok` 也生成了。
+
+2026-09-29 刷新到 1.0.44 后，单独构建该包的结果是：
+
+```bash
+$ /tmp/grok-pin/bin/grok --version
+grok 1.0.44 (5b807183dd79) [alpha]
+
+$ grep -o 'GROK_DISABLE_AUTOUPDATER[^ ]*' "$(readlink -f /tmp/grok-pin/bin/grok)"
+GROK_DISABLE_AUTOUPDATER='1'
+```
+
+版本号自带 `[alpha]`，来源仍是 stable 频道返回的 1.0.44，不是另选的测试频道。这次没有 switch。
 
 ## 为什么这样解决
 
