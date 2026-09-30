@@ -100,9 +100,9 @@ KIOXIA 上的数据要到第 9.2 节才会被抹掉。
 
 | 部分 | 状态 |
 |------|------|
-| Windows 11 的安装（第 6 章） | **真机走通，进了桌面。** 首次设置卡在联网界面，用本地账户绕过，见 6.5 节。diskpart 预建分区是被安装器直接接受，还是走了 6.4 节的退路，装机时没有记下来 |
+| Windows 11 的安装（第 6 章） | **真机走通，进了桌面。** 首次设置卡在联网界面，用本地账户绕过，见 6.5 节。diskpart 预建的 1 GiB ESP 和 1000 GiB 共享盘被安装器直接接受了（6.4 节的退路没用上）。Windows 装完后自己又建了一个约 892 MB 的恢复分区 |
 | NixOS 的分区、格式化、挂载、`nixos-install`（第 9 章） | **真机走通。** 其中 9.9 节手动建 `Linux Boot Manager` 启动项那步实际用过，重启后直接进了 systemd-boot → NixOS |
-| 首次进 NixOS（第 10 章） | **能进系统。** 10.3 到 10.6 的运行时验证（显卡 offload、共享盘、Wi-Fi、应用）还没有记录 |
+| 首次进 NixOS（第 10 章） | **能进系统。** 10.3 的系统层验证和 10.4 的驱动加载已经通过（主机名、内核、压缩、zram、两个挂载点、`nvidia-smi`）；PRIME offload 实测、共享盘写入、Wi-Fi、应用还没有记录 |
 | rEFInd 与双 ESP（第 11 章） | **还没在真机上走。** 只在虚拟机里验证过，用的是假的 Windows ESP |
 | Windows 那一侧的第 7 章设置 | 要在装 NixOS 之前完成；是否做完，装机时没有记录 |
 | `hosts/asus/` 的运行时表现 | 系统层已经在 asus 上装进去并启动，但显卡、睡眠唤醒等要到第 10 节和附录 D.5 才验证 |
@@ -364,11 +364,18 @@ exit
 - `1024000` MiB = 1000 GiB，是共享盘。
 - 四个数加起来（ESP、MSR、C:、共享盘）比整盘少约 1.6 GiB，那点余量是有意留的。
 
-**没有建 Windows 恢复分区（WinRE），这是有意的。** 那个分区只服务于
-「重置此电脑」和系统起不来时的自动修复；没有它，Windows 会把恢复映像放在 C: 里，
-装和用都不受影响。代价是 C: 坏到起不来时没法用自带的恢复环境自救，
-那种情况改用 Windows 安装 U 盘，选「修复计算机」，效果一样。
-好处是少四行 diskpart，而且以后想扩大 C: 时没有分区挡路。
+**脚本里没有预建 Windows 恢复分区（WinRE），这是有意的。** 那个分区只服务于
+「重置此电脑」和系统起不来时的自动修复。好处是少四行 diskpart。
+
+> **实测发现（2026-09-30）：Windows 装完之后自己又建了一个恢复分区。**
+> 在 NixOS 里 `lsblk` 看到 Samsung 盘上多了一个约 892 MB、没有卷标的 NTFS 分区
+> （`nvme0n1p4`），同时 C: 是 859.5 GiB，比脚本里 `size=881000`（约 860.3 GiB）
+> 少了差不多同样的大小。所以这个分区是 Windows 安装器从 C: 里缩出来的。
+> **从大小反推的，没有进 Windows 用 `reagentc /info` 或磁盘管理确认过。**
+>
+> 结论：**「不预建」并不能阻止 Windows 自己建一个，只是省了我们自己的四行脚本。**
+> 这个分区没有害处，不用管它，也**不要删**。它不影响共享盘和 NixOS 的任何东西。
+> 所以本节上面「没有恢复分区」的预期分区表，实际会多出一个小分区，见 9.1 节的 `lsblk` 示意。
 
 `list partition` 的输出应该有 4 行：
 
@@ -593,8 +600,9 @@ NAME        SIZE  MODEL                   FSTYPE  LABEL
 nvme0n1     1.8T  Samsung SSD 990 PRO ..
 ├─nvme0n1p1 1G                            vfat    SYSTEM
 ├─nvme0n1p2 16M
-├─nvme0n1p3 860G                          ntfs    Windows
-└─nvme0n1p4 1000G                         ntfs    share
+├─nvme0n1p3 859.5G                        ntfs    Windows
+├─nvme0n1p4 892M                          ntfs            ← Windows 自己建的恢复分区，无卷标
+└─nvme0n1p5 1000G                         ntfs    share
 nvme1n1     3.7T  KIOXIA KXG80ZN84T09 ..
 ├─nvme1n1p1 1.5T                          ntfs    WinData
 ├─nvme1n1p2 1.5T                          ext4    LinuxData
@@ -914,11 +922,18 @@ nixos-rebuild list-generations | head -3      # 有 generation
 findmnt -t btrfs -o TARGET,OPTIONS            # 4 个子卷，选项含 compress=zstd:3
 swapon --show                                 # 只有 zram，没有磁盘 swap
 sysctl vm.swappiness                          # 180
-findmnt /mnt/winesp /mnt/share                # 两个都挂上了
+findmnt /mnt/winesp                           # Windows 的 ESP，vfat
+findmnt /mnt/share                            # 共享盘，ntfs3
 ```
 
-**`findmnt /mnt/winesp /mnt/share` 没输出**：`nofail` 让它静默失败了。
+> **`findmnt` 一次只认一个挂载点。** 写成 `findmnt /mnt/winesp /mnt/share`
+> 不会报错，只是**什么都不输出**，返回码是 1，看起来就像两个都没挂上。
+> 2026-09-30 在 asus 上就被这个骗过：那条命令没输出，实际两个分区都挂得好好的。
+> 所以要一条一条查，或者按类型查：`findmnt -t vfat,ntfs3`。
+
+**`findmnt /mnt/winesp` 或 `findmnt /mnt/share` 没输出**：`nofail` 让它静默失败了。
 看 `tuning.nix` 里的 UUID 对不对，`sudo blkid` 对照一遍。
+再看 `systemctl status mnt-winesp.mount mnt-share.mount`。
 
 **`/mnt/share` 是只读或挂不上**：Windows 那侧的快速启动或休眠没关干净，
 NTFS 是脏的。回 Windows 里做 7.1 和 7.2，**然后关机（不是重启）**，再回 NixOS。
@@ -1268,7 +1283,8 @@ nixos-rebuild list-generations | head -3
 # 文件系统与 swap
 findmnt -t btrfs -o TARGET,OPTIONS
 swapon --show                                # 只有 zram
-findmnt /mnt/winesp /mnt/share
+findmnt /mnt/winesp
+findmnt /mnt/share
 
 # 显卡
 nvidia-smi
@@ -1630,9 +1646,44 @@ Wi-Fi 网卡（RTL8852CE）装机器里不认，驱动是 EXE，这个阶段没�
 和 bash 的行为一致。在 asus 拿到这个配置之前，用 `setopt interactive_comments`
 临时打开。改了：10.3 节开头加了提示。
 
+**7. `findmnt /mnt/winesp /mnt/share` 没输出，被它骗了。**
+第一次做 10.3 的验证，这条命令什么都没输出，我据此判断两个分区没挂上，
+让排查 UUID、脏状态。**判断错了：** `findmnt` 一次只认一个挂载点，
+传两个参数不会报错，只是无输出、返回码 1（在 thinkpad 上用 `findmnt /boot /home` 复现了）。
+实际两个都挂好了：`systemctl status` 显示 `/mnt/winesp` 是 `/dev/nvme0n1p1`（vfat）、
+`/mnt/share` 是 `/dev/nvme0n1p5`（ntfs），开机时就 mounted；
+`tuning.nix` 里的 `winEspUuid`（6E1C-D1AE）和 `shareUuid`（4C0C4C710C4C585A）
+都和 `blkid` 对得上，9.7 节的填法是对的。
+改了：10.3 节和第 13 节的检查命令拆成两条，10.3 加了说明。
+教训：**验证命令本身也要验证。** 一条「没输出」的命令，先想是不是命令写错了，
+再去怀疑系统。
+
+**8. diskpart 预建的分区被 Windows 安装器直接接受了。**
+从 NixOS 里看：Samsung 盘上 `nvme0n1p1` 是 1G 的 vfat、卷标 `SYSTEM`（我们 diskpart
+建的，安装器自己建的 ESP 只有一百多 MB），`nvme0n1p5` 是 1000G、卷标 `share`。
+所以 6.3 的脚本走通了，6.4 节的退路没有用上。**这一条是从分区结果反推的，
+没有记录安装器当时的界面。**
+
+**9. Windows 装完后自己多建了一个约 892 MB 的恢复分区。**
+`lsblk` 里 `nvme0n1p4`，892M，NTFS，没有卷标；C: 是 859.5 GiB，比脚本预期的
+860.3 GiB 少了差不多同样大小，说明是从 C: 里缩出来的。所以「脚本里不预建」
+只是省了四行 diskpart，并不能阻止 Windows 自己建一个。没有害处，不要删。
+从大小反推的，没有在 Windows 里用 `reagentc /info` 确认。
+改了：6.3 节的说明改成了实际情况，9.1 节的 `lsblk` 示意加了这一行。
+
+**10. 装机后的首轮验证结果（10.3 和 10.4 节的部分）。**
+全部符合预期：`hostnamectl` 是 asus、内核 6.18.52；generation 1 存在
+（`Configuration Revision` 是 Unknown，因为装机时仓库是脏的，正常）；
+四个 Btrfs 子卷都是 `compress=zstd:3,noatime`，另有默认的 `ssd,discard=async,space_cache=v2`；
+`swapon --show` 只有 `zram0`（15.2G）；`vm.swappiness = 180`；
+`nvidia-smi` 看到 RTX 5060 Laptop、8GB、驱动 595.71.05、空闲 P8 约 3W。
+另外 `hostnamectl` 的 `OS Support End: 2026-12-31` 证实了附录 D.7 说的
+26.05 大约年底到期。
+
 ### 待补
 
 - 华硕的启动菜单键、BIOS 键具体是哪个（装机时没有记下来）
-- diskpart 预建分区是被 Windows 安装器直接接受，还是走了 6.4 节的退路
-- 第 10 章的运行时验证结果：显卡 PRIME offload、`/mnt/share` 是否可写、Wi-Fi、Steam 等
+- 第 7 章（快速启动、休眠、UTC）是否做完；共享盘 `/mnt/share` 现在能挂上，但是否可写还没验证
+- 第 10 章还没验证的：PRIME offload 是否真的用上独显（10.4）、桌面与输入（10.5）、Steam 等应用（10.6）、Wi-Fi
+- 恢复分区是 Windows 自己建的这一判断，要在 Windows 里用 `reagentc /info` 确认
 - 第 11 章 rEFInd 的 GOP 分辨率实测值
