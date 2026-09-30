@@ -73,6 +73,7 @@ neovim 配置、VS Code 的 `userSettings`、20 个 Agent Skill、zsh/tmux/stars
 | `~/.config/monitors.xml` | 多显示器布局（台式机上有用） |
 | `~/.config/user-dirs.dirs` | XDG 目录指向 |
 | `~/.claude/settings.json` | Claude Code 的模型 / effort / 主题偏好。**归 B 类是因为工具在运行时写它** |
+| `~/.grok/config.toml` | Grok Build 的主题 / 默认模型 / 启用的插件，同样是工具运行时写的。同目录的 `auth.json`、`mcp_credentials.json` 是 C 类，`trusted_folders.toml` 刻意不收（信任决定要在新机器上重做） |
 
 ### C 类 —— 不搬，新机器重新签发
 
@@ -85,7 +86,7 @@ neovim 配置、VS Code 的 `userSettings`、20 个 Agent Skill、zsh/tmux/stars
 | `~/.gnupg/` | 需要时新生成 |
 | `~/.config/gh/` | `gh auth login` |
 | `~/.claude.json`、`~/.claude/` 里的凭据 | `claude` 首次启动时登录。**但 `~/.claude/projects/` 下的会话记录要搬**，那不是凭据，见 7.5 |
-| `~/.grok/` 里的凭据（Grok Build） | `grok login`。`~/.grok/` 里其余东西（`config.toml`、会话、memory）怎么分类，见文末「还没解决的问题」 |
+| `~/.grok/` 里的凭据（Grok Build） | `grok login`。`~/.grok/` 里只有 `config.toml` 收进 B 类，会话、memory、缓存不搬 |
 | `~/.config/.wrangler/`（Cloudflare 的 OAuth 令牌） | 在用到的项目目录里 `pnpm exec wrangler login`。wrangler 是项目的 devDependency，不是全局命令 |
 | `~/.local/share/DBeaverData` | DBeaver 的连接、密码和 JDBC 驱动。整目录不搬，新机器重新建连接；驱动会自己重新下载 |
 | `~/.local/state/syncthing/`（旧布局可能在 `~/.config/syncthing/`） | 设备身份证（`cert.pem`、`key.pem`）和文件夹列表。**不要拷**。拷过去两台会变成同一台，同步直接坏掉。新机器生成新 ID，在网页里重新配对 |
@@ -1445,6 +1446,7 @@ sudo refind-sync
 | 加了什么 | 要检查 |
 |----------|--------|
 | 新的语言工具链（Rust / Go / Python…） | 有没有用户级的 registry / 缓存 / 凭据（`~/.cargo/credentials`、`~/.npmrc`）|
+| Rust（现在是手工 rustup 装的） | `~/.cargo` 和 `~/.rustup` 加起来一个多 GB，都是下载来的缓存，已按「可重建」进了 `ignoredHome`。**唯一的例外是 `~/.cargo/credentials.toml`**，那是 crates.io 令牌，C 类。想让 Rust 也进 Nix 的话，装 `pkgs.rustup` 再让它自己拉工具链，届时把这一行改掉 |
 | 虚拟机（QEMU / VirtualBox / Docker） | 镜像和虚拟磁盘在哪、要不要搬 |
 | 需要登录的服务 | 加进 7.3 的重新签发清单 |
 | 新的 GUI 程序 | 它的配置在 `~/.config/` 下，看是该进 Nix（A 类）还是进 `dotfiles-state`（B 类）|
@@ -1492,12 +1494,19 @@ migration-check
 | B 类清单是否还有该收未收的 | 加了新工具之后跑 `migration-check`，它会报出 `$HOME` 里没人认领的东西 |
 | 第 1-5 节没在全新机器上从头跑过 | 只能等下次真装新机器时验证，对不上的地方回来改 |
 | 独显探测判据未经多显卡机器验证 | AMD 的 APU 不在 PCI bus 00 上且也报显存，可能被误判成独显。真遇到直接改 `hwinfo.nix` |
-| `~/.grok/` 的 A / B / C 划分 | 2026-09-23 刚装，还没登录用过，目录里会有什么未实测。凭据先按 C 类记；登录并用过几天后跑 `migration-check`，它会把 `~/.grok` 报成没人认领，届时逐项分类、补进 `ignoredHome` 或 `stateFiles`，再改这一行 |
-| `~/.local/share/DBeaverData` 还没进 `migration-check` 的忽略清单 | 目录要等第一次打开 DBeaver 才出现。出现后 `migration-check` 会把它报成没人认领，再补进 `home/migration.nix` 的 `ignored`。分类已经定了：整目录是 C 类，不搬 |
 | `~/.config/obsidian` 还没分类 | 只是这台机器打开过哪些库。第一次打开 Obsidian 后 `migration-check` 若报没人认领，再决定忽略还是收进 B 类。库本身是普通文件夹，要跨设备就用 Syncthing 同步那个目录 |
 | VS Code 的四个扩展仍是手工装的 | nixpkgs 里的版本比实际装的旧（claude-code 会退到 2.1.223），声明进 Nix 等于降级。归手工清单，`migration-check` 盯着 |
 
 **已解决**（原先列在这里）：
+
+- **`~/.grok/` 的 A / B / C 划分**（2026-09-30）—— 登录用过之后逐项看过：
+  `config.toml` 收进 B 类，`auth.json` 和 `mcp_credentials.json` 是 C 类，
+  `trusted_folders.toml` 不收，其余（sessions、memory-v2、缓存）是运行时状态。
+  整个 `.grok` 进了 `ignoredHome`。
+- **`~/.local/share/DBeaverData`** —— 按原定的 C 类进了 `ignored`。
+  同一轮还处理了 `.cargo`、`.rustup`、`.copilot`、`.eclipse`、`Secrets`、
+  Cryptomator 的两份、`kde.org`、`QtProject.conf`、`direnv`、`grove`、`pnpm`，
+  以及 `~/.claude` 里的 `state`、`stats-cache.json`、`uploads`，都是可重建的缓存或运行时状态。
 
 - **rEFInd 的实际 GOP 模式**（批二）—— 是 `Mode 0: 2560x1440`（面板原生），
   **没有 1080p**。和另外四个实机坑一起记在

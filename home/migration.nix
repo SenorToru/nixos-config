@@ -35,6 +35,16 @@ let
     ".config/monitors.xml" # 多显示器布局（台式机上有用）
     ".config/user-dirs.dirs" # XDG 目录指向
 
+    # Grok Build 的偏好：主题、默认模型、启用的插件。
+    #
+    # 同样归 B 类，理由和下面 Claude Code 那条一样：**是工具在运行时写它**。
+    # 已核对过内容，里面没有令牌或密钥。
+    # 同目录里的 auth.json、mcp_credentials.json 是 C 类，绝不能进来；
+    # 其余（sessions、memory-v2、缓存）是运行时状态，见 ignoredHome 里的 .grok。
+    # trusted_folders.toml 也没收：里面是「哪个目录被信任」的决定，
+    # 新机器上该重新做一遍，而不是继承。
+    ".grok/config.toml"
+
     # Claude Code 的偏好：当前模型、effort、主题、推送开关。
     #
     # **归 B 类而不是 A 类，是因为 Claude Code 在运行时写它** ——
@@ -90,6 +100,11 @@ let
     # 禁用状态不在这里 —— 那在 ~/.local/state/agent-skills/disabled，
     # 已经收进 B 类了。
     "skills"
+
+    # 运行时状态，工具自己管、丢了会重建
+    "state" # mcp-discover-verdicts.json，MCP 服务器的探测结果缓存
+    "stats-cache.json" # 用量统计缓存
+    "uploads" # 会话里上传过的附件，跟着会话走，不搬
   ];
 
   # ============================================
@@ -120,6 +135,20 @@ let
     ".xwechat"
     ".vscode" # 扩展由上面单独一节查
     ".vscode-shared"
+
+    # 用 rustup 手工装的 Rust 工具链，下载下来的东西，加起来一个多 GB。
+    # 没有 credentials.toml（那个才是 C 类：crates.io 令牌），所以整个都是
+    # 可重建的缓存。将来要在 Nix 里管 Rust 的话再回来改，见 MIGRATION.md 第 10 节。
+    ".cargo"
+    ".rustup"
+
+    # 工具的运行时状态
+    ".copilot" # Copilot 的 IDE 连接状态和 skills 链接，会重建
+    ".eclipse" # DBeaver（基于 Eclipse 平台）的插件缓存
+    ".grok" # 混合目录：config.toml 单独收进了 B 类（见 stateFiles）；
+    #         auth.json 和 mcp_credentials.json 是 C 类；
+    #         sessions、memory-v2、缓存是运行时状态，都不搬
+    "Secrets" # Cryptomator 的挂载点。锁定时必须是空目录，里面的东西是保险箱明文，不搬
 
     # C 类：秘密，刻意不搬
     ".ssh"
@@ -194,9 +223,16 @@ let
     "ulauncher"
     "zen"
     ".gsd-keyboard.settings-ported"
+    "Cryptomator" # 只记着保险箱在哪、窗口位置。新机器上「打开已有保险箱」选一次就有了，见 Documents/library 的规矩
+    "kde.org" # Ghostwriter（Markdown 编辑器）的窗口与最近打开的文件
+    "QtProject.conf" # Qt 文件对话框记住的上次目录
 
     # ~/.local/share 下的
     "Trash"
+    "DBeaverData" # C 类：连接、密码和 JDBC 驱动，整目录不搬，新机器重新建连接
+    "direnv" # 「哪些 .envrc 被允许执行」的记录。**故意不搬**：那是安全决定，新机器上每个项目重新 direnv allow
+    "grove" # Grok 的一个空状态文件
+    "pnpm" # pnpm 的包缓存（近 1 GB），项目里 pnpm install 会自己重建
     "agent-skills" # A 类：home-manager 管的符号链接
     "applications"
     "backgrounds"
