@@ -659,7 +659,7 @@ umount /mnt
 ```
 
 ```bash
-OPTS=compress=zstd:1,noatime
+OPTS=compress=zstd:3,noatime
 
 mount -o subvol=@,$OPTS          ${DISK}-part2 /mnt
 mkdir -p /mnt/{home,nix,.snapshots,boot}
@@ -675,11 +675,19 @@ mount -o umask=0077              ${DISK}-part1 /mnt/boot
 findmnt -R /mnt
 ```
 
-- [ ] 四个 btrfs 子卷都在，`/mnt/boot` 是 vfat，选项里有 `compress=zstd:1`
+- [ ] 四个 btrfs 子卷都在，`/mnt/boot` 是 vfat，选项里有 `compress=zstd:3`
 
 > 这里挂载用的选项**只影响安装过程本身**。装好之后持久生效的那份写在
 > `hosts/asus/tuning.nix`（`nixos-generate-config` 不记 `compress` 和 `noatime`）。
 > 背景见 [MIGRATION.md 决策点 C](MIGRATION.md)。
+>
+> **这台用 `zstd:3`，不是 thinkpad 的 `zstd:1`。** 决策点 C 的判据是「CPU 有富余就用 3」，
+> Ryzen AI 7 H 350 够强。**装机时这里的 `OPTS` 和 `tuning.nix` 里的必须是同一个等级**，
+> 两处不一致的话，装机期间写进去的数据按一个等级压，装好之后的新数据按另一个等级压，
+> 不会坏，但不整齐。
+>
+> 只有这块 Btrfs 能压缩：ESP 是 FAT32，Windows 共享盘是 NTFS，都压缩不了，也不需要。
+> 想在装好之后确认压缩真的生效：`sudo compsize /`（`nix shell nixpkgs#compsize`）。
 
 ### 9.5 生成硬件配置
 
@@ -862,7 +870,7 @@ reboot
 ```bash
 hostnamectl                                   # Static hostname: asus
 nixos-rebuild list-generations | head -3      # 有 generation
-findmnt -t btrfs -o TARGET,OPTIONS            # 4 个子卷，选项含 compress=zstd:1
+findmnt -t btrfs -o TARGET,OPTIONS            # 4 个子卷，选项含 compress=zstd:3
 swapon --show                                 # 只有 zram，没有磁盘 swap
 sysctl vm.swappiness                          # 180
 findmnt /mnt/winesp /mnt/share                # 两个都挂上了

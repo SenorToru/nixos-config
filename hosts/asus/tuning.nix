@@ -10,6 +10,12 @@ let
   # 占位没换掉的话每次构建都会提示。
   winEspUuid = "0000-0000";
   shareUuid = "0000000000000000";
+
+  # 四个 Btrfs 子卷共用的挂载选项，见下面「文件系统」一节。
+  btrfsOptions = [
+    "compress=zstd:3"
+    "noatime"
+  ];
 in
 {
   # ============================================
@@ -87,14 +93,21 @@ in
   # 挂载选项里 compress 和 noatime **不会被 nixos-generate-config 记录**，
   # 所以在这里补上（MIGRATION.md 决策点 C）。选项列表会和
   # hardware-configuration.nix 里的 subvol= 合并。
-  fileSystems."/".options = [
-    "compress=zstd:1"
-    "noatime"
-  ];
-  fileSystems."/home".options = [
-    "compress=zstd:1"
-    "noatime"
-  ];
+  #
+  # 压缩等级用 zstd:3。thinkpad 用的是 zstd:1，那是因为 Skylake 的移动端 U
+  # 比较弱；这台是 Ryzen AI 7 H 350，CPU 有富余，多花一点 CPU 换更好的压缩率。
+  # 决策依据见 MIGRATION.md 决策点 C。
+  #
+  # **四个子卷必须写成同一个等级。** Btrfs 的 compress 是整个文件系统
+  # 共用的，几个子卷写得不一样，内核只会按其中一个生效，还会打警告。
+  # 所以用文件开头 let 里的同一个 btrfsOptions，别各写各的。
+  #
+  # 只有这块 Btrfs 能压缩。ESP 是 FAT32，共享盘是 NTFS（ntfs3 不支持
+  # 写时压缩），压缩不了，也不需要。
+  fileSystems."/".options = btrfsOptions;
+  fileSystems."/home".options = btrfsOptions;
+  fileSystems."/nix".options = btrfsOptions;
+  fileSystems."/.snapshots".options = btrfsOptions;
 
   # Samsung 上 Windows 的 ESP。refind-sync 要往里写一份 rEFInd，所以必须挂着。
   # nofail 不能省：那块盘不在的时候，没有它会卡在开机。

@@ -33,6 +33,18 @@
     options = [ "subvol=@home" ];
   };
 
+  fileSystems."/nix" = {
+    device = "/dev/disk/by-uuid/00000000-0000-0000-0000-000000000000";
+    fsType = "btrfs";
+    options = [ "subvol=@nix" ];
+  };
+
+  fileSystems."/.snapshots" = {
+    device = "/dev/disk/by-uuid/00000000-0000-0000-0000-000000000000";
+    fsType = "btrfs";
+    options = [ "subvol=@snapshots" ];
+  };
+
   fileSystems."/boot" = {
     device = "/dev/disk/by-uuid/0000-0000";
     fsType = "vfat";
