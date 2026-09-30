@@ -29,9 +29,8 @@
 Samsung 990 PRO 2TB（nvme，归 Windows）
 ├── 1  ESP          1 GiB      FAT32   卷标 SYSTEM     Windows 的引导
 ├── 2  MSR          16 MiB
-├── 3  C:           约 859 GiB NTFS    卷标 Windows
-├── 4  恢复分区     1 GiB      NTFS    卷标 Recovery
-└── 5  共享盘       1000 GiB   NTFS    卷标 share      Windows 和 NixOS 共用
+├── 3  C:           约 860 GiB NTFS    卷标 Windows
+└── 4  共享盘       1000 GiB   NTFS    卷标 share      Windows 和 NixOS 共用
 
 KIOXIA 3.7T（nvme，归 NixOS）
 ├── 1  ESP          约 2 GiB   FAT32   卷标 BOOT       NixOS 的引导
@@ -345,13 +344,8 @@ format quick fs=fat32 label="SYSTEM"
 
 create partition msr size=16
 
-create partition primary size=880000
+create partition primary size=881000
 format quick fs=ntfs label="Windows"
-
-create partition primary size=1024
-format quick fs=ntfs label="Recovery"
-set id="de94bba4-06d1-4d40-a16a-bfd50179d6ac"
-gpt attributes=0x8000000000000001
 
 create partition primary size=1024000
 format quick fs=ntfs label="share"
@@ -363,23 +357,26 @@ exit
 说明：
 
 - diskpart 里的 `size=` 单位是 **MB，实际等于 MiB**（1024 就是 1 GiB）。
-- `880000` MiB ≈ 859 GiB，是 C: 的大小。
+- `881000` MiB ≈ 860 GiB，是 C: 的大小。
 - `1024000` MiB = 1000 GiB，是共享盘。
-- 三个数加起来（含 ESP、MSR、恢复分区）比整盘少约 1.6 GiB，那点余量是有意留的。
-- 那个奇怪的 `set id` 是「Windows 恢复分区」的类型 GUID，
-  `gpt attributes` 让 Windows 隐藏它并且不给盘符。
+- 四个数加起来（ESP、MSR、C:、共享盘）比整盘少约 1.6 GiB，那点余量是有意留的。
 
-`list partition` 的输出应该有 5 行：
+**没有建 Windows 恢复分区（WinRE），这是有意的。** 那个分区只服务于
+「重置此电脑」和系统起不来时的自动修复；没有它，Windows 会把恢复映像放在 C: 里，
+装和用都不受影响。代价是 C: 坏到起不来时没法用自带的恢复环境自救，
+那种情况改用 Windows 安装 U 盘，选「修复计算机」，效果一样。
+好处是少四行 diskpart，而且以后想扩大 C: 时没有分区挡路。
+
+`list partition` 的输出应该有 4 行：
 
 ```
   Partition 1    System             1024 MB
   Partition 2    Reserved             16 MB
-  Partition 3    Primary             859 GB
-  Partition 4    Recovery           1024 MB
-  Partition 5    Primary            1000 GB
+  Partition 3    Primary             860 GB
+  Partition 4    Primary            1000 GB
 ```
 
-- [ ] 五个分区都在，大小对得上
+- [ ] 四个分区都在，大小对得上
 
 然后在命令提示符里：
 
@@ -391,18 +388,19 @@ exit
 
 ### 6.4 选安装位置
 
-回到安装界面，点「刷新」。**你应该看到 Samsung 上有 5 个分区**：
-「系统」、「MSR」、「主分区 859 GB」、「恢复」、「主分区 1000 GB」。
+回到安装界面，点「刷新」。**你应该看到 Samsung 上有 4 个分区**：
+「系统」、「MSR」、「主分区 860 GB」、「主分区 1000 GB」。
 
-**选那个 859 GB 的分区**（不是 1000 GB 的，不是 KIOXIA 上的任何分区），点「下一步」。
+**选那个 860 GB 的分区**（不是 1000 GB 的，不是 KIOXIA 上的任何分区），点「下一步」。
 
 > **如果安装器拒绝，或者报「无法在此驱动器上安装」：**
 > 这说明它不接受预建的分区。退路是：
 > `Shift+F10` → `diskpart` → `select disk N` → `clean` → `convert gpt` → `exit`，
 > 然后回到安装界面，选那块盘的「未分配空间」，点「新建」，
-> **在「大小」里填 `880000`**，让安装器自己划 ESP、MSR、C: 和恢复分区。
-> 装完再回 Windows 的「磁盘管理」，把剩下的未分配空间建成一个 1000 GiB 的
-> NTFS 分区，卷标 `share`。
+> **在「大小」里填 `881000`**，让安装器自己划 ESP、MSR、C:。
+> **这种情况下安装器会自己多建一个恢复分区，这个没关系，不用管它。**
+> 装完再回 Windows 的「磁盘管理」，把剩下的未分配空间建成一个 NTFS 分区
+> （约 1000 GiB，以磁盘管理里实际剩下的为准，不必凑整），卷标 `share`。
 > **这种情况下 ESP 会比 1 GiB 小，卷标也不是 `SYSTEM`。** 到了 9.7 节，
 > `blkid -L SYSTEM` 会找不到它，按那里的说明用 `fatlabel` 补一个卷标就行。
 
@@ -565,9 +563,8 @@ NAME        SIZE  MODEL                   FSTYPE  LABEL
 nvme0n1     1.8T  Samsung SSD 990 PRO ..
 ├─nvme0n1p1 1G                            vfat    SYSTEM
 ├─nvme0n1p2 16M
-├─nvme0n1p3 859G                          ntfs    Windows
-├─nvme0n1p4 1G                            ntfs    Recovery
-└─nvme0n1p5 1000G                         ntfs    share
+├─nvme0n1p3 860G                          ntfs    Windows
+└─nvme0n1p4 1000G                         ntfs    share
 nvme1n1     3.7T  KIOXIA KXG80ZN84T09 ..
 ├─nvme1n1p1 1.5T                          ntfs    WinData
 ├─nvme1n1p2 1.5T                          ext4    LinuxData
@@ -1291,9 +1288,10 @@ Samsung 990 PRO 2TB：`last-lba 3907029134`，共 3907029168 个 512 字节扇�
 |---|------|------|------|
 | 1 | ESP | 1024 MiB | FAT32，`SYSTEM` |
 | 2 | MSR | 16 MiB | |
-| 3 | C: | 880000 MiB（≈859.4 GiB） | NTFS，`Windows` |
-| 4 | 恢复 | 1024 MiB | NTFS，`Recovery`，类型 GUID `de94bba4-...` |
-| 5 | 共享盘 | 1024000 MiB（=1000 GiB） | NTFS，`share` |
+| 3 | C: | 881000 MiB（≈860.3 GiB） | NTFS，`Windows` |
+| 4 | 共享盘 | 1024000 MiB（=1000 GiB） | NTFS，`share` |
+
+没有 Windows 恢复分区（WinRE），是有意的，理由见 6.3 节。
 
 这些是理论值，Windows 实际建出来的起止扇区会有几 MiB 的对齐差异，
 以 `diskpart` 里 `list partition` 的输出为准。

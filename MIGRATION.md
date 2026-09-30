@@ -903,7 +903,7 @@ Windows 的功能更新会擅自把 UEFI 启动顺序第一位重置成
 
 | 盘 | 分区 |
 |----|------|
-| Samsung 2TB | ESP 1 GiB（卷标 `SYSTEM`）、MSR 16 MiB、C: 约 859 GiB、恢复 1 GiB、共享 NTFS 1000 GiB（盘尾） |
+| Samsung 2TB | ESP 1 GiB（卷标 `SYSTEM`）、MSR 16 MiB、C: 约 860 GiB、共享 NTFS 1000 GiB（盘尾）；**不建 Windows 恢复分区** |
 | KIOXIA 3.7T | ESP 约 2 GiB（FAT32，卷标 `BOOT`）、Btrfs 其余（`@` 和 `@home`）；**没有 swap 分区**，不休眠，只用 zram |
 
 顺序：**先装 Windows，后装 NixOS。** 装 Windows 时 KIOXIA 上还没有 ESP，
@@ -912,10 +912,8 @@ Windows 的功能更新会擅自把 UEFI 启动顺序第一位重置成
 **靠型号和容量认盘，不靠编号。**
 
 Windows 的 ESP 默认只有 100MB 左右。要 1 GiB 得在安装界面按 Shift+F10，
-用 diskpart 自己建（`create partition efi size=1024` 等），恢复分区用
-`set id="de94bba4-06d1-4d40-a16a-bfd50179d6ac"` 和
-`gpt attributes=0x8000000000000001` 标记。装完在 Windows 里关快速启动、
-跑 `powercfg /h off`。
+用 diskpart 自己建（`create partition efi size=1024` 等，完整脚本见
+ASUS_INSTALL.md 6.3 节）。装完在 Windows 里关快速启动、跑 `powercfg /h off`。
 
 装好 NixOS 之后**必须回来改 `hosts/asus/` 里这几处占位**，否则它们静默失效：
 
