@@ -1446,7 +1446,7 @@ sudo refind-sync
 | 加了什么 | 要检查 |
 |----------|--------|
 | 新的语言工具链（Rust / Go / Python…） | 有没有用户级的 registry / 缓存 / 凭据（`~/.cargo/credentials`、`~/.npmrc`）|
-| Rust（现在是手工 rustup 装的） | `~/.cargo` 和 `~/.rustup` 加起来一个多 GB，都是下载来的缓存，已按「可重建」进了 `ignoredHome`。**唯一的例外是 `~/.cargo/credentials.toml`**，那是 crates.io 令牌，C 类。想让 Rust 也进 Nix 的话，装 `pkgs.rustup` 再让它自己拉工具链，届时把这一行改掉 |
+| Rust | **不装在系统里，也不用 rustup。** 每个需要 Rust 的项目自己带 `flake.nix` 的 devShell（`~/Projects/dev` 下的 shukuba 和 poster-gen，直接用 nixpkgs 的 `rustc`、`cargo`、`clippy`、`rustfmt`、`lld`、`trunk`、`worker-build`），进目录时 direnv 自动加载。旧的 `~/.cargo` 和 `~/.rustup` 加起来一个多 GB，是 rustup 装法遗留的，**删掉，不迁移**。新机器上每个项目 clone 下来后 `direnv allow` 一次即可。**如果将来某个项目用了 `cargo install` 装东西，`~/.cargo/credentials.toml`（crates.io 令牌）是 C 类，别进版本库** |
 | 虚拟机（QEMU / VirtualBox / Docker） | 镜像和虚拟磁盘在哪、要不要搬 |
 | 需要登录的服务 | 加进 7.3 的重新签发清单 |
 | 新的 GUI 程序 | 它的配置在 `~/.config/` 下，看是该进 Nix（A 类）还是进 `dotfiles-state`（B 类）|

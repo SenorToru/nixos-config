@@ -136,11 +136,9 @@ let
     ".vscode" # 扩展由上面单独一节查
     ".vscode-shared"
 
-    # 用 rustup 手工装的 Rust 工具链，下载下来的东西，加起来一个多 GB。
-    # 没有 credentials.toml（那个才是 C 类：crates.io 令牌），所以整个都是
-    # 可重建的缓存。将来要在 Nix 里管 Rust 的话再回来改，见 MIGRATION.md 第 10 节。
-    ".cargo"
-    ".rustup"
+    # Rust 不在这里：~/.cargo 和 ~/.rustup 是旧的 rustup 装法留下的，
+    # 已被各项目自己的 flake devShell 取代（shukuba、poster-gen），
+    # 目录该删掉而不是忽略，见 MIGRATION.md 第 10 节。
 
     # 工具的运行时状态
     ".copilot" # Copilot 的 IDE 连接状态和 skills 链接，会重建
