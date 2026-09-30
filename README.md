@@ -25,11 +25,14 @@
 ├── flake.nix                 入口：inputs 与 nixosConfigurations
 ├── flake.lock                input 版本锁（必须提交）
 ├── hosts/
-│   └── thinkpad/
-│       ├── default.nix       本机身份 + 模块拼装
-│       ├── hardware-configuration.nix   nixos-generate-config 生成，别手改
-│       ├── hwinfo.nix        refind-hwinfo 生成，别手改（引导画面的硬件行）
-│       └── tuning.nix        本机硬件调优
+│   ├── thinkpad/
+│   │   ├── default.nix       本机身份 + 模块拼装
+│   │   ├── hardware-configuration.nix   nixos-generate-config 生成，别手改
+│   │   ├── hwinfo.nix        refind-hwinfo 生成，别手改（引导画面的硬件行）
+│   │   └── tuning.nix        本机硬件调优
+│   └── asus/                 ASUS TX Air，Windows + NixOS 双系统；结构同上。
+│                             装机前 hardware-configuration.nix / hwinfo.nix 是占位，
+│                             装机现场由 nixos-generate-config / refind-hwinfo 覆盖
 ├── modules/                  共用模块（任何机器都能 import）
 ├── home/
 │   ├── toru.nix              home-manager 用户配置
@@ -83,8 +86,9 @@
 | `dns.nix` | 加密 DNS：systemd-resolved + DNS-over-TLS（严格模式）、`dns-plain` / `dns-dot` 逃生舱（见下面「DNS」一节） |
 | `syncthing.nix` | Syncthing 的防火墙端口（22000、21027）。服务在 `home/syncthing.nix`，网页只听本机 8384 |
 | `development.nix` | 编辑器与工具链、claude-code、grok-build 与 dbeaver-bin 的版本覆写 overlay |
-| `browsers.nix` | Zen / Brave 与 chromium 扩展策略 |
-| `apps.nix` | 桌面应用 |
+| `browsers.nix` | Zen / Brave / Google Chrome 与 chromium 扩展策略 |
+| `apps.nix` | 桌面应用（含 Telegram） |
+| `steam.nix` | Steam 客户端（`programs.steam`，不用 Flatpak 版）。**可选模块**：只有想装的主机才在自己的 `default.nix` 里引入，目前是 asus |
 | `flatpak.nix` | Flatpak 与 Flathub 自动安装 |
 | `stylix.nix` | 全局配色的单一真相：base16 方案、polarity、壁纸、NixOS 级 target |
 | `refind.nix` | rEFInd 顶层引导入口：主题 derivation、`refind.conf`、`refind-sync`、`refind-hwinfo`（见下面「引导」一节） |
@@ -101,10 +105,12 @@
 | `skills-tests.sh` | `skills` 命令的回归测试，由 `agent-skills.nix` 在构建期执行 |
 | `migration.nix` | `state-sync`（搬 B 类用户状态）和 `migration-check`（查漂移）；B 类清单的单一真相 |
 | `syncthing.nix` | Syncthing 用户服务。界面是本机网页，不装托盘 |
+| `desktop-prefs.nix` | GNOME 输入与电源偏好：鼠标、开终端快捷键（共用）；内置触摸板禁用、电源与息屏（**只在 asus 生效**，按 `custom.flakeHost` 判断） |
 | `migration-tests.sh` | `state-sync` 的回归测试，由 `migration.nix` 在构建期执行 |
 
 `hosts/thinkpad/default.nix` 的 `imports` 按
-**「本机专属在前、共用模块在后」**分两组写，加新机器时照抄这个骨架即可。
+**「本机专属在前、共用模块在后」**分两组写，加新机器时照抄这个骨架即可
+（`hosts/asus/default.nix` 就是这么来的，末尾多一组只有它要装的可选模块）。
 
 ---
 

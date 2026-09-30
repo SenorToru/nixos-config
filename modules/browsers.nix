@@ -20,9 +20,11 @@ in
   environment.systemPackages = with pkgs; [
     zenPackage
     brave
+    # unfree，已由 common.nix 的 allowUnfree 放行
+    google-chrome
   ];
 
-  # Chromium configuration (applies to Brave and other Chromium-based browsers)
+  # Chromium configuration (applies to Brave, Chrome and other Chromium-based browsers)
   programs.chromium = {
     enable = true;
     extensions = [

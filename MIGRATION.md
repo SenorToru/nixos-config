@@ -891,6 +891,47 @@ Windows 的功能更新会擅自把 UEFI 启动顺序第一位重置成
 `Windows Boot Manager`。这条让 Windows 自己的引导入口也指向 rEFInd，
 于是它抢回第一顺位也没用 —— 开机照样先进 rEFInd。
 
+#### asus 的具体安排（第一台真机双 ESP）
+
+上面的做法只在虚拟机里验证过。asus（ASUS TX Air，前身是跑 Bluefin 的那台）
+是第一台真机，配置在 `hosts/asus/`。**装机前后各有几件事要手动做，
+写在这里而不是留在脑子里。**
+
+盘的分工：Samsung 990 PRO 2TB 归 Windows，KIOXIA 3.7T 归 NixOS。
+
+| 盘 | 分区 |
+|----|------|
+| Samsung 2TB | ESP 1 GiB（卷标 `SYSTEM`）、MSR 16 MiB、C: 约 859 GiB、恢复 1 GiB、共享 NTFS 1000 GiB（盘尾） |
+| KIOXIA 3.7T | ESP 约 2 GiB（FAT32，卷标 `BOOT`）、Btrfs 其余（`@` 和 `@home`）；**没有 swap 分区**，不休眠，只用 zram |
+
+顺序：**先装 Windows，后装 NixOS。** 装 Windows 时 KIOXIA 上还没有 ESP，
+它只会用 Samsung 自己的；反过来的话 Windows 安装器可能把引导文件写进 NixOS 那块盘的 ESP。
+两块盘的设备名（`nvme0n1` / `nvme1n1`）在安装介质里可能对调，
+**靠型号和容量认盘，不靠编号。**
+
+Windows 的 ESP 默认只有 100MB 左右。要 1 GiB 得在安装界面按 Shift+F10，
+用 diskpart 自己建（`create partition efi size=1024` 等），恢复分区用
+`set id="de94bba4-06d1-4d40-a16a-bfd50179d6ac"` 和
+`gpt attributes=0x8000000000000001` 标记。装完在 Windows 里关快速启动、
+跑 `powercfg /h off`。
+
+装好 NixOS 之后**必须回来改 `hosts/asus/` 里这几处占位**，否则它们静默失效：
+
+- `hardware-configuration.nix`：换成 `nixos-generate-config` 生成的
+- `hwinfo.nix`：跑 `sudo refind-hwinfo` 生成
+- `tuning.nix` 里的 `winEspUuid` 和 `shareUuid`：用 `blkid` 查
+  （构建时有 warning 提醒，没换的话每次都会出现）
+- `default.nix` 里 `custom.refind.resolution`：按 6.4 节校一遍
+- `default.nix` 里的键盘布局：目前按 US 写，如果物理键盘是 JIS 要改成 `jp106`
+- `home/toru.nix` 的 `signingKeys`：新机器生成 SSH 密钥后加一行 `asus`
+
+顺序：`sudo refind-sync`（两个 ESP 都要写到）→ Windows 里跑上面的 `bcdedit` →
+`efibootmgr` 清掉旧的悬空启动项（Bluefin 留下的 Fedora 和指向 rEFInd 的假
+`Windows Boot Manager`，格式化之后它们指向的文件已经不存在了）。
+
+共享 NTFS 分区挂在 `/mnt/share`（`ntfs3` 驱动，`nofail`）。Windows 侧的
+快速启动和休眠不关的话，这块盘迟早会脏，见 4.3 节。
+
 ### 6.6 开不了机怎么办
 
 按代价从小到大：
@@ -1407,6 +1448,7 @@ sudo refind-sync
 | 新的 GUI 程序 | 它的配置在 `~/.config/` 下，看是该进 Nix（A 类）还是进 `dotfiles-state`（B 类）|
 | 新的 Flatpak | 加进 `modules/flatpak.nix`，**别只装不声明** |
 | 新硬件类别（独显、无线网卡） | 第 5.2 节的 `tuning.nix` 要点里补一条 |
+| Telegram、Google Chrome、Steam（asus 上加的） | 登录态都是 C 类，不搬，新机器上重新登录。Chrome 的 profile（约 3.5G）和 Steam 游戏库都**不搬**，这是有意的决定 |
 | **新机器本身** | 公钥加进 `home/toru.nix` 的 `signingKeys`，否则别的机器验不了它签的提交 |
 
 **判据永远是第 0 节那三类。** 能进 Nix 就进 Nix（A 类），

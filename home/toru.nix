@@ -593,6 +593,9 @@ in
 
     # Syncthing 用户服务。防火墙在 modules/syncthing.nix。
     ./syncthing.nix
+
+    # 鼠标、快捷键（共用）和触摸板、电源（只在 asus 生效）。
+    ./desktop-prefs.nix
   ];
 
   home.username = "toru";

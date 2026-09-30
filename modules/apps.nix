@@ -14,5 +14,8 @@
 
     # 实用工具
     peazip
+
+    # 通讯
+    telegram-desktop
   ];
 }
