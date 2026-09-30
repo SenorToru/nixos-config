@@ -53,7 +53,9 @@
   # 但 kernel + initrd 每换一次内核就多存一份，菜单条目照样限一下。
   boot.loader.systemd-boot.configurationLimit = 20;
 
-  # 内核用 nixpkgs 的默认 LTS（写这条时是 6.18），**不跟 linuxPackages_latest**。
+  # 内核**明确钉在 6.18 LTS**，不跟 linuxPackages_latest，
+  # 也不用不带版本号的 linuxPackages（那个是「nixpkgs 当前的默认内核」，
+  # nixpkgs 一换默认，内核就跟着跨大版本）。
   #
   # 原因是 NVIDIA 开源内核模块：thinkpad 用的 linuxPackages_latest（7.2.6）
   # 上，nixpkgs 里的驱动 595.71.05 编译不过
@@ -62,10 +64,16 @@
   # 这台机器有独显，要以驱动能编译为先。
   #
   # 6.18 对 Ryzen AI 350（Krackan Point）和 RTL8852CE 都够新。
-  # 以后想换回 latest：先确认 nvidiaPackages.stable 能在那个内核上编译
+  #
+  # **6.18 到期退役时会怎样：** nixpkgs 会删掉 linuxPackages_6_18 这个属性，
+  # 构建直接报 "linux 6.18 was removed because it has reached its end of life"。
+  # 这是**故意想要的响亮失败**：构建发生在 switch 之前，当前系统不受影响。
+  # 该怎么办见 ASUS_INSTALL.md 附录 D。
+  #
+  # 想换回 latest 或换别的版本：先确认 nvidiaPackages.stable 能在那个内核上编译
   # （`nix build .#nixosConfigurations.asus.config.system.build.toplevel`
   # 就会暴露），别只看 nixpkgs 有没有更新的驱动版本。
-  boot.kernelPackages = pkgs.linuxPackages;
+  boot.kernelPackages = pkgs.linuxPackages_6_18;
 
   # ============================================
   # rEFInd 顶层引导入口

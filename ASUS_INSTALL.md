@@ -61,7 +61,7 @@ rEFInd（顶层菜单）
 | 谁装在哪块盘 | 大盘 KIOXIA 给 NixOS，Samsung 给 Windows |
 | 装的顺序 | **先 Windows，后 NixOS** |
 | swap | 不要磁盘 swap，不休眠，只用 zram |
-| 内核 | NixOS 默认 LTS（6.18），不用 latest（原因见 `hosts/asus/default.nix`：NVIDIA 驱动在 7.2 内核上编译不过） |
+| 内核 | **明确钉在 6.18 LTS**（`linuxPackages_6_18`），不用 latest，也不用不带版本号的默认。原因见 `hosts/asus/default.nix`：nixpkgs 里的 NVIDIA 驱动在 7.2 内核上编译不过。6.18 退役时怎么办见附录 D |
 | Secure Boot | 保持关闭 |
 | BitLocker / 设备加密 | 现在没开。**装完 Windows 要回头确认，见 7.3** |
 | 键盘 | US |
@@ -198,25 +198,39 @@ KIOXIA 上的数据要到第 9.2 节才会被抹掉。
 
 ### 3.2 NixOS 安装盘
 
-**1. 下载 Graphical（GNOME）ISO。** 地址 `https://nixos.org/download/`，
-选 `nixos-gnome-<版本>-x86_64-linux.iso`（版本和 `flake.nix` 里的 `nixos-26.05` 对齐）。
+**1. 下载 26.05 的 Graphical ISO**（约 3.9 GB，版本和 `flake.nix` 里的
+`nixos-26.05` 对齐）。这个地址永远指向 26.05 分支上最新的一份：
+
+```bash
+curl -L -o nixos-graphical.iso \
+  https://channels.nixos.org/nixos-26.05/latest-nixos-graphical-x86_64-linux.iso
+```
 
 > 为什么选 Graphical 不选 Minimal：这次要认盘、看分区，
 > Graphical 自带 GParted 可以目视确认；联网也是点两下。
 > 详细比较见 [MIGRATION.md 决策点 A](MIGRATION.md)。
+>
+> **ISO 自带的内核版本不重要。** 装好之后的内核由
+> `hosts/asus/default.nix` 的 `boot.kernelPackages` 决定（钉在 6.18），
+> 和 ISO 无关。ISO 的内核只影响安装那一小时里屏幕能不能正常显示，
+> 出问题见 8.1 节的 `nomodeset`。
 
 **2. 校验。别跳过，下载损坏在装到一半时才暴露最难受。**
 
+上面那个地址会跳转到带具体版本号的文件，校验值在同一个地址后面加 `.sha256`：
+
 ```bash
-sha256sum nixos-gnome-*.iso
-# 和下载页上的 SHA-256 逐位比对
+curl -L https://channels.nixos.org/nixos-26.05/latest-nixos-graphical-x86_64-linux.iso.sha256
+sha256sum nixos-graphical.iso
+# 两个哈希逐位比对，必须完全一致。
+# 注意 .sha256 里的文件名是带版本号的，和你本地的文件名不同，只比哈希那一串。
 ```
 
 **3. 写盘。**
 
 ```bash
 lsblk -o NAME,SIZE,MODEL,SERIAL,MOUNTPOINT      # 认清 U 盘，再往下
-sudo dd if=nixos-gnome-*.iso of=/dev/sdX bs=4M status=progress conv=fsync
+sudo dd if=nixos-graphical.iso of=/dev/sdX bs=4M status=progress conv=fsync
 #                                   ^^^^^^^^ 换成 U 盘本身（不带数字）
 ```
 
@@ -1240,7 +1254,7 @@ cd ~/nixos-config && find . ! -user toru -printf '%u  %p\n'   # 无输出
 | Windows 更新后开机直接进了 Windows | Windows 抢回了第一顺位。进 NixOS 后 `sudo refind-sync` 重建 NVRAM 项；再确认 11.5 的 `bcdedit` 还在 |
 | 从 Windows 关机后，NixOS 里 `/mnt/share` 只读 | 快速启动或休眠又被打开了（Windows 更新有时会重置）。回 Windows 重做 7.1、7.2，然后**关机而不是重启** |
 | 时间差 9 小时 | 7.5 的注册表项没生效或被重置了 |
-| `nixos-install` 失败 | 记下最后 30 行输出。已知一个：NVIDIA 驱动在新内核上编译失败（`hosts/asus/default.nix` 已经用 LTS 避开了，如果有人改回 `linuxPackages_latest` 会复现） |
+| `nixos-install` 失败 | 记下最后 30 行输出。已知一个：NVIDIA 驱动在新内核上编译失败（`hosts/asus/default.nix` 已经钉在 6.18 避开了，如果有人改回 `linuxPackages_latest` 会复现） |
 | 黑屏、进不了 GDM | 开机在 systemd-boot 菜单里选上一个 generation；实在不行按 `Ctrl+Alt+F2` 切 TTY 登录排查 |
 | 以上全失败 | 用 NixOS 安装 U 盘启动，`mount` 好分区后 `nixos-enter --root /mnt` 修 |
 
@@ -1327,3 +1341,174 @@ powercfg /h off
 manage-bde -status
 bcdedit /set {bootmgr} path \EFI\refind\refind_x64.efi
 ```
+
+## 附录 D：内核 6.18 退役了怎么办
+
+`hosts/asus/default.nix` 把内核明确钉在 `linuxPackages_6_18`，原因是 nixpkgs
+里的 NVIDIA 开源驱动（写这段时是 595.71.05）在 7.2 内核上编译不过。
+6.18 是长期支持版（LTS），但总有一天会到期。**这一节是那天的预案。**
+
+> **写这一节时（2026-09-30）的实测事实**，之后会变，用来帮你理解命令输出的样子：
+>
+> | 组合 | 结果 |
+> |------|------|
+> | nixos-26.05 锁定版：驱动 595.71.05 + 内核 7.2.6 | 编译失败 |
+> | nixos-unstable：驱动 595.104.02 + 内核 7.2.8 | 能编译（官方缓存里有现成产物） |
+> | nixos-26.05 分支最新：驱动 595.71.05 | 驱动版本没变，估计同样编不过（只看了版本，没编） |
+> | Bluefin 上的驱动 615.71.09 | NVIDIA 官网有，**任何 nixpkgs 分支都没有** |
+>
+> 也就是说：新驱动能解决编译问题，只是 26.05 这个稳定分支还没跟上。
+> 而且**「能编译」不等于「在这块 RTX 5060 上能跑」**，这两件事要分开验证。
+
+### D.1 「退役」会以什么形式出现
+
+**它不会突然把系统弄坏。** 正在跑的系统完全不受影响。它只会在你**更新
+`flake.lock`**（`nix flake update`，或者 `skills-update`，它内部跑的就是这个）
+之后，以下面两种形式之一冒出来：
+
+1. **构建直接失败**：nixpkgs 已经删掉了 `linuxPackages_6_18`，报错里有
+   `removed because it has reached its end of life`（7.0、7.1 就是这样，
+   现在都已经被删了）。**这发生在 `nix build` 那一步，`switch` 之前，
+   所以当前系统毫发无损。** 这是故意想要的「响亮失败」，比悄悄升内核好得多。
+2. **还能构建，但上游已经不再给 6.18 打安全补丁**（nixpkgs 删得晚一点的情况）。
+   这种没有报错，所以**不能只靠报错来发现**。
+
+**提前知道的办法：** kernel.org 的 releases 页面（`https://www.kernel.org/category/releases.html`）
+里 longterm 那一栏列着每个 LTS 的预计结束日期。
+**建议在 6.18 结束日期前 2-3 个月设一个日历提醒。**
+
+### D.2 收到报错的第一反应
+
+先把 `flake.lock` 还原，让仓库回到能构建的状态：
+
+```bash
+cd ~/nixos-config
+git restore flake.lock
+```
+
+这是**权宜之计，不是解决办法**：旧的锁还能构建，但内核不再有上游安全补丁，
+不要在这个状态上停太久。真正的处理从 D.3 开始。
+
+### D.3 找候选内核
+
+```bash
+cd ~/nixos-config
+
+# 1. nixpkgs 现在推荐的默认内核（通常就是它认定的当前 LTS，是最好的起点）
+nix eval --raw .#nixosConfigurations.asus.pkgs.linuxPackages.kernel.version
+
+# 2. 列出当前 nixpkgs 里真正还能用的内核（已被删的会被过滤掉）
+nix eval --json .#nixosConfigurations.asus.pkgs.linuxKernel.packages --apply \
+  'p: builtins.filter (n: (builtins.tryEval p.${n}.kernel.version).success)
+       (builtins.filter (n: builtins.match "linux_[0-9]+_[0-9]+" n != null)
+         (builtins.attrNames p))'
+
+# 3. 当前锁定的驱动版本
+nix eval --raw .#nixosConfigurations.asus.config.hardware.nvidia.package.version
+```
+
+第 2 条的输出形如 `["linux_5_10","linux_5_15","linux_6_1","linux_6_12","linux_6_18","linux_6_6","linux_7_2"]`
+（这是 2026-09-30 的结果）。**选 LTS，不选普通版本**：普通版本几个月就到期，
+选了等于过几个月再来一遍。哪些是 LTS 以 kernel.org 的 longterm 栏为准。
+LTS 通常是每年最后发布的那个版本。
+
+### D.4 试新内核能不能编译
+
+把 `hosts/asus/default.nix` 里的 `pkgs.linuxPackages_6_18` 换成候选内核，
+版本号里的点换成下划线，例如 `pkgs.linuxPackages_7_4`：
+
+```nix
+  boot.kernelPackages = pkgs.linuxPackages_X_Y;    # X_Y 换成你选的版本
+```
+
+然后**只构建，不切换**（**不用 sudo**）：
+
+```bash
+nixfmt hosts/asus/default.nix
+nix build .#nixosConfigurations.asus.config.system.build.toplevel --out-link /tmp/res
+nix build .#nixosConfigurations.asus.config.home-manager.users.toru.home.activationPackage --out-link /tmp/hm
+```
+
+- **两条都通过** → 去 D.5。
+- **失败**，日志里有 `nvidia-open`（或 `nvidia/os-interface.c` 之类）→ 是驱动和这个
+  内核的头文件不兼容，去 D.6。看日志的办法：
+  `nix log <报错里给出的 .drv 路径>`。
+- **失败但和 nvidia 无关** → 是别的东西，把最后 30 行日志记下来再查。
+
+### D.5 装上去并验证
+
+**换内核要用 `boot`，不用 `switch`。** `boot` 只写引导项、不激活，
+下次重启才生效，万一起不来，重启就能选回旧的（原理见 CLAUDE.md「切换」那张表）：
+
+```bash
+sudo nixos-rebuild boot --flake /home/toru/nixos-config#asus
+reboot
+```
+
+重启后**逐项验证，构建通过不等于可用**：
+
+```bash
+uname -r                                       # 是新内核
+nvidia-smi                                     # 看得到 RTX 5060
+nix shell nixpkgs#mesa-demos -c nvidia-offload glxinfo -B | grep -i renderer   # NVIDIA
+systemctl --failed                             # 0 loaded units listed
+```
+
+再手动试：
+
+- [ ] Wi-Fi 能连
+- [ ] **合盖睡眠再唤醒**一次，屏幕正常、独显程序不花屏
+  （`hosts/asus/tuning.nix` 里 `powerManagement.enable` 对应的就是这件事）
+- [ ] 外接显示器能亮
+- [ ] Steam 能启动一个游戏，走独显
+
+**全部通过再提交。** 出问题就重启，在 systemd-boot 菜单里选上一个
+generation（里面是旧内核），回去后 `git restore hosts/asus/default.nix` 再想办法。
+
+> **别在一个没验证过的新内核上住太久。** `modules/common.nix` 的 `nix.gc`
+> 会清掉 7 天以前的旧 generation。放着不管超过一周，能退回的旧 generation
+> 就没了。验证要在一周之内做完。
+
+### D.6 驱动编不过：按代价从小到大
+
+| 办法 | 怎么做 | 代价与风险 |
+|------|--------|------------|
+| **a. 换相邻的内核试试** | D.4 换一个版本再构建 | 几乎没有。有时只是某个内核头文件不兼容，隔壁版本就好了 |
+| **b. 换 NVIDIA 驱动分支** | 先看各分支版本：`for p in stable production latest beta new_feature legacy_580; do printf '%s ' $p; nix eval --raw ".#nixosConfigurations.asus.config.boot.kernelPackages.nvidiaPackages.$p.version"; echo; done`。挑一个更新的，写 `hardware.nvidia.package = config.boot.kernelPackages.nvidiaPackages.<分支>;` | 小。`beta` 分支比 `stable` 新但没那么稳。**RTX 50 系必须用开源内核模块**（`hardware.nvidia.open = true`），别为了兼容去关掉它 |
+| **c. 内核连同驱动一起从 nixos-unstable 拿** | `flake.nix` 加一个 `nixpkgs-unstable` 输入，`boot.kernelPackages = inputs.nixpkgs-unstable.legacyPackages.x86_64-linux.linuxPackages_latest;`。`hardware.nvidia.package` 用 `config.boot.kernelPackages.nvidiaPackages.stable`，它会跟着取到 unstable 那个版本 | 中。**没有试过。** 内核和驱动必须**成对**来自同一个 nixpkgs，只换其中一个会不匹配。unstable 是滚动的，每次更新都可能变 |
+| **d. 手工钉住 NVIDIA 官网的版本**（比如 Bluefin 上的 615.71.09） | 用 `nvidiaPackages.mkDriver { version = "…"; sha256_64bit = "…"; openSha256 = "…"; settingsSha256 = "…"; persistencedSha256 = "…"; }`，哈希用 `nix-prefetch-url` 逐个算 | 大。**没有试过。** 要自己维护版本和哈希，而且新版驱动不保证在新内核上编得过 |
+| **e. 停在旧锁上等** | `git restore flake.lock`，不更新 | **只是拖延。** 6.18 一旦没有上游安全补丁，这就是在裸奔。给自己定个期限，别无限期 |
+| **f. 应急：先让系统能用** | 把 `hosts/asus/tuning.nix` 里 NVIDIA 那一大段（`videoDrivers` 里的 `nvidia`、整个 `hardware.nvidia`）临时注释掉，再构建 | 独显暂时用不了（Steam 游戏、CUDA 之类），**但系统能起来**：显示器全部接在 AMD 核显上，桌面照常。**没有试过**，但逻辑上是通的 |
+
+**顺序建议：a → b → c。** d 和 f 是万不得已。
+
+### D.7 更大的一件事：26.05 这个 channel 本身也会到期
+
+NixOS 稳定版只维护大约七个月（**以 nixos.org 的公告为准**）。26.05 是 2026 年 5 月出的，
+**大约在 2026 年底结束支持**，到时整个仓库要一起升到下一个版本（26.11）。
+这和内核退役经常是**同一件事**，因为新 channel 会带来新的默认 LTS 内核。
+
+升级时三个输入要一起改，缺一个就会版本错位：
+
+```nix
+  # flake.nix
+  nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.11";
+  home-manager.url = "github:nix-community/home-manager/release-26.11";
+  stylix.url = "github:danth/stylix/release-26.11";
+```
+
+然后 `nix flake update`（**不加 sudo**）。**thinkpad 和 asus 两台都要各构建两层**，
+两台都通过再切换。asus 那台的内核选择和 D.3 到 D.6 一样，先看新 channel
+里还有没有 `linuxPackages_6_18`，没有就按上面走。
+
+### D.8 平时的习惯
+
+- **更新 `flake.lock` 之后，先对 asus 做两个 `nix build`（不用 sudo），再 `switch`。**
+  这条本来就在重建流程里，asus 上尤其不能省：它有独显，驱动编不过就是构建失败，
+  但你要**看到**这个失败才知道。
+- **`skills-update` 内部会 `nix flake update`**，也就是会顺带推进 nixpkgs 和内核。
+  在 asus 上跑完它同样要先构建再切换。
+- **换内核用 `nixos-rebuild boot` 不用 `switch`**，并且一周之内验证完（见 D.5 末尾）。
+- **thinkpad 的内核继续用 `linuxPackages_latest` 不受影响**：它没有独显，
+  没有 NVIDIA 驱动这个约束。
+- 6.18 结束日期前 2-3 个月的日历提醒。
