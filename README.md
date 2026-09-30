@@ -13,7 +13,8 @@
 
 > 本文件是**给人看的操作手册**。
 > 给 AI 协作用的约定在 [CLAUDE.md](CLAUDE.md)，
-> **装新机器和搬用户状态**在 [MIGRATION.md](MIGRATION.md)（演练清单见 [REHEARSAL.md](REHEARSAL.md)），
+> **装新机器和搬用户状态**在 [MIGRATION.md](MIGRATION.md)（演练清单见 [REHEARSAL.md](REHEARSAL.md)；
+> **asus 这一台**的完整重装步骤见 [ASUS_INSTALL.md](ASUS_INSTALL.md)），
 > 踩过的坑和排查过程在 [Lesson-Learn/](Lesson-Learn/README.md)。
 
 ---
@@ -43,6 +44,7 @@
 ├── Lesson-Learn/             知识库（按时间顺序编号）
 ├── MIGRATION.md              装新机器 + 搬 Nix 管不到的用户状态
 ├── REHEARSAL.md              在虚拟机里演练装机流程的检查清单
+├── ASUS_INSTALL.md           asus 重装指南：Windows + NixOS 双系统，从分区到 rEFInd 的完整步骤
 └── CLAUDE.md                 AI 协作约定
 ```
 

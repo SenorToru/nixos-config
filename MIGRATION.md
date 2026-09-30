@@ -894,8 +894,9 @@ Windows 的功能更新会擅自把 UEFI 启动顺序第一位重置成
 #### asus 的具体安排（第一台真机双 ESP）
 
 上面的做法只在虚拟机里验证过。asus（ASUS TX Air，前身是跑 Bluefin 的那台）
-是第一台真机，配置在 `hosts/asus/`。**装机前后各有几件事要手动做，
-写在这里而不是留在脑子里。**
+是第一台真机，配置在 `hosts/asus/`。**从备份到装好的完整逐步指南在
+[ASUS_INSTALL.md](ASUS_INSTALL.md)**，下面只留分区表和要点，两处描述同一件事，
+改一处要改另一处。
 
 盘的分工：Samsung 990 PRO 2TB 归 Windows，KIOXIA 3.7T 归 NixOS。
 
@@ -920,7 +921,8 @@ Windows 的 ESP 默认只有 100MB 左右。要 1 GiB 得在安装界面按 Shif
 - `hardware-configuration.nix`：换成 `nixos-generate-config` 生成的
 - `hwinfo.nix`：跑 `sudo refind-hwinfo` 生成
 - `tuning.nix` 里的 `winEspUuid` 和 `shareUuid`：用 `blkid` 查
-  （构建时有 warning 提醒，没换的话每次都会出现）
+  （构建时有 warning 提醒，没换的话每次都会出现）。ASUS_INSTALL.md 里是
+  在 `nixos-install` 之前、装机环境里就填好，不用等到装完
 - `default.nix` 里 `custom.refind.resolution`：按 6.4 节校一遍
 - `default.nix` 里的键盘布局：目前按 US 写，如果物理键盘是 JIS 要改成 `jp106`
 - `home/toru.nix` 的 `signingKeys`：新机器生成 SSH 密钥后加一行 `asus`
