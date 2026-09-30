@@ -1491,11 +1491,18 @@ migration-check
 | `users.users.toru` 没有密码字段，新机器装完账户是锁定的 | **有意不改**。密码属 C 类，塞进仓库是倒退。第 5.4 节的 `nixos-enter … passwd toru` 是正解 |
 | B 类清单是否还有该收未收的 | 加了新工具之后跑 `migration-check`，它会报出 `$HOME` 里没人认领的东西 |
 | 第 1-5 节没在全新机器上从头跑过 | 只能等下次真装新机器时验证，对不上的地方回来改 |
-| 独显探测判据未经多显卡机器验证 | AMD 的 APU 不在 PCI bus 00 上且也报显存，可能被误判成独显。真遇到直接改 `hwinfo.nix` |
 | `~/.config/obsidian` 还没分类 | 只是这台机器打开过哪些库。第一次打开 Obsidian 后 `migration-check` 若报没人认领，再决定忽略还是收进 B 类。库本身是普通文件夹，要跨设备就用 Syncthing 同步那个目录 |
 | VS Code 的四个扩展仍是手工装的 | nixpkgs 里的版本比实际装的旧（claude-code 会退到 2.1.223），声明进 Nix 等于降级。归手工清单，`migration-check` 盯着 |
 
 **已解决**（原先列在这里）：
+
+- **`refind-hwinfo` 的显卡探测判据**（2026-09-30）—— 原来只在单核显的 thinkpad 上验证过，
+  asus（AMD APU + NVIDIA 独显）上两个方向都判反了：NVIDIA 没有 sysfs 显存节点，
+  被当成核显；AMD APU 报了 512M 显存，被当成独显。判据改成：bus 00 算核显、
+  NVIDIA 算独显、有显存节点且不小于 2048M 算独显、其余（含 AMD APU）算核显。
+  用 asus、thinkpad、AMD 独显桌面三种形态的样例输入验证过逻辑，thinkpad 上重跑结果不变；
+  **asus 真机上重跑还没做**。AMD 厂商名 lspci 里是 "Advanced Micro Devices"，
+  也顺带改成了 AMD。
 
 - **`~/.grok/` 的 A / B / C 划分**（2026-09-30）—— 登录用过之后逐项看过：
   `config.toml` 收进 B 类，`auth.json` 和 `mcp_credentials.json` 是 C 类，

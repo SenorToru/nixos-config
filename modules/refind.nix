@@ -233,13 +233,21 @@ let
           | sed 's/ CPU @.*//; s/ @ .*//; s/ Processor//' | norm)
 
     # ---------- GPU ----------
-    # 核显与独显分开收集。判据：PCI 地址在 bus 0000:00 上的算核显；
-    # 否则看有没有显存节点（amdgpu 的 mem_info_vram_total / Intel Arc 的
-    # lmem_total_bytes），有才算独显。
+    # 核显与独显分开收集。判据，按顺序：
     #
-    # **这个判据只在单核显机器上实测过**（写它的时候手头只有这一台）。
-    # AMD 的 APU 不在 bus 00 上且也报显存，有可能被误判成独显。
-    # 真遇到了直接改生成出来的 hwinfo.nix，比改这里省事。
+    #   1. PCI 地址在 bus 0000:00 上 -> 核显（Intel 的核显都在这里）。
+    #   2. 厂商是 NVIDIA -> 独显。NVIDIA 没有 sysfs 显存节点，所以不标显存。
+    #   3. 有显存节点且 >= 2048M -> 独显（AMD 独显、Intel Arc）。
+    #   4. 其余 -> 核显。**AMD 的 APU 就落在这一条**：它不在 bus 00 上，
+    #      而且会报一小块划给它的显存（asus 上是 512M），但那是从内存里
+    #      划出来的，不是独立显存。
+    #
+    # 这个判据的来历：原来只有「不在 bus 00 且有显存节点就是独显」，
+    # 只在单核显的 thinkpad 上实测过。asus（AMD APU + NVIDIA 独显）上
+    # 两个方向都判反了：NVIDIA 没有显存节点，被当成 SHARED 的核显；
+    # AMD APU 报了 512M，被当成独显。2026-09-30 在 asus 上发现并改成上面这样。
+    # 上面第 4 条的 2048M 是个经验阈值，不是规范；碰到边界情况直接改
+    # 生成出来的 hwinfo.nix，比改这里省事。
     igpu=()
     dgpu=()
     for card in /sys/class/drm/card[0-9]; do
@@ -253,15 +261,25 @@ let
         *\[*\]*) name=''${raw##*[}; name=''${name%]} ;;
         *)       name=$raw ;;
       esac
-      vram=""
+      vram_mb=""
       for f in "$card/device/mem_info_vram_total" "$card/lmem_total_bytes"; do
-        [ -r "$f" ] && { vram="$(( $(cat "$f") / 1048576 ))M"; break; }
+        [ -r "$f" ] && { vram_mb="$(( $(cat "$f") / 1048576 ))"; break; }
       done
-      desc=$(printf '%s %s' "''${ven%% *}" "$name" | norm)
-      if [ -n "$vram" ]; then desc="$desc / $vram"; else desc="$desc / SHARED"; fi
+      # lspci 里 AMD 的厂商名是 "Advanced Micro Devices, Inc. [AMD/ATI]"，
+      # 取第一个词会得到 "Advanced"，换成人们认识的 AMD。
+      vname=''${ven%% *}
+      [ "$vname" = "Advanced" ] && vname=AMD
+      base=$(printf '%s %s' "$vname" "$name" | norm)
       case "$addr" in
-        0000:00:*) igpu+=("$desc") ;;
-        *)         if [ -n "$vram" ]; then dgpu+=("$desc"); else igpu+=("$desc"); fi ;;
+        0000:00:*) igpu+=("$base / SHARED") ;;
+        *)
+          if [ "$vname" = "NVIDIA" ]; then
+            dgpu+=("$base")
+          elif [ -n "$vram_mb" ] && [ "$vram_mb" -ge 2048 ]; then
+            dgpu+=("$base / ''${vram_mb}M")
+          else
+            igpu+=("$base / SHARED")
+          fi ;;
       esac
     done
 

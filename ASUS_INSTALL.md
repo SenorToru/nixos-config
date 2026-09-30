@@ -102,7 +102,7 @@ KIOXIA 上的数据要到第 9.2 节才会被抹掉。
 |------|------|
 | Windows 11 的安装（第 6 章） | **真机走通，进了桌面。** 首次设置卡在联网界面，用本地账户绕过，见 6.5 节。diskpart 预建的 1 GiB ESP 和 1000 GiB 共享盘被安装器直接接受了（6.4 节的退路没用上）。Windows 装完后自己又建了一个约 892 MB 的恢复分区 |
 | NixOS 的分区、格式化、挂载、`nixos-install`（第 9 章） | **真机走通。** 其中 9.9 节手动建 `Linux Boot Manager` 启动项那步实际用过，重启后直接进了 systemd-boot → NixOS |
-| 首次进 NixOS（第 10 章） | **能进系统。** 10.3 的系统层验证和 10.4 的驱动加载已经通过（主机名、内核、压缩、zram、两个挂载点、`nvidia-smi`）；PRIME offload 实测、共享盘写入、Wi-Fi、应用还没有记录 |
+| 首次进 NixOS（第 10 章） | **能进系统。** 10.3 的系统层验证和 10.4 的驱动加载已经通过（主机名、内核、压缩、zram、两个挂载点、`nvidia-smi`）；共享盘写入和 PRIME offload 实测也已通过；桌面与输入、Wi-Fi、应用还没有记录 |
 | rEFInd 与双 ESP（第 11 章） | **还没在真机上走。** 只在虚拟机里验证过，用的是假的 Windows ESP |
 | Windows 那一侧的第 7 章设置 | 要在装 NixOS 之前完成；是否做完，装机时没有记录 |
 | `hosts/asus/` 的运行时表现 | 系统层已经在 asus 上装进去并启动，但显卡、睡眠唤醒等要到第 10 节和附录 D.5 才验证 |
@@ -946,7 +946,7 @@ touch /mnt/share/nixos-test && rm /mnt/share/nixos-test && echo "共享盘可写
 
 ```bash
 nvidia-smi                                    # 应该看到 RTX 5060 Laptop，驱动版本
-lspci -k | grep -EA3 'VGA|3D'                 # 核显用 amdgpu，独显用 nvidia
+lspci -D -k | grep -EA3 'VGA|3D|Display'         # 核显用 amdgpu，独显用 nvidia
 ```
 
 再确认 **PRIME offload** 真的在工作（默认是核显出图，独显只在被点名时启动）：
@@ -963,7 +963,7 @@ nix shell nixpkgs#mesa-demos -c nvidia-offload glxinfo -B | grep -i 'renderer'
 检查 `hosts/asus/tuning.nix` 的 `amdgpuBusId` / `nvidiaBusId`：
 
 ```bash
-lspci -D | grep -E 'VGA|3D'
+lspci -D | grep -E 'VGA|3D|Display'
 # 0000:66:00.0 → PCI:102:0:0    （0x66 = 102）
 # 0000:64:00.0 → PCI:100:0:0    （0x64 = 100）
 ```
@@ -978,6 +978,19 @@ lspci -D | grep -E 'VGA|3D'
 - [ ] **内置触摸板是禁用的**（这台机器的既定设置，见 `home/desktop-prefs.nix`）
 - [ ] `Ctrl+Alt+T` 和 `Ctrl+Alt+Return` 都能开出 Ghostty
 - [ ] 输入法：中文（白霜拼音）和日文（mozc）都能打
+
+> **新机器上输入法要手动启用一次。** 刚装好时，fcitx5 里 Rime 和 Mozc 的程序都在，
+> 但「启用了哪几个输入法」那份设置（`~/.config/fcitx5/profile`，B 类状态）是空的，
+> 所以配置窗口的当前输入法里一个都没有。2026-09-30 实测就是这样。
+>
+> 手动加的办法：fcitx5 配置 → Input Method → 左下角 `+` →
+> **取消勾选底部的「Only Show Current Language」**（默认勾着，系统语言是英文，
+> 所以 Mozc 和 Rime 被藏起来，这是「看不见」的真正原因）→ 搜 `Mozc`、`Rime` 各加一个 → Apply。
+> 第一次切到 Rime 会自动部署（白霜词库要编译，一两分钟，不需要执行任何命令）。
+>
+> **不要用 `state-sync restore` 把 thinkpad 的 profile 整份铺过来：** thinkpad 的是
+> JIS 日语键盘，profile 里是 `Default Layout=jp` 和 `keyboard-jp`，而 asus 是 US 键盘，
+> 铺过来键位会错。要还原的话，之后把这两处改成 `us` 和 `keyboard-us`。
 
 ### 10.6 验证应用
 
@@ -1016,9 +1029,14 @@ find . ! -user toru -printf '%u  %p\n'      # 应该没有输出
 git diff hosts/asus/hwinfo.nix
 ```
 
-应该是 AMD Ryzen AI 7 H 350、Radeon / RTX 5060、内存约 30G、Samsung 或 KIOXIA
-的磁盘那几行。**探测错了可以直接改这个文件**，它不在开机路径上，
+应该是 AMD Ryzen AI 7 H 350、Radeon / RTX 5060、内存约 30G（会显示 32768M）、
+根所在盘（KIOXIA）的那几行。**探测错了可以直接改这个文件**，它不在开机路径上，
 错了只是启动画面上一行字不对。
+
+**特别看两行 GPU 有没有标反：** `igpu` 应该是 AMD Radeon 860M（标 SHARED），
+`dgpu` 应该是 NVIDIA RTX 5060。2026-09-30 用旧版探测判据时，这两行在 asus 上
+标反了（见附录 E 第 13 条）。判据已经修过，但**在 asus 真机上重跑修好的版本还没做**，
+所以这里仍然要目视检查一遍。标反了就直接手改，改法见附录 E 第 13 条。
 
 ### 11.2 重建并写进两个 ESP
 
@@ -1296,7 +1314,7 @@ echo $SHELL
 
 # 服务
 systemctl is-active fwupd
-systemctl --failed                           # 0 loaded units listed
+systemctl --failed                           # 只应有 nvidia_wmi_ec_backlight 那一条，见附录 E 第 12 条
 
 # DNS（modules/dns.nix）
 resolvectl status                            # 每个 Link 段没有 DNS Servers: 那一行
@@ -1535,7 +1553,7 @@ reboot
 uname -r                                       # 是新内核
 nvidia-smi                                     # 看得到 RTX 5060
 nix shell nixpkgs#mesa-demos -c nvidia-offload glxinfo -B | grep -i renderer   # NVIDIA
-systemctl --failed                             # 0 loaded units listed
+systemctl --failed                             # 只应有 nvidia_wmi_ec_backlight 那一条（附录 E 第 12 条）
 ```
 
 再手动试：
@@ -1680,10 +1698,71 @@ Wi-Fi 网卡（RTL8852CE）装机器里不认，驱动是 EXE，这个阶段没�
 另外 `hostnamectl` 的 `OS Support End: 2026-12-31` 证实了附录 D.7 说的
 26.05 大约年底到期。
 
+**11. 10.4 显卡验证通过，PRIME offload 实测生效。**
+由 asus 上的 Claude（通过 Remote Control）跑命令并回报，输出原样：
+- `lspci -D -k`：`0000:64:00.0` 是 NVIDIA GB206M，`Kernel driver in use: nvidia`；
+  `0000:66:00.0` 是 AMD Krackan，`Kernel driver in use: amdgpu`。
+- `/sys/class/drm/card1` 指向 `0000:64:00.0`（nvidia），`card2` 指向 `0000:66:00.0`（amdgpu）。
+- 默认渲染：`AMD Radeon 860M Graphics (radeonsi, krackan1, ACO, DRM 3.64, 6.18.52)`。
+- `nvidia-offload` 下：`NVIDIA GeForce RTX 5060 Laptop GPU/PCIe/SSE2`。
+- `tuning.nix` 里 `amdgpuBusId = "PCI:102:0:0"`、`nvidiaBusId = "PCI:100:0:0"` 和实际总线号对得上。
+两个小发现：
+- **AMD 核显在 `lspci` 里是 `Display controller`（class 0380），不是 `VGA compatible controller`。**
+  原来文档里 `grep -E 'VGA|3D'` 会漏掉它，只看到 NVIDIA 一块。已改成 `VGA|3D|Display`。
+- 非 root 跑 `lspci -k` 会打一行 `pcilib: Error reading .../label: Operation not permitted`，
+  无害，忽略即可。
+另外确认了 `lspci` 在 asus 的 PATH 上（`modules/common.nix` 里有 `pciutils`），
+不需要 `nix shell`。
+
+**12. `systemctl --failed` 里有一个失败的服务，无害，不处理。**
+`systemd-backlight@backlight:nvidia_wmi_ec_backlight.service` 失败，
+`Result: start-limit-hit`，日志每次都是同一句：
+`Failed to write system 'brightness' attribute: Input/output error`。
+内核侧同时打着 `nvidia-wmi-ec-backlight ...: EC backlight control failed: AE_NOT_FOUND`。
+本次启动内出现了 13 轮，每轮 5 次尝试后撞上启动频率限制。
+**这不是「只在开机时失败」**（asus 上的 Claude 核对日志后指出的）：13 轮里只有 1 轮在开机
+（22:11:14），另外 12 轮发生在 22:25:39 到 22:45:13 之间、会话运行期间，
+每一轮内核侧都伴随 6 行 `AE_NOT_FOUND`。
+**触发原因没有查清。** 时间点大致和 toru 那段时间跑 `nvidia-smi`、`nvidia-offload`、
+试亮度的时间重合，所以曾推测是独显被唤醒、或亮度被调节时会重发这个背光设备的
+udev 事件，但这只是猜测，没有拿证据验证过。
+
+关键的一点：**屏幕亮度本身是正常的。** toru 亲自试过，亮度键和 GNOME 设置里的滑块
+都能明显调亮调暗。这台机器上 `/sys/class/backlight/` 里只有这一个设备
+（`nvidia_wmi_ec_backlight`，type=firmware，brightness=35，max=100），
+内核日志里 `amdgpu ... Skipping amdgpu DM backlight registration`，
+`nvidia-modeset` 报 `ACPI reported no NVIDIA native backlight available;
+attempting to use ACPI backlight`。也就是说**真正管这块面板亮度的就是这个设备**，
+失败的是 `systemd-backlight` 的 load 操作，也就是把保存的亮度值写回这个设备，
+写的时候设备返回 EIO。它在运行期间也会反复触发，不限于开机。
+**已观察到的后果**只有 `systemctl --failed` 多一行，亮度键和滑块都仍然有效。
+**没有观察到但不能排除的：** 重启后亮度是否被恢复到上次的值，没有专门试过。
+**不要为了让它不报错就去屏蔽模块**（`boot.blacklistedKernelModules`）：
+那会连唯一的背光设备一起拿掉，亮度控制就没了。
+决定：不处理，只记录。13 节和 D.5 的检查里，`systemctl --failed` 的预期改成
+「只应有这一条」。如果将来出现别的失败服务，才需要查。
+
+**13. `refind-hwinfo` 把 asus 的两块显卡标反了。**
+`sudo refind-hwinfo` 生成的 hwinfo.nix 里：`igpu` 是 NVIDIA RTX 5060（标 SHARED），
+`dgpu` 是 AMD Radeon 840M/860M（标 512M）。原因是 `modules/refind.nix` 里的判据
+只在单核显的 thinkpad 上验证过：NVIDIA 没有 sysfs 显存节点，被当成核显；
+AMD APU 不在 bus 00 上、又报了 512M 的划分显存，被当成独显。
+`modules/refind.nix` 注释里早就写过这个风险，这次是第一次在真机上碰到。
+CPU、内存（32768M LPDDR5）、磁盘（根在 KIOXIA 上，之前的占位写的是 Samsung）三行是对的。
+处理：
+- 本次装机：按脚本注释的建议，直接手改 `hosts/asus/hwinfo.nix` 的两行
+  （igpu 改成 AMD RADEON 860M GRAPHICS / SHARED，dgpu 改成
+  NVIDIA GEFORCE RTX 5060 LAPTOP / 8151M）。
+- 工具本身：`modules/refind.nix` 的判据改成 bus 00 算核显、NVIDIA 算独显、
+  显存 >= 2048M 算独显、其余算核显；AMD 厂商名也从 "Advanced" 改成 AMD。
+  用三种形态的样例验证了逻辑，thinkpad 上重跑结果不变。
+  asus 真机上重跑还没做。
+改了：11.1 节加了提醒。
+
 ### 待补
 
 - 华硕的启动菜单键、BIOS 键具体是哪个（装机时没有记下来）
-- 第 7 章（快速启动、休眠、UTC）是否做完；共享盘 `/mnt/share` 现在能挂上，但是否可写还没验证
-- 第 10 章还没验证的：PRIME offload 是否真的用上独显（10.4）、桌面与输入（10.5）、Steam 等应用（10.6）、Wi-Fi
+- 第 7 章（快速启动、休眠、UTC）是否做完。共享盘 `/mnt/share` 已确认能挂上、能写；「从 Windows 关机后再进 NixOS 仍可写」和时间是否差 9 小时，要等第一次进过 Windows 之后才能验
+- 第 10 章还没验证的：桌面与输入（10.5）、Steam 等应用（10.6）、Wi-Fi、合盖睡眠唤醒
 - 恢复分区是 Windows 自己建的这一判断，要在 Windows 里用 `reagentc /info` 确认
 - 第 11 章 rEFInd 的 GOP 分辨率实测值
