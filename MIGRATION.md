@@ -805,7 +805,9 @@ store 路径**，不重新构建的话新图根本不存在，sync 拷的还是�
 反推即可。2560×1440 对应 11,059,254 字节。
 
 > **F10 截图 rEFInd 自己从不清理**，每张 11 MB，攒几张就吃掉 ESP 一块。
-> 看完删掉：`sudo rm -f /boot/screenshot_*.bmp`
+> **它不一定写在 rEFInd 启动所在的 ESP 上**：asus 上 rEFInd 从 NixOS 盘的 ESP 启动，
+> 截图却写到了 Windows 盘的 ESP。所以找的时候两个 ESP 都要看，
+> 删的时候写具体文件名，不要用通配符。详见 ASUS_INSTALL.md 11.4 节。
 
 ### 6.5 双启动：两个 ESP 各装一份
 
@@ -883,8 +885,9 @@ sudo ls /mnt/winesp/EFI/refind/
 
 #### Windows 侧的防御
 
-```powershell
-# 管理员 PowerShell
+```
+:: 管理员命令提示符（cmd）。在 PowerShell 里花括号会被当成脚本块，
+:: 要写成 bcdedit /set '{bootmgr}' path \EFI\refind\refind_x64.efi
 bcdedit /set {bootmgr} path \EFI\refind\refind_x64.efi
 ```
 

@@ -103,10 +103,10 @@ KIOXIA 上的数据要到第 9.2 节才会被抹掉。
 | Windows 11 的安装（第 6 章） | **真机走通，进了桌面。** 首次设置卡在联网界面，用本地账户绕过，见 6.5 节。diskpart 预建的 1 GiB ESP 和 1000 GiB 共享盘被安装器直接接受了（6.4 节的退路没用上）。Windows 装完后自己又建了一个约 892 MB 的恢复分区 |
 | NixOS 的分区、格式化、挂载、`nixos-install`（第 9 章） | **真机走通。** 其中 9.9 节手动建 `Linux Boot Manager` 启动项那步实际用过，重启后直接进了 systemd-boot → NixOS |
 | 首次进 NixOS（第 10 章） | **能进系统。** 10.3 的系统层验证和 10.4 的驱动加载已经通过（主机名、内核、压缩、zram、两个挂载点、`nvidia-smi`）；共享盘写入和 PRIME offload 实测也已通过；桌面与输入、Wi-Fi、应用还没有记录 |
-| rEFInd 与双 ESP（第 11 章） | **还没在真机上走。** 只在虚拟机里验证过，用的是假的 Windows ESP |
-| Windows 那一侧的第 7 章设置 | 要在装 NixOS 之前完成；是否做完，装机时没有记录 |
+| rEFInd 与双 ESP（第 11 章） | **真机走通，全部验证完**：两个 ESP 都写入，菜单、图标、进 NixOS 和 Windows、2560x1600 分辨率、Windows 侧 `bcdedit` 兜底都正常（附录 E 第 14、15、18 条） |
+| Windows 那一侧的第 7 章设置 | **已核实**：休眠关、快速启动不可用、BitLocker 关、UTC 已设置（附录 E 第 16 条）。共享盘在进过 Windows 之后仍可写，时间没有错开（附录 E 第 18 条） |
 | `hosts/asus/` 的运行时表现 | 系统层已经在 asus 上装进去并启动，但显卡、睡眠唤醒等要到第 10 节和附录 D.5 才验证 |
-| 华硕的启动菜单键、BIOS 键 | 已经实际按过。**具体是哪个键，装机时没有记下来**，下次重装时补 |
+| 华硕的启动菜单键、BIOS 键 | 启动菜单键是 **`Esc`**（实测）。BIOS 键还没记录 |
 
 三件虚拟机验证不了的事，还都没碰到：
 **GOP 分辨率**（第 11.4 节）、**NTFS 脏状态**（第 10.3 节）、**硬件探测的值**（第 11.1 节）。
@@ -371,7 +371,9 @@ exit
 > 在 NixOS 里 `lsblk` 看到 Samsung 盘上多了一个约 892 MB、没有卷标的 NTFS 分区
 > （`nvme0n1p4`），同时 C: 是 859.5 GiB，比脚本里 `size=881000`（约 860.3 GiB）
 > 少了差不多同样的大小。所以这个分区是 Windows 安装器从 C: 里缩出来的。
-> **从大小反推的，没有进 Windows 用 `reagentc /info` 或磁盘管理确认过。**
+> **已确认：** 在 Windows 里跑 `reagentc /info`，`Windows RE status: Enabled`，
+> `Windows RE location: \\?\GLOBALROOT\device\harddisk0\partition4\Recovery\WindowsRE`，
+> 也就是第 4 个分区，和 `lsblk` 里 892M 的 `nvme0n1p4` 对上了。
 >
 > 结论：**「不预建」并不能阻止 Windows 自己建一个，只是省了我们自己的四行脚本。**
 > 这个分区没有害处，不用管它，也**不要删**。它不影响共享盘和 NixOS 的任何东西。
@@ -1090,20 +1092,44 @@ nix shell nixpkgs#efibootmgr -c efibootmgr
 写了固件没有的值，背景图会被拉伸或平铺。thinkpad 就是这么踩过的：
 固件压根不提供 1080p。
 
-流程：
+**asus 上实际走通的更短做法（2026-09-30，一次成功）：**
 
-1. 把 `hosts/asus/default.nix` 里 `custom.refind.resolution` 临时改成一个
-   明显无效的值：`width = 1; height = 1;`
-2. `sudo nixos-rebuild switch --flake /home/toru/nixos-config#asus`，
-   然后 `sudo refind-sync`，重启。
-3. rEFInd 启动时会**列出固件支持的全部模式**。拍照或抄下来。
-4. 挑面板原生的那一个（通常是 Mode 0）。这台的面板原生多半是
-   2880×1800 或 1920×1200，**以固件实际列出的为准，别想当然**。
-5. 改回 `default.nix`，重新 `nrb`（`sudo nixos-rebuild switch ...`），
-   `sudo refind-sync`，重启。
-6. 验证：在 rEFInd 界面按 `F10` 截图，会往 ESP 根目录写一张 BMP，
-   `文件大小 = 宽 × 高 × 3 + 54`，反推就知道实际分辨率。看完删掉：
-   `sudo rm -f /boot/screenshot_*.bmp`
+1. 先看面板原生分辨率，内核报的首选模式在第一行：
+   `cat /sys/class/drm/card*-eDP-*/modes | head -3`（连着内置屏的那个 `card` 编号
+   会随重启变，别写死；这台是 `2560x1600`，16:10）。
+2. 直接把 `hosts/asus/default.nix` 里 `custom.refind.resolution` 改成这个值，
+   `nixfmt`（排除 hardware-configuration.nix）、用户态 `nix build`、
+   `sudo nixos-rebuild switch ...`、`sudo refind-sync`，重启。
+3. **固件有这个模式**：画面清晰、填满屏幕，完成。asus 就是这样，
+   固件的 GOP 里有面板原生的 2560x1600。
+4. **固件没有**：rEFInd 启动时会报模式不存在并**列出固件支持的全部模式**，
+   拍照或抄下来，从里面挑最接近原生的，再走一遍第 2 步。这条路在 thinkpad 上走过。
+   想主动让它列出来，把 `resolution` 临时设成一个明显无效的值（`width = 1; height = 1;`）。
+
+内核报的模式不是固件 GOP 的列表，两者不一定相同，所以第 1 步只是给出一个
+**值得先试的候选**，不是保证。这台碰巧一致，thinkpad 也一致（原生 2560x1440 就是 Mode 0）。
+
+**验证实际分辨率：** 在 rEFInd 界面按 `F10` 截图，会写一张未压缩的 BMP，
+`文件大小 = 宽 × 高 × 3 + 54`，反推就知道实际分辨率。
+2560x1600 对应 12,288,054 字节，asus 上实测就是这个数，说明没有被回退到别的模式。
+
+**这张 BMP 不一定在 rEFInd 启动所在的 ESP 上。** asus 上 rEFInd 是从 KIOXIA 的 ESP
+（`/boot`）启动的，截图却写到了 Windows 的 ESP（`/mnt/winesp/screenshot_001.bmp`）。
+原因没有查过，可能是 rEFInd 挑了它遇到的第一个可写的 FAT 卷，**这一条是推测**。
+所以找它要两个 ESP 都看：
+
+```bash
+sudo find /boot /mnt/winesp -maxdepth 1 -iname 'screenshot_*.bmp' -exec ls -l {} \;
+```
+
+每张 12 MB，rEFInd 自己从不清理。想留着当记录，先转成 PNG（约 290 KB）再删：
+
+```bash
+nix shell nixpkgs#imagemagick -c magick /tmp/shot.bmp "$HOME/Pictures/library/2026/09/2026-09-30 asus rEFInd 2560x1600.png"
+```
+
+**删的时候写具体文件名，不要用通配符**，尤其是在 Windows 的 ESP 上：
+`sudo rm -f /mnt/winesp/screenshot_001.bmp`。
 
 详细背景见 [MIGRATION.md 6.4](MIGRATION.md)。
 
@@ -1111,11 +1137,32 @@ nix shell nixpkgs#efibootmgr -c efibootmgr
 
 ### 11.5 Windows 侧的兜底
 
-**这一步在 Windows 里做。** 从 rEFInd 选 Windows 进去，管理员 PowerShell：
+**这一步在 Windows 里做。** 从 rEFInd 选 Windows 进去。
 
-```powershell
+> **别在 PowerShell 里直接敲 `{bootmgr}`。** PowerShell 会把花括号当成脚本块，
+> 命令不会按你想的执行。要么开**管理员命令提示符**（`cmd`，命令原样有效），
+> 要么在 PowerShell 里给花括号加单引号：`'{bootmgr}'`。
+> （2026-09-30 做这一步之前发现的，教程原来写的是不带引号的 PowerShell 写法。）
+
+先看基线，`path` 一行现在应该是 `\EFI\Microsoft\Boot\bootmgfw.efi`：
+
+```
+bcdedit /enum {bootmgr}
+```
+
+然后改（管理员命令提示符）：
+
+```
 bcdedit /set {bootmgr} path \EFI\refind\refind_x64.efi
 ```
+
+同一条在管理员 PowerShell 里要写成：
+
+```powershell
+bcdedit /set '{bootmgr}' path \EFI\refind\refind_x64.efi
+```
+
+改完再跑一次 `bcdedit /enum {bootmgr}`，`path` 应该变成 `\EFI\refind\refind_x64.efi`。
 
 这条让 Windows 自己的引导入口也指向 Windows 那个 ESP 里的 rEFInd。
 Windows 的功能更新会擅自把 UEFI 启动顺序第一位重置成 `Windows Boot Manager`，
@@ -1440,8 +1487,12 @@ state-sync status ; migration-check
 ```powershell
 # Windows（管理员 PowerShell）
 powercfg /h off
-manage-bde -status
-bcdedit /set {bootmgr} path \EFI\refind\refind_x64.efi
+powercfg /a
+manage-bde -status C:
+reagentc /info
+bcdedit /enum '{bootmgr}'
+bcdedit /set '{bootmgr}' path \EFI\refind\refind_x64.efi
+# 上面 bcdedit 的花括号在 PowerShell 里必须加单引号；在 cmd 里不加也行
 ```
 
 ## 附录 D：内核 6.18 退役了怎么办
@@ -1759,10 +1810,66 @@ CPU、内存（32768M LPDDR5）、磁盘（根在 KIOXIA 上，之前的占位�
   asus 真机上重跑还没做。
 改了：11.1 节加了提醒。
 
+**14. rEFInd 第一次上真机：菜单、图标、进系统都正常。**
+`refind-hwinfo` → 手改 GPU 两行 → `nixos-rebuild switch` → `refind-sync` 一路走通，
+两个 ESP 都写进了 rEFInd（`refind_x64.efi`、`refind.conf`、`themes/`），
+NVRAM 里 rEFInd 排 `BootOrder` 第一位，`Linux Boot Manager` 安全网还在。
+重启后菜单出现，NixOS 和 Windows 11 两个图标都是正常图标（不是黄黑方块），
+选 NixOS 进了系统。**启动菜单键是 `Esc`**（之前一直写「通常是」，这次实际用过）。
+两处小现象：
+- `refind-sync` 每次先删自己上次建的那条 NVRAM 项再重建，所以编号会变
+  （`Boot0004` → `Boot0001`），无害。
+- 装机时插过的 U 盘留下的那条 `UEFI OS`（MBR 磁盘上的 `\EFI\BOOT\BOOTX64.EFI`）
+  拔掉 U 盘后固件自己清掉了，11.6 节的「清死启动项」在这台上基本用不上。这一条是推测。
+
+**15. rEFInd 分辨率：直接试面板原生值，一次成功。**
+面板原生（内核 `modes` 第一行）是 `2560x1600`（16:10），直接填进 `resolution`，
+固件 GOP 里有这个模式。F10 截图 12,288,054 字节 = 2560×1600×3+54，证明实际就是这个分辨率，
+没有被回退。比文档原来写的「先填无效值逼它列模式」少一轮重启。
+改了：11.4 节改写，加了「更短的做法」，保留原来的做法作为固件没有该模式时的退路。
+两个发现：
+- 连着内置屏的 `card` 编号会随重启变（`card1`/`card2` 重启后成了 `card0`/`card1`），
+  不要按编号找，按连接器名（`eDP-1`）或总线号。
+- **F10 截图写到了 Windows 的 ESP，不是 rEFInd 启动所在的 ESP。** 原因没查，
+  推测是它挑了遇到的第一个可写 FAT 卷。找和删的时候两个 ESP 都要看，
+  删用具体文件名不用通配符。截图转成 PNG（294 KB）存在
+  `~/Pictures/library/2026/09/`，原 BMP 删除。
+  改了：11.4 节和 MIGRATION.md 6.4 节。
+
+### 2026-10-01
+
+**16. Windows 一侧的第 7 章设置全部核实通过（在 Windows 里跑命令）。**
+- `powercfg /a`：`Hibernate: Hibernation has not been enabled`，
+  `Fast Startup: Hibernation is not available`。休眠没开，快速启动因此不可用，
+  这正是 7.1 和 7.2 要的结果。
+- `manage-bde -status C:`：`BitLocker Version: None`，`Fully Decrypted`，
+  `Protection Off`。设备加密没开（用了本地账户），7.3 担心的事没有发生。C: 是 859.48 GB。
+- `reagentc /info`：`Windows RE status: Enabled`，位置在 `harddisk0\partition4`，
+  即第 4 个分区。**这证实了附录 E 第 9 条的推断：892 MB 的恢复分区是 Windows 自己建的。**
+- `reg query ... RealTimeIsUniversal`：`REG_DWORD 0x1`，UTC 时间已设置（7.5）。
+另外 `powercfg /a` 显示这台是 `Standby (S0 Low Power Idle)`，即 Modern Standby，
+S1/S2/S3 都不可用。这会影响 Linux 侧的睡眠方式，第 10 章的合盖睡眠验证要留意。
+
+**17. 教程里 `bcdedit` 的 PowerShell 写法有问题（做之前发现的）。**
+`bcdedit /set {bootmgr} ...` 在 PowerShell 里花括号会被当成脚本块，不会按预期执行。
+要么用管理员 cmd，要么给花括号加单引号。教程原来写的是「管理员 PowerShell」加不带引号的写法。
+**这是从 PowerShell 的已知行为推断的，没有实际在这台上试过错误写法。**
+改了：11.5 节、附录 C、MIGRATION.md 6.5 节。
+
+**18. 第 11 章双系统验证完成：bcdedit 兜底、从 rEFInd 进 Windows、共享盘、时间都正常。**
+- Windows 里 `bcdedit /enum '{bootmgr}'`：`device partition=\Device\HarddiskVolume1`
+  （Windows 自己的 ESP），`path \EFI\refind\refind_x64.efi`。
+  改之前的基线输出没有保留，所以「原来是 bootmgfw.efi」这一点没有实测记录。
+- 重启后先出 rEFInd，从菜单选 Windows 11 能正常启动。
+- 回到 NixOS：`touch` 再 `rm` `/mnt/share` 里的文件成功，共享盘在进过 Windows
+  之后仍然可写。这是「快速启动和休眠已关」的真正检验，比之前没进过 Windows
+  时的可写更有说服力。
+- `date` 是 `2026年 10月 1日 00:12:34 JST`，和前面的日志时间线（截图 PNG 在
+  23:50 生成）对得上，没有差 9 小时，UTC 设置生效。这一条是对照日志时间线判断的，
+  没有拿外部时间源核对。
+
 ### 待补
 
-- 华硕的启动菜单键、BIOS 键具体是哪个（装机时没有记下来）
-- 第 7 章（快速启动、休眠、UTC）是否做完。共享盘 `/mnt/share` 已确认能挂上、能写；「从 Windows 关机后再进 NixOS 仍可写」和时间是否差 9 小时，要等第一次进过 Windows 之后才能验
-- 第 10 章还没验证的：桌面与输入（10.5）、Steam 等应用（10.6）、Wi-Fi、合盖睡眠唤醒
-- 恢复分区是 Windows 自己建的这一判断，要在 Windows 里用 `reagentc /info` 确认
-- 第 11 章 rEFInd 的 GOP 分辨率实测值
+- 华硕的 BIOS 键具体是哪个（启动菜单键已确认是 Esc）
+- 第 10 章还没验证的：Steam 等应用的实际使用、合盖睡眠唤醒（这台 Windows 侧是 Modern Standby，Linux 侧要留意）
+- 第 12 章：SSH 密钥、提交签名、state-sync、Syncthing 配对、保险箱都还没做
