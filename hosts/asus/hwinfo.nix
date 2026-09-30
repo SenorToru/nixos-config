@@ -1,28 +1,36 @@
-# 占位。装好 NixOS 之后在仓库根目录跑 `sudo refind-hwinfo` 重新生成，
-# 再 nrb、sudo refind-sync。
+# 本文件由 refind-hwinfo 生成。
 #
-# 生成的内容会整个覆盖这个文件。下面几行是按 Bluefin 上查到的硬件
-# 手填的，仅仅为了装机前能把配置构建通过。
+# 重新生成：在仓库根目录跑 refind-hwinfo，然后 nrb，再 sudo refind-sync。
+# 换了硬件就重跑一次。探测判断错了可以直接改这个文件 ——
+# 它不在开机路径上，错了只是启动画面上一行字不对。
+#
+# 内核版本不在这里：它跟着 nixpkgs 滚，由 modules/refind.nix 在
+# 求值时从 config.boot.kernelPackages 取，永远不会过期。
 {
   custom.refind.bootRows = [
     {
       name = "cpu    ";
-      value = "AMD RYZEN AI 7 H 350 ";
+      value = "AMD RYZEN AI 7 H 350 W/ RADEON 860M ";
       status = "[ ONLINE ]";
     }
     {
-      name = "gpu    ";
-      value = "RADEON 860M + RTX 5060 ";
+      name = "igpu   ";
+      value = "AMD RADEON 860M GRAPHICS / SHARED ";
+      status = "[ ONLINE ]";
+    }
+    {
+      name = "dgpu   ";
+      value = "NVIDIA GEFORCE RTX 5060 LAPTOP / 8151M ";
       status = "[ ONLINE ]";
     }
     {
       name = "memory ";
-      value = "30G ";
+      value = "32768M LPDDR5 ";
       status = "[ OK ]";
     }
     {
       name = "disk   ";
-      value = "SAMSUNG 990 PRO 2TB ";
+      value = "KXG80ZN84T09 KIOXIA 4TB ";
       status = "[ MOUNTED ]";
     }
   ];

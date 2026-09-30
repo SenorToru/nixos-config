@@ -88,8 +88,8 @@
     # 挑面板原生那个（通常是 Mode 0）填回来，再 nrb + sudo refind-sync。
     # 流程见 MIGRATION.md 第 6.4 节。
     resolution = {
-      width = 1920;
-      height = 1080;
+      width = 2560;
+      height = 1600;
     };
 
     # 双盘双启动：两个 ESP 各装一份 rEFInd，refind-sync 一条命令写两个。

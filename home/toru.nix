@@ -40,6 +40,7 @@ let
     # 倒是可以在抹机时删掉 —— 那是凭据，这里是档案。）
     bluefin = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIH1xdLp1BDLpF6RvP3hOiWlX87cP10uZo47oNGdPFBa8";
     thinkpad = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIN3eXGsLq+JC/KMkovt51bjryIFvTw/LOlk65VjsyMNv";
+    asus = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIK8D5PDvcTYAEqL6fiPqMzqTtofMmYumxZrOKP00Tnpe";
     vm = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJTtTxB/hGjBI556MZohBsITtonP+WmVrgsWmdiM1jRJ";
   };
 

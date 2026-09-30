@@ -8,8 +8,8 @@ let
   # 抄错了配上 nofail 会**静默失败**：不报错、不阻止开机，只是 rEFInd
   # 没写进第二个 ESP，然后你会跑去怀疑 refind 模块。所以下面有个 warning，
   # 占位没换掉的话每次构建都会提示。
-  winEspUuid = "0000-0000";
-  shareUuid = "0000000000000000";
+  winEspUuid = "6E1C-D1AE";
+  shareUuid = "4C0C4C710C4C585A";
 
   # 四个 Btrfs 子卷共用的挂载选项，见下面「文件系统」一节。
   btrfsOptions = [
