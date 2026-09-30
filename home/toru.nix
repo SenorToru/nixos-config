@@ -872,6 +872,20 @@ in
     };
 
     shellAliases = commonAliases;
+
+    # 交互式 shell 里把 # 后面的内容当注释。
+    #
+    # **zsh 默认不这样，bash 默认这样。** 仓库文档里（README、MIGRATION、
+    # ASUS_INSTALL）的命令块大量写着 `命令   # 说明`。在 bash 里整段复制粘贴没事，
+    # 在 zsh 里 `#` 会被当成普通参数：`hostnamectl # 说明` 报
+    # `Unknown command verb '#'`，`sysctl vm.swappiness # 180` 去找
+    # /proc/sys/# 和 /proc/sys/180。症状看起来像命令坏了，其实是注释没被识别，
+    # 2026-09-30 在 asus 上第一次验证时就是这样踩到的。
+    #
+    # 打开它之后，文档里的命令块怎么复制都能直接跑，两个 shell 的行为也一致
+    # （上面说过：bash 和 zsh 要配成同一套基线）。
+    # 这个列表会和 history 那几个选项自动合并，不会覆盖它们。
+    setOptions = [ "INTERACTIVE_COMMENTS" ];
   };
 
   # bash 不再是登录 shell，但仍然要能用，而且行为要和 zsh 一致。

@@ -899,6 +899,15 @@ reboot
 
 ### 10.3 验证系统层（构建通过不等于可用）
 
+> **先在当前终端里跑一次这条：** `setopt interactive_comments`
+>
+> 下面的命令块里有很多 `命令   # 说明`。zsh 默认不把交互式输入里的 `#` 当注释，
+> 整块粘贴会报 `Unknown command verb '#'`、`sysctl: cannot stat /proc/sys/#`
+> 这类看起来像命令坏了的错误（2026-09-30 实测踩到）。这条命令让当前终端认 `#` 为注释。
+> 仓库里 `home/toru.nix` 已经把它写成了 zsh 的默认选项，**这台机器 `git pull`
+> 并 `nrb` 之后就不用再敲**；在此之前每开一个新终端都要敲一次，
+> 或者粘贴时把 `#` 后面的部分去掉。
+
 ```bash
 hostnamectl                                   # Static hostname: asus
 nixos-rebuild list-generations | head -3      # 有 generation
@@ -1607,6 +1616,19 @@ Wi-Fi 网卡（RTL8852CE）装机器里不认，驱动是 EXE，这个阶段没�
 
 **5. 第一次进入 NixOS 成功。**
 从 systemd-boot 进的，这时还没有 rEFInd，是预期的。第 10 章之后的验证还没有记录。
+
+**6. 整块粘贴带 `# 注释` 的命令，在 zsh 里报错。**
+第一次做 10.3 的验证，把命令块整个粘进终端，得到
+`Unknown command verb '#'`、`head: cannot open '#' for reading`、
+`sysctl: cannot stat /proc/sys/#: No such file or directory`。
+**不是系统有问题：** zsh 默认不把交互式输入里的 `#` 当注释，bash 默认当。
+文档命令块大量写着 `命令   # 说明`，整块复制就撞上了。
+同一次输出里真正有信息量的两条是对的：`swapon --show` 只有 zram0（15.2G）、
+`vm.swappiness = 180`。
+**修法：** `home/toru.nix` 的 `programs.zsh` 加了
+`setOptions = [ "INTERACTIVE_COMMENTS" ]`，两台机器的 zsh 都生效，
+和 bash 的行为一致。在 asus 拿到这个配置之前，用 `setopt interactive_comments`
+临时打开。改了：10.3 节开头加了提示。
 
 ### 待补
 
