@@ -93,21 +93,24 @@ KIOXIA 上的数据要到第 9.2 节才会被抹掉。
 
 ---
 
-## 1. 这份指南没有在真机上走过
+## 1. 验证到了哪里
 
-**诚实地说清楚验证到了哪里：**
+**诚实地说清楚哪些走通了，哪些还没有。** 2026-09-30 开始在 asus 真机上装，
+下表随进度更新，沿途踩的坑集中记在附录 E。
 
 | 部分 | 状态 |
 |------|------|
-| NixOS 的分区、安装、rEFInd | 在虚拟机里完整演练过，thinkpad 上 rEFInd 也实测过 |
-| `hosts/asus/` 的配置 | 三个方向的构建都通过了（asus 系统层 + home 层、thinkpad 回归），**没有在 asus 硬件上跑过** |
-| 双 ESP 的做法 | **只在虚拟机里验证过**，用的是假的 Windows ESP |
-| diskpart 预建 Windows 分区 | 没试过。第 6.4 节给了退路 |
-| Windows 那一侧的所有操作 | 没有验证过 |
-| 华硕的启动菜单键、BIOS 键 | 只是「通常」是 Esc / F2，**没有查证** |
+| Windows 11 的安装（第 6 章） | **真机走通，进了桌面。** 首次设置卡在联网界面，用本地账户绕过，见 6.5 节。diskpart 预建分区是被安装器直接接受，还是走了 6.4 节的退路，装机时没有记下来 |
+| NixOS 的分区、格式化、挂载、`nixos-install`（第 9 章） | **真机走通。** 其中 9.9 节手动建 `Linux Boot Manager` 启动项那步实际用过，重启后直接进了 systemd-boot → NixOS |
+| 首次进 NixOS（第 10 章） | **能进系统。** 10.3 到 10.6 的运行时验证（显卡 offload、共享盘、Wi-Fi、应用）还没有记录 |
+| rEFInd 与双 ESP（第 11 章） | **还没在真机上走。** 只在虚拟机里验证过，用的是假的 Windows ESP |
+| Windows 那一侧的第 7 章设置 | 要在装 NixOS 之前完成；是否做完，装机时没有记录 |
+| `hosts/asus/` 的运行时表现 | 系统层已经在 asus 上装进去并启动，但显卡、睡眠唤醒等要到第 10 节和附录 D.5 才验证 |
+| 华硕的启动菜单键、BIOS 键 | 已经实际按过。**具体是哪个键，装机时没有记下来**，下次重装时补 |
 
-三件虚拟机验证不了的事，这次会第一次碰到：
-**GOP 分辨率**（第 11.4 节）、**NTFS 脏状态**（第 7.2 节）、**硬件探测的值**（第 11.1 节）。
+三件虚拟机验证不了的事，还都没碰到：
+**GOP 分辨率**（第 11.4 节）、**NTFS 脏状态**（第 10.3 节）、**硬件探测的值**（第 11.1 节）。
+都要等第 10、11 章才会遇到。
 
 **遇到和文档对不上的地方，把实际输出记下来。**
 这份文档就是靠这样一轮轮改对的，装完要按第 15 节回头更新它。
@@ -573,6 +576,12 @@ ping -c3 nixos.org
 
 ### 9.1 认盘 —— 用 by-id，不用 nvme0n1
 
+> **本章的命令靠 shell 变量（`$DISK`、`$OPTS` 等）串起来，而变量只在当前终端里有。**
+> 换一个终端窗口、`sudo -i`、进 `nixos-enter` 都会让它们消失，
+> 而消失之后的症状不直观：`readlink: missing operand`、命令报设备不存在。
+> **每次开新终端，先 `sudo -i`，再照下面重设一次 `DISK`，并 `lsblk $DISK` 核对是 KIOXIA。**
+> 9.9 节的建启动项那一步就是因为这个，改成了不依赖 `$DISK` 的写法。
+
 ```bash
 lsblk -o NAME,SIZE,MODEL,SERIAL,FSTYPE,LABEL
 ```
@@ -817,14 +826,37 @@ ls /mnt/boot/EFI/systemd/ /mnt/boot/EFI/BOOT/
 因为上面说的原因，固件里现在**没有**指向 NixOS 的启动项，
 而 Windows 已经占着第一位。手动补一条：
 
+**不要依赖前面设的 `$DISK` 变量。** 换过终端窗口、`sudo -i` 过、进过 `nixos-enter`，
+变量都会丢，丢了之后下面的命令会报 `readlink: missing operand`。
+所以这里直接从**已经挂载的 ESP** 推出磁盘和分区号：
+
 ```bash
-nix-shell -p efibootmgr --run "
-  efibootmgr --create \
-    --disk $(readlink -f $DISK) --part 1 \
-    --loader '\\EFI\\systemd\\systemd-bootx64.efi' \
-    --label 'Linux Boot Manager'
-"
+# 1. /mnt/boot 必须还挂着，是 KIOXIA 的 ESP
+findmnt /mnt/boot
+
+ESP_DEV=$(findmnt -no SOURCE /mnt/boot)                       # 如 /dev/nvme1n1p1
+DISK_DEV=/dev/$(lsblk -no PKNAME "$ESP_DEV")                  # 如 /dev/nvme1n1
+PART=$(cat /sys/class/block/$(basename "$ESP_DEV")/partition) # 应该是 1
+
+# 2. 写之前核对：必须是 3.7T 的 KIOXIA，不是 Samsung
+lsblk -o NAME,SIZE,MODEL "$DISK_DEV"
+echo "disk=$DISK_DEV part=$PART"
 ```
+
+**`lsblk` 输出里型号必须是 KIOXIA、大小约 3.7T。** 是 Samsung 就停下来，
+说明挂载错了盘。
+
+```bash
+# 3. 确认现在是 UEFI 模式启动，而且不在 nixos-enter 里面
+ls /sys/firmware/efi/efivars | head -3
+
+# 4. 建启动项
+nix-shell -p efibootmgr --run "efibootmgr --create --disk $DISK_DEV --part $PART --loader '\\EFI\\systemd\\systemd-bootx64.efi' --label 'Linux Boot Manager'"
+```
+
+如果 `findmnt /mnt/boot` 没有输出，说明 ESP 已经被卸载了，
+回 9.4 把 `/mnt/boot` 挂回去（`mount -o umask=0077 ${DISK}-part1 /mnt/boot`，
+`DISK` 要先按 9.1 重新设）。
 
 输出里应该能看到新的 `Boot0004* Linux Boot Manager`（编号可能不同），
 并且它在 `BootOrder` 的最前面。这样重启后直接进 systemd-boot → NixOS。
@@ -1539,3 +1571,46 @@ NixOS 稳定版只维护大约七个月（**以 nixos.org 的公告为准**）�
 - **thinkpad 的内核继续用 `linuxPackages_latest` 不受影响**：它没有独显，
   没有 NVIDIA 驱动这个约束。
 - 6.18 结束日期前 2-3 个月的日历提醒。
+
+## 附录 E：真机实测记录
+
+装机过程中和文档不一致、或者第一次在真机上碰到的事。每条写明**发生了什么、怎么解决、
+文档哪里因此改了**。这是第 15 节要求的回头更新的原始素材。
+
+### 2026-09-30
+
+**1. Windows 11 首次设置卡在联网界面。**
+Wi-Fi 网卡（RTL8852CE）装机器里不认，驱动是 EXE，这个阶段没法运行。
+用 `Shift+F10` 打开命令提示符，`oobe\bypassnro` 重启后选「我没有 Internet 连接」，
+用本地账户进桌面，再装驱动。**实测可用。**
+改了：6.5 节加了整段说明，并提醒装机前把驱动 EXE 放进 U 盘。
+
+**2. 决定不要 Windows 恢复分区。**
+这是设计上的调整，不是踩坑：恢复分区只服务于「重置此电脑」和系统起不来时的自动修复，
+这台的 Windows 是第二系统，不需要。
+改了：diskpart 脚本、分区表、各处示意图，共享盘从 5 号分区变成 4 号。
+
+**3. Btrfs 压缩等级从 zstd:1 改成 zstd:3。**
+走完 9.4 才想起来。因为还没往里写过任何数据，卸载后用新选项重新挂载就够，
+不用重做 9.2 到 9.4。**实测可用。**
+顺带发现 `hosts/asus/tuning.nix` 原来漏了 `/nix` 和 `/.snapshots` 两个子卷的
+压缩选项，已补上，四个子卷共用同一个 `btrfsOptions`。
+改了：9.4 节的 `OPTS`、验证清单、`tuning.nix`。
+
+**4. 建 `Linux Boot Manager` 启动项时，`$DISK` 变量丢了。**
+换过终端窗口之后，`readlink -f $DISK` 报 `missing operand`，`efibootmgr` 报
+`Could not prepare Boot variable: No such file or directory`。
+改用从已挂载的 ESP 推出磁盘和分区号（`findmnt` + `lsblk -no PKNAME` +
+`/sys/class/block/.../partition`），写之前先核对型号是 KIOXIA。**实测可用，
+重启后直接进了 systemd-boot → NixOS。**
+改了：9.9 节第三步整段重写；9.1 节开头加了变量会丢的提醒。
+
+**5. 第一次进入 NixOS 成功。**
+从 systemd-boot 进的，这时还没有 rEFInd，是预期的。第 10 章之后的验证还没有记录。
+
+### 待补
+
+- 华硕的启动菜单键、BIOS 键具体是哪个（装机时没有记下来）
+- diskpart 预建分区是被 Windows 安装器直接接受，还是走了 6.4 节的退路
+- 第 10 章的运行时验证结果：显卡 PRIME offload、`/mnt/share` 是否可写、Wi-Fi、Steam 等
+- 第 11 章 rEFInd 的 GOP 分辨率实测值
