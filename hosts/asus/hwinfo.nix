@@ -15,12 +15,12 @@
     }
     {
       name = "igpu   ";
-      value = "AMD RADEON 860M GRAPHICS / SHARED ";
+      value = "AMD RADEON 840M / 860M GRAPHICS / SHARED ";
       status = "[ ONLINE ]";
     }
     {
       name = "dgpu   ";
-      value = "NVIDIA GEFORCE RTX 5060 LAPTOP / 8151M ";
+      value = "NVIDIA GEFORCE RTX 5060 MAX-Q / MOBILE ";
       status = "[ ONLINE ]";
     }
     {
