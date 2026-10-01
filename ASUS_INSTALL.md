@@ -1868,8 +1868,65 @@ S1/S2/S3 都不可用。这会影响 Linux 侧的睡眠方式，第 10 章的合
   23:50 生成）对得上，没有差 9 小时，UTC 设置生效。这一条是对照日志时间线判断的，
   没有拿外部时间源核对。
 
+**19. SSH 密钥和提交签名链打通，asus 的装机改动已提交并推送。**
+顺序和实测：
+- toru 在 asus 上亲手 `ssh-keygen -t ed25519 -C "asus"`，私钥没有被任何 Claude 会话读过，
+  只读了公钥。`~/.ssh` 是 0700，私钥 0600。
+- toru 在 GitHub 网页上把同一把公钥登记了两次：Authentication key 和 Signing key。
+- `ssh -T git@github.com` 返回 `Hi SenorToru! You've successfully authenticated`。
+  第一次连接的主机指纹 `SHA256:+DiY3wvv...` 和 GitHub 公布的 ED25519 指纹核对一致后才输入 yes。
+- remote 从 https 换成 `git@github.com:SenorToru/nixos-config.git`。
+- 合并 thinkpad 上推的提交之前，先 `fetch` 加 `diff --stat HEAD origin/master` 做只读的重叠检查：
+  上游只改了三个文件，和 asus 本地改的五个文件没有重叠，才 `git pull --ff-only`，快进成功，
+  本地改动原样保留。装机的真实结果就是靠这道检查没有被冲掉。
+- `home/toru.nix` 的 `signingKeys` 加了 `asus` 一行。提交前用户态构建了系统层和 home 层，
+  确认 `allowed_signers` 里 asus、bluefin、thinkpad、vm 四个键名都在（输出是字母序，
+  因为 `lib.mapAttrsToList` 按属性名排序，不按书写顺序，无害）。
+- toru 提交并推送，**GitHub 上显示 Verified**，说明 Signing key 登记正确。
+还没做的：asus 本地的 `git log --show-signature` 要等 asus `nrb` 一次，
+`allowed_signers` 才带上新公钥；thinkpad 要 `git pull` 再 `nrb`，才认得 asus 签的提交
+（MIGRATION.md 7.3 节说的那个不对称）。
+一个教训：**两台机器各有一份仓库工作区、又各改不同文件时，先 fetch 看重叠再 pull，
+不要盲目 pull。** 这次靠它保住了 asus 上没提交的装机结果。
+
+### 2026-10-01（续）
+
+**20. 第二天：两台 nrb、修好的 refind-hwinfo 实测、合盖睡眠、固件更新。**
+asus 上的 Claude 汇报，输出原样：
+- **提交签名本地验证通过。** asus 提交 `61c86f7` 的 `git log -1 --format='%G?'` 是 `G`
+  （Good signature），已推送，`origin/master` 与本地一致。两台都 `nrb` 之后，`allowed_signers`
+  生效（asus 的是 generation 5）。
+- **修好的 `refind-hwinfo` 在 asus 真机上重跑，igpu 和 dgpu 两行不再标反。** 生成结果：
+  igpu `AMD RADEON 840M / 860M GRAPHICS / SHARED`，dgpu `NVIDIA GEFORCE RTX 5060 MAX-Q / MOBILE`
+  （NVIDIA 没有显存节点，所以没有显存后缀，这是判据的设计，不是遗漏）。
+  内存行从 `32768M LPDDR5` 变成 `32768M`，原因是内存代数要 `dmidecode`，而它要 root，
+  **不加 sudo 跑就没有这一段**（脚本注释里本来就说过）。要保留 LPDDR5 就必须 `sudo refind-hwinfo`。
+  这也意味着 hwinfo.nix 变了，要 `nrb` 加 `sudo refind-sync` 才会更新 ESP 上那张背景图。
+- **合盖睡眠再唤醒：两台机器都正常，屏幕没有花屏。** 之前担心的 Modern Standby、独显电源管理、
+  背光服务失败，在这个测试里没有表现出问题。这一条只测了一轮合盖，不等于长期稳定。
+- **固件更新：** GNOME Software（经 fwupd/LVFS）提供了一个 Secure Boot dbx 更新，
+  `UEFI dbx 20250902 → 20260707`，状态 Success，已重启。这台 Secure Boot 是关着的
+  （`bootctl` 显示 disabled），所以这个更新不影响当前任何引导。
+- **固件启动项：** `Boot0000`（标签 Windows Boot Manager）现在指向
+  `\EFI\refind\refind_x64.efi`，也就是说 Windows 按 `{bootmgr}` 的 `path` 重写了自己的启动项，
+  **这正是 11.5 节 `bcdedit` 兜底设计的效果，是一次间接的实测**。另外多出一条
+  `Boot0004`（同样标签 Windows Boot Manager，指向 `bootmgfw.efi`），排在 `BootOrder` 末尾。
+  谁建的没有查清（Windows、固件或 dbx 更新都有可能），无害。
+
+**21. NVMe 设备名在两次启动之间对调了，所以 `/dev/nvmeXn1` 不能写死。**
+asus 上第一天启动时 KIOXIA 是 `nvme1n1`、Samsung 是 `nvme0n1`；第二天一次启动后反过来，
+KIOXIA 成了 `nvme0n1`、Samsung 成了 `nvme1n1`。`refind-sync` 的日志也跟着变：
+前两次是 `disk=/dev/nvme1n1 part=1`，这次是 `disk=/dev/nvme0n1 part=1`。
+**`refind-sync` 没受影响**，因为它是从 `/boot` 的挂载点反推磁盘和分区号的，
+新建的 `Boot0001` 指向的分区 PARTUUID 仍是 `bded4d87-...`（KIOXIA 的 ESP）。
+挂载用的是 UUID，也不受影响。
+这印证了教程一开始就强调的做法：**认盘靠型号、容量、卷标、PARTUUID，不靠 `nvme0n1`/`nvme1n1`
+这种编号**（9.1 节用 by-id，9.9 节从挂载点推磁盘）。教程里凡是用 `lsblk` 示意的地方，
+编号都只是示例，可能和你机器上实际的对调。同理，连着内置屏的 `card` 编号
+也会在重启之间变（附录 E 第 15 条）。
+
 ### 待补
 
 - 华硕的 BIOS 键具体是哪个（启动菜单键已确认是 Esc）
-- 第 10 章还没验证的：Steam 等应用的实际使用、合盖睡眠唤醒（这台 Windows 侧是 Modern Standby，Linux 侧要留意）
-- 第 12 章：SSH 密钥、提交签名、state-sync、Syncthing 配对、保险箱都还没做
+- 第 10 章还没验证的：Steam 等应用的实际使用
+- 第 12 章剩下的：`gh auth login`、state-sync（注意 fcitx5 的 profile 不要整份还原）、Syncthing 配对、Cryptomator 保险箱
