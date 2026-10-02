@@ -438,3 +438,5 @@ scanfor manual,external,optical
 - [`000F`](000F_LAPTOP_TUNING_AND_AI_FRIENDLY_SHELL.md) —— `modules/` 与 `hosts/` 的分界判据
 - [`0012`](0012_AGENT_SKILLS.md) —— `flake = false` 的 input + `writeShellScriptBin`
   这套模式的先例
+- [`0017`](0017_ASUS_DUAL_BOOT_INSTALL.md) —— 后续：asus 是第一次真机双 ESP（两个 ESP 各装一份 rEFInd、
+  Windows 菜单项、`bcdedit` 兜底），以及 `refind-hwinfo` 显卡判据在 AMD 核显 + NVIDIA 独显机器上判反后的修正

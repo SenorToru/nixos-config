@@ -4,12 +4,14 @@
 
 | 项目 | 当前状态 |
 |------|----------|
-| 主机 | `thinkpad`（ThinkPad X1 Yoga 1st Gen，Skylake i7-6500U / 7.6 GiB） |
+| 主机 | `thinkpad`（ThinkPad X1 Yoga 1st Gen，Skylake i7-6500U / 7.6 GiB，单系统） |
+| | `asus`（ASUS TX Air，Ryzen AI 7 H 350 + RTX 5060，32 GiB，**Windows + NixOS 双系统**，2026-10 装成） |
 | 频道 | `nixos-26.05`（home-manager `release-26.05`） |
+| 内核 | thinkpad 跟 `linuxPackages_latest`；asus **钉在 6.18 LTS**（NVIDIA 开源模块在 7.2 上编译不过，退役预案见 ASUS_INSTALL.md 附录 D） |
 | 桌面 | GNOME on Wayland |
 | 登录 shell | zsh（starship / atuin / direnv / fzf / zoxide） |
 | 输入法 | fcitx5（rime 白霜拼音 + mozc UT 词典版） |
-| 引导 | rEFInd（顶层入口）→ systemd-boot（管 generation） |
+| 引导 | rEFInd（顶层入口）→ systemd-boot（管 generation）；asus 上两个 ESP 各一份 rEFInd，另有 Windows 11 菜单项 |
 
 > 本文件是**给人看的操作手册**。
 > 给 AI 协作用的约定在 [CLAUDE.md](CLAUDE.md)，
@@ -30,9 +32,8 @@
 │   │   ├── hardware-configuration.nix   nixos-generate-config 生成，别手改
 │   │   ├── hwinfo.nix        refind-hwinfo 生成，别手改（引导画面的硬件行）
 │   │   └── tuning.nix        本机硬件调优
-│   └── asus/                 ASUS TX Air，Windows + NixOS 双系统；结构同上。
-│                             装机前 hardware-configuration.nix / hwinfo.nix 是占位，
-│                             装机现场由 nixos-generate-config / refind-hwinfo 覆盖
+│   └── asus/                 ASUS TX Air，Windows + NixOS 双系统；结构同上，
+│                             tuning.nix 里多了 NVIDIA/PRIME、Windows ESP 与共享盘挂载
 ├── modules/                  共用模块（任何机器都能 import）
 ├── home/
 │   ├── toru.nix              home-manager 用户配置
@@ -42,7 +43,8 @@
 │   └── migration-tests.sh    state-sync 的回归测试（构建期执行）
 ├── Lesson-Learn/             知识库（按时间顺序编号）
 ├── MIGRATION.md              装新机器 + 搬 Nix 管不到的用户状态
-├── ASUS_INSTALL.md           asus 重装指南：Windows + NixOS 双系统，从分区到 rEFInd 的完整步骤
+├── ASUS_INSTALL.md           asus 重装指南：Windows + NixOS 双系统，从分区到 rEFInd 的完整步骤，
+│                             附录 E 是装机当天的 29 条实测记录（总结见 Lesson-Learn/0017）
 └── CLAUDE.md                 AI 协作约定
 ```
 
@@ -78,14 +80,14 @@
 
 | 文件 | 负责 |
 |------|------|
-| `common.nix` | Nix 设置与自动 GC、`allowUnfree`、时区与 locale、`nix-ld`、NetworkManager、基础 CLI 工具、fwupd、sudo 密码回显 |
+| `common.nix` | Nix 设置与自动 GC、`allowUnfree`、时区与 locale、`nix-ld`、NetworkManager、基础 CLI 工具、fwupd、sudo 密码回显，以及 `custom.flakeHost` / `custom.defaultTheme` 两个选项的定义 |
 | `desktop.nix` | GDM + GNOME、蓝牙、PipeWire、打印、默认终端（`xdg.terminal-exec` → Ghostty）、`nautilus-python`（让 Ghostty 自带的右键扩展能加载） |
 | `desktop-gnome.nix` | GNOME 扩展包；**只开 `programs.dconf`，不声明任何设置** —— dconf 的单一真相在 `home/toru.nix` |
 | `localization.nix` | 字体（全系统唯一的 `fonts` 声明处，含 `stylix.fonts`）与 fcitx5 输入法 |
 | `shell.nix` | 系统层 zsh、`PAGER`（**不含**用户名指派） |
 | `dns.nix` | 加密 DNS：systemd-resolved + DNS-over-TLS（严格模式）、`dns-plain` / `dns-dot` 逃生舱（见下面「DNS」一节） |
 | `syncthing.nix` | Syncthing 的防火墙端口（22000、21027）。服务在 `home/syncthing.nix`，网页只听本机 8384 |
-| `development.nix` | 编辑器与工具链、claude-code、grok-build 与 dbeaver-bin 的版本覆写 overlay |
+| `development.nix` | 编辑器与工具链、claude-code、grok-build 与 dbeaver-bin 的版本覆写 overlay。Rust 不装在系统里，各项目自带 devShell（direnv 加载） |
 | `browsers.nix` | Zen / Brave / Google Chrome 与 chromium 扩展策略 |
 | `apps.nix` | 桌面应用（含 Telegram） |
 | `steam.nix` | Steam 客户端（`programs.steam`，不用 Flatpak 版）。**可选模块**：只有想装的主机才在自己的 `default.nix` 里引入，目前是 asus |
@@ -100,11 +102,11 @@
 
 | 文件 | 负责 |
 |------|------|
-| `toru.nix` | home-manager 主配置：别名、程序、主题 specialisation |
+| `toru.nix` | home-manager 主配置：别名、程序、20 套主题 specialisation 与 `theme` 命令（每台机器的默认主题和上次选择各记各的，不同步）、提交验签清单 `signingKeys` |
 | `agent-skills.nix` | Agent Skills 的安装、开关命令和使用指南生成（见下面「Agent Skills」一节） |
 | `skills-tests.sh` | `skills` 命令的回归测试，由 `agent-skills.nix` 在构建期执行 |
 | `migration.nix` | `state-sync`（搬 B 类用户状态）和 `migration-check`（查漂移）；B 类清单的单一真相 |
-| `syncthing.nix` | Syncthing 用户服务。界面是本机网页，不装托盘 |
+| `syncthing.nix` | Syncthing 用户服务，声明六个同步文件夹（笔记、档案、保险箱、照片、音乐、视频）。界面是本机网页，不装托盘；另装 Cryptomator |
 | `desktop-prefs.nix` | GNOME 输入与电源偏好：鼠标、开终端快捷键（共用）；内置触摸板禁用、电源与息屏（**只在 asus 生效**，按 `custom.flakeHost` 判断） |
 | `migration-tests.sh` | `state-sync` 的回归测试，由 `migration.nix` 在构建期执行 |
 
@@ -145,6 +147,8 @@ nix build .#nixosConfigurations.thinkpad.config.system.build.toplevel --out-link
 nix build .#nixosConfigurations.thinkpad.config.home-manager.users.toru.home.activationPackage \
   --out-link /tmp/hm
 ```
+
+以下命令都按 thinkpad 写；在 asus 上把 `thinkpad` 换成 `asus`（别名自动跟着走）。
 
 交互 shell 里这一步是 `ncheck`（系统层）和 `nhm`（home 层）。
 全部 11 条别名见 [交互 shell 里的别名](#交互-shell-里的别名)。
@@ -362,9 +366,19 @@ rEFInd                      好看的开机画面 + 将来的多系统选单
 ```
 
 配置在 [`modules/refind.nix`](modules/refind.nix)，本机参数在
-`hosts/thinkpad/default.nix` 的 `custom.refind` 和 `hosts/thinkpad/hwinfo.nix`。
+`hosts/<主机>/default.nix` 的 `custom.refind` 和 `hosts/<主机>/hwinfo.nix`。
 选型推理和踩过的五个坑见
 [Lesson-Learn/0013](Lesson-Learn/0013_REFIND_BOOT.md)。
+
+两台机器的差别：
+
+| | thinkpad | asus |
+|---|---|---|
+| ESP | 一个（`/boot`） | **两个**：NixOS 盘 `/boot`、Windows 盘 `/mnt/winesp`，`custom.refind.espMountPoints` 列出，`refind-sync` 一条命令都写；NVRAM 项只为第一个建 |
+| 分辨率 | 2560x1440 | 2560x1600 |
+| 多系统 | 无 | 菜单里有 Windows 11（`extraEntries`，`volume SYSTEM`）；Windows 一侧还用 `bcdedit` 把 `{bootmgr}` 指向 rEFInd 兜底（见 MIGRATION.md 6.5） |
+
+下面的例子按 thinkpad 写。
 
 ### 关键：rEFInd 不由 `nixos-rebuild` 管
 
@@ -406,8 +420,8 @@ store 路径**，不重新构建的话新图根本不存在。
 ### 分辨率
 
 `custom.refind.resolution` **只能填 UEFI GOP 实际提供的模式**。
-本机是 `2560x1440`（面板原生，固件的 Mode 0）—— 注意它**没有 1080p**，
-别想当然。
+thinkpad 是 `2560x1440`（面板原生，固件的 Mode 0）—— 注意它**没有 1080p**，
+别想当然；asus 的固件有 `2560x1600`（面板原生），一次填对。
 
 换机器时先随便填一个装上去，固件不支持会在启动时把支持的模式全列出来，
 再回来改。想主动列出来就把分辨率临时设成 `1 1`。
@@ -430,13 +444,17 @@ NixOS 图标在不在（如果是个约 32×32 的黄黑斜条小方块，那是
 sudo rm -f /boot/screenshot_*.bmp
 ```
 
+asus 上截图可能落在 **Windows 的 ESP**（`/mnt/winesp`）而不是 `/boot`，
+所以两个 ESP 都要看；删的时候写具体文件名，不要用通配符
+（见 ASUS_INSTALL.md 附录 E 第 15 条）。
+
 ### 安全网
 
 有两条独立的路，`refind-sync` 都不碰（它只往 `\EFI\refind\` 这个新目录写）：
 
 | 路径 | 怎么触发 |
 |------|----------|
-| `Boot0003` → `\EFI\systemd\systemd-bootx64.efi` | 开机敲 **F12** 选 `Linux Boot Manager`。**已实测** |
+| `Linux Boot Manager`（thinkpad 上是 `Boot0003`）→ `\EFI\systemd\systemd-bootx64.efi` | 开机敲 **F12** 选它（asus 的启动菜单键是 **`Esc`**）。两台都已实测 |
 | 通用设备项 `NVMe0` → `\EFI\BOOT\BOOTX64.EFI` | rEFInd 的 NVRAM 项失效时固件**自动**落下来 |
 
 > **动引导之前先把退路实际走一遍** —— 敲 F12、选 `Linux Boot Manager`、
@@ -602,7 +620,7 @@ sudo nix store optimise
 
 ### 引导菜单条目数上限
 
-`hosts/thinkpad/default.nix` 里已经设了：
+两台机器的 `hosts/<主机>/default.nix` 里都设了：
 
 ```nix
 boot.loader.systemd-boot.configurationLimit = 20;
@@ -625,7 +643,7 @@ boot.loader.systemd-boot.configurationLimit = 20;
 
 ### `/boot` 什么时候才会紧张
 
-当前 36 个 generation，`/boot` 只用了 109 MiB / 1022 MiB。
+thinkpad 上某次实测（当时 36 个 generation，`/boot` 约 1 GiB），只用了 109 MiB。
 原因是这 36 个里有 35 个跑在同一个 nixpkgs revision 上，
 **共用同一份 kernel + initrd**，`/boot` 里只存了两套。
 
@@ -677,6 +695,21 @@ sudo nixos-rebuild switch --flake ~/nixos-config#<新主机>
 > 判据是「它有没有留下 Nix 管不到的状态」。
 > `MIGRATION.md` 第 10 节有一张「加了什么 → 要检查什么」的表。
 
+## 文件同步：Syncthing
+
+`home/syncthing.nix` 声明六个文件夹：笔记、档案（`~/Documents/library`）、
+保险箱（`~/Documents/secrets`）、照片、音乐、视频。服务是用户级的，
+登录后启动；界面是 `http://127.0.0.1:8384/`，只听本机；防火墙端口在
+`modules/syncthing.nix`。
+
+- **设备配对不在仓库里** —— 设备 ID 是机器相关的，在网页里手工配对；
+  `overrideDevices` / `overrideFolders` 都是 `false`，网页里另加的设备和文件夹不会被激活冲掉。
+- **保险箱**里放的是 Cryptomator 加密保险库，明文只在解锁后出现在 `~/Secrets`，
+  **`~/Secrets` 不同步**。复制凭据类文件前先 `findmnt ~/Secrets` 确认它是挂载点。
+- **不同步**：整个 `Documents`（除上面两个）、`Downloads`、`Pictures/Screenshots`、
+  `~/.config`、`~/.local`。
+- 新机器上的配对步骤见 ASUS_INSTALL.md 12.6 节。
+
 ## 搬用户状态：state-sync 与 migration-check
 
 `$HOME` 里有一批 Nix 管不到的东西。[MIGRATION.md](MIGRATION.md) 第 0 节
@@ -696,7 +729,14 @@ state-sync restore    # 把仓库里的状态铺回 $HOME
 
 收哪些路径由 [`home/migration.nix`](home/migration.nix) 的 `stateFiles`
 决定，两个命令共用同一份清单。目前是 fcitx5 配置、mozc 学习历史、
-当前主题、Agent Skill 的禁用状态、多显示器布局、XDG 目录指向。
+Agent Skill 的禁用状态、多显示器布局、XDG 目录指向、Claude Code 的
+`settings.json` 和 Grok Build 的 `config.toml`。**主题不在清单里** ——
+每台机器各选各的，默认值写在 `hosts/<主机>/default.nix` 的 `custom.defaultTheme`。
+
+> **`restore` 是整份覆盖**（对每个路径先 `rm -rf` 再 `cp -a`），清单里有几项
+> 是**跟着机器走**的（fcitx5 的键盘布局、`monitors.xml`、目标机器已有的
+> `settings.json`）。**不同硬件的机器上不要整份 `restore`**，只手工还原需要的几项，
+> 做法见 MIGRATION.md 7.1。
 
 > **push 不自动提交。** 和 nixos-config 一个道理：人工看过再提交，
 > 不让一个刚改坏的配置覆盖掉好的。
@@ -710,7 +750,7 @@ push 时会剔掉日志、锁文件和 `.session.ipc` —— 最后那个记的�
 migration-check
 ```
 
-只读。扫五处，报出「实际存在但没人认领」的东西：
+只读。扫下面几类，报出「实际存在但没人认领」的东西：
 
 | 查什么 | 抓什么 |
 |--------|--------|

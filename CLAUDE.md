@@ -34,6 +34,9 @@ Toru 的 NixOS 多机配置仓库（flake，home-manager 作为 NixOS 模块）�
 
 `hosts/thinkpad/default.nix` 的 `imports` 按「本机专属在前、共用模块在后」
 分两组写，加新机器时照抄这个骨架即可。
+现有两台：`thinkpad`（Intel、JIS 键盘、单系统）和 `asus`（AMD + NVIDIA、US 键盘、
+Windows 双系统；`hosts/asus/default.nix` 末尾多一组只有它要装的可选模块，如 `steam.nix`）。
+下文命令里的 `thinkpad` 都是示例，在 asus 上换成 `asus`。
 
 ## 三份文档的分工
 
@@ -264,6 +267,14 @@ find . ! -user toru -printf '%u  %p\n'
 `custom.refind` 和 `hosts/<主机>/hwinfo.nix`。
 完整记录见 [Lesson-Learn/0013](Lesson-Learn/0013_REFIND_BOOT.md)。
 
+asus 是**双 ESP**（NixOS 盘 `/boot`、Windows 盘 `/mnt/winesp`）：
+`custom.refind.espMountPoints` 列出两个，`refind-sync` 一条命令都写，
+NVRAM 项只为第一个建；Windows 在另一块盘上，`extraEntries` 里必须写 `volume`；
+Windows 侧还要用 `bcdedit` 把 `{bootmgr}` 指向 rEFInd 兜底。
+**认盘靠卷标、PARTUUID、by-id，不靠 `nvme0n1`/`nvme1n1`** ——
+两块 NVMe 的设备名在两次启动之间对调过。完整记录见
+[Lesson-Learn/0017](Lesson-Learn/0017_ASUS_DUAL_BOOT_INSTALL.md)。
+
 改这块之前必须知道的四件事：
 
 1. **`nixos-rebuild` 不碰 ESP 上的 rEFInd 目录。**
@@ -372,7 +383,7 @@ C 是秘密的一律不搬**（新机器重新签发）。
 
 实现在 `home/migration.nix`，两个命令共用同一份清单。
 
-改这块之前必须知道的四件事：
+改这块之前必须知道的五件事（外加最后一条习惯）：
 
 1. **B 类清单（`stateFiles`）是单一真相，别在脚本里另写一份。**
    两份清单必然漂移，而漂移的表现是「换机器之后某个设置莫名其妙没了」，
@@ -398,14 +409,22 @@ C 是秘密的一律不搬**（新机器重新签发）。
    **`~/.claude` 单独扫而不是整个加白名单**，是因为整个忽略的话，
    以后 Claude Code 在那里新增一个该管的配置文件就发现不了了。
 
-5. **同一个目录里的文件可以分属不同类，判据是「谁在写这个文件」。**
+4. **同一个目录里的文件可以分属不同类，判据是「谁在写这个文件」。**
    `~/.claude/` 就是例子：`keybindings.json` 手写、工具不碰 → A 类，
    声明进 `home.file`；`settings.json` 被 `/model`、`/effort`、`/config`
    在运行时写 → B 类，进 `dotfiles-state`。
    把后者写成只读符号链接会让那几个命令直接失效 ——
    **不要为了声明式的纯度关掉工具的功能。**
 
-4. **加了新的开发工具之后跑一次 `migration-check`。**
+5. **`state-sync restore` 是整份覆盖，B 类清单里混着「跟着机器走」的项。**
+   `fcitx5/profile`（键盘布局）、`monitors.xml`、目标机器已有的
+   `~/.claude/settings.json` 都不能整份还原到不同硬件的机器上；
+   asus 上是手工选择性还原的（MIGRATION.md 7.1）。给 `restore` 加路径参数的想法
+   toru 决定不做，**不要再提议**。往清单里加新项之前先问：
+   **跟着人走，还是跟着机器走？** 后者不该进 B 类（主题就是这样被移出去的，
+   现在每台机器在 `hosts/<主机>/default.nix` 用 `custom.defaultTheme` 各自声明）。
+
+6. **加了新的开发工具之后跑一次 `migration-check`。**
    它会报出 `$HOME` 里没人认领的东西。每一处问：A、B 还是 C？
    处理完同步 `MIGRATION.md` 第 10 节的表。
 
@@ -470,16 +489,26 @@ bash 保持完全可用，两者配的是同一套基线。
 - zsh 这边 `/etc/zshenv` 对**所有** zsh（含 `zsh -c`）都会 source 一次
   `set-environment`，所以非交互 zsh 也有完整的系统 PATH。
 
+## 内核版本：asus 钉在 6.18
+
+asus 的 `boot.kernelPackages = pkgs.linuxPackages_6_18`，thinkpad 跟 `linuxPackages_latest`。
+原因是 NVIDIA 开源模块在 7.2 内核上编译不过。**换内核之前先确认
+`nixosConfigurations.asus` 能构建**，别只看 nixpkgs 有没有更新的驱动。
+6.18 到期时 nixpkgs 会删掉那个属性，构建在 `switch` 之前就报错，当前系统不受影响；
+退役预案在 ASUS_INSTALL.md 附录 D。
+
 ## 不要自动提交
 
 **改完不要 `git commit`。** Toru 会先自己
-`sudo nixos-rebuild switch --flake .#thinkpad` 实机验证，通过后由他决定提交。
+`sudo nixos-rebuild switch --flake .#<本机>` 实机验证，通过后由他决定提交。
 
 构建通过不等于可用 —— 例如字体族名写错时 `nix build` 完全成功，
 但 fontconfig 会静默回退；home-manager 激活失败时系统层已经切过去了，
 只有实机才能发现。
 
 可以准备好 `GIT_COMMIT_MESSAGE.txt`，但执行提交由 Toru 决定。
+**每次提交前重写这个文件，只描述这一次的改动，不要往里追加。**
+追加过一次，结果三个提交标题完全一样但内容不同。
 
 ## 本仓库反复出现的坑
 
@@ -513,7 +542,15 @@ bash 保持完全可用，两者配的是同一套基线。
    就在 `${pkgs.refind}/share/refind/` 里，查一眼十秒，比实机试错便宜得多）；
    **动引导之前先把退路实际走一遍**，别信「理论上能回退」。
 
-7. **「网络通」不等于「解析对」——中间设备会伪造 DNS 应答。**
+7. **验证命令本身也会写错，「没输出」先怀疑命令。**
+   asus 装机时：`findmnt /mnt/winesp /mnt/share` 一次只认一个挂载点，
+   传两个不报错、不输出，看起来像两个分区都没挂（其实都挂着）；
+   zsh 默认不把交互输入里的 `#` 当注释（已在 `programs.zsh.setOptions`
+   开了 `INTERACTIVE_COMMENTS`）；`pkill -f` 匹配整条命令行，写在含该字样的
+   `bash -c` 里会杀掉自己，要用 `pkill -x`；`du` 一次传父目录和子目录，子目录
+   的数出不来。详见 [Lesson-Learn/0017](Lesson-Learn/0017_ASUS_DUAL_BOOT_INSTALL.md)。
+
+8. **「网络通」不等于「解析对」——中间设备会伪造 DNS 应答。**
    iKuai 路由器一个「禁止 AAAA 记录（IPv6）解析」的勾选框，
    最终表现成「虚拟机里 Claude Code 报连不上 Anthropic」，中间隔了五层。
    它伪造的 NODATA 包不合规（SOA 字段为空、OPT 记录跑到 authority 段），

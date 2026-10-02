@@ -23,21 +23,19 @@
 | 二 | rEFInd 主题 derivation、`refind-sync`、`refind-hwinfo`、在 thinkpad 上实装验证 | **已完成** |
 | 三 | A 类配置补全、`migration-check`、`state-sync`、README/CLAUDE.md 同步 | **已完成** |
 
-**第 1-5 节已在虚拟机里完整跑通**（2026-09-21，Bluefin 上的 libvirt/KVM）。
-装完能进 GNOME，A 类复现逐条验证过：字体命中 `Sarasa Mono J` 不回退、
-登录 shell 是 zsh、`claude --version` 和 manifest 钉的版本一致、
-25 个 Agent Skill 全在。（演练清单 REHEARSAL.md 已在 asus 真机跑通之后删除，需要时
-`git log -- REHEARSAL.md` 从历史里找。）
+**第 1-5 节在 asus 真机上从头走通了**（2026-09-30 到 2026-10-02，Windows + NixOS 双系统）。
+逐步记录和 29 条实测发现在 [ASUS_INSTALL.md](ASUS_INSTALL.md) 附录 E，总结在
+[Lesson-Learn/0017](Lesson-Learn/0017_ASUS_DUAL_BOOT_INSTALL.md)。更早（2026-09-21）在虚拟机里演练过一遍，
+那套演练清单和虚拟机主机配置已经删除，需要时 `git log -- REHEARSAL.md hosts/vm` 从历史里找。
 
-**第 6 节（rEFInd）在 thinkpad 上验过**，连重启看菜单、图标、分辨率都做了，
-踩的五个坑记在 [Lesson-Learn/0013](Lesson-Learn/0013_REFIND_BOOT.md)。
-但**在全新安装的语境下还没走过** —— 虚拟机演练的下一步就是它。
+**第 6 节（rEFInd）在两台真机上都验过**：thinkpad（单 ESP，连重启看菜单、图标、分辨率都做了，
+踩的五个坑记在 [Lesson-Learn/0013](Lesson-Learn/0013_REFIND_BOOT.md)）；asus（双 ESP + Windows，
+第 6.5 节，`bcdedit` 兜底和 `Linux Boot Manager` 安全网都走过）。
 
 **第 7 节（搬用户状态）在 thinkpad 上验过**，`dotfiles-state` 私有仓库
 已经建好并推上 GitHub。
 
-三件虚拟机验证不了的，真机上还得重走：GOP 分辨率（OVMF 的模式和真机
-固件无关）、NTFS 脏状态（没有真 Windows 去弄脏它）、硬件探测的值。
+虚拟机验证不了的三件事里，GOP 分辨率和硬件探测的值在 asus 真机上走过了；NTFS 脏状态这次没碰到。
 
 ---
 
@@ -166,7 +164,7 @@ Bruno 是 Flatpak（`com.usebruno.Bruno`）。运行时数据在
 | 选 | 什么时候 |
 |----|----------|
 | `zstd:1` | CPU 较弱（移动端 U、老平台）、盘够大。**ThinkPad X1 Yoga 这类选这个** |
-| `zstd:3` | CPU 有富余（新一代桌面 / HX 系列）、盘偏小想多换点空间 |
+| `zstd:3` | CPU 有富余（新一代桌面 / HX 系列）、盘偏小想多换点空间。**asus（Ryzen AI 7 H 350）选的就是这个**，四个子卷共用 tuning.nix 里的 `btrfsOptions` |
 
 判据是「压缩的 CPU 开销 vs 省下的 IO」。`zstd:1` 几乎不占 CPU 且已经
 能压掉 `/nix/store` 相当可观的一块；`zstd:3` 多压不了太多，但 CPU 开销明显上升。
@@ -189,7 +187,7 @@ Bruno 是 Flatpak（`com.usebruno.Bruno`）。运行时数据在
 
 `hosts/<主机名>/` 的目录名、`networking.hostName`、
 `flake.nix` 里 `nixosConfigurations` 的条目名，三处要一致。
-现有的是 `thinkpad` / `thinkpad-nixos`。
+现有的是 `thinkpad`、`asus`（`networking.hostName` 与目录名一致）。
 
 ---
 
@@ -810,7 +808,7 @@ store 路径**，不重新构建的话新图根本不存在，sync 拷的还是�
 
 ### 6.5 双启动：两个 ESP 各装一份
 
-**已在虚拟机里验证过**（造一块盘、格 FAT32、放一个假的 `bootmgfw.efi`）。
+**已在 asus 真机上验证过**（第 6.5 节末尾的 asus 安排；`bcdedit` 兜底和 NixOS 一侧的安全网都实际走过，见 ASUS_INSTALL.md 附录 E 第 18 条）。
 
 #### 为什么要两份
 
@@ -896,8 +894,8 @@ Windows 的功能更新会擅自把 UEFI 启动顺序第一位重置成
 
 #### asus 的具体安排（第一台真机双 ESP）
 
-上面的做法只在虚拟机里验证过。asus（ASUS TX Air，前身是跑 Bluefin 的那台）
-是第一台真机，配置在 `hosts/asus/`。**从备份到装好的完整逐步指南在
+上面的做法先在虚拟机里验证过，再在 asus（ASUS TX Air，前身是跑 Bluefin 的那台）
+这第一台真机上走通，配置在 `hosts/asus/`。**从备份到装好的完整逐步指南在
 [ASUS_INSTALL.md](ASUS_INSTALL.md)**，下面只留分区表和要点，两处描述同一件事，
 改一处要改另一处。
 
@@ -905,8 +903,8 @@ Windows 的功能更新会擅自把 UEFI 启动顺序第一位重置成
 
 | 盘 | 分区 |
 |----|------|
-| Samsung 2TB | ESP 1 GiB（卷标 `SYSTEM`）、MSR 16 MiB、C: 约 860 GiB、共享 NTFS 1000 GiB（盘尾）；**不建 Windows 恢复分区** |
-| KIOXIA 3.7T | ESP 约 2 GiB（FAT32，卷标 `BOOT`）、Btrfs 其余（`@` 和 `@home`）；**没有 swap 分区**，不休眠，只用 zram |
+| Samsung 2TB | ESP 1 GiB（卷标 `SYSTEM`）、MSR 16 MiB、C: 约 860 GiB、共享 NTFS 1000 GiB（盘尾）；**计划不建 Windows 恢复分区，但 Windows 安装器还是自己建了一个约 892 MB 的**（`reagentc /info` 证实是它建的，留着别删，见 ASUS_INSTALL.md 附录 E 第 2、9 条） |
+| KIOXIA 3.7T | ESP 约 2 GiB（FAT32，卷标 `BOOT`）、Btrfs 其余（`@`、`@home`、`@nix`、`@snapshots`，全部 `zstd:3`）；**没有 swap 分区**，不休眠，只用 zram |
 
 顺序：**先装 Windows，后装 NixOS。** 装 Windows 时 KIOXIA 上还没有 ESP，
 它只会用 Samsung 自己的；反过来的话 Windows 安装器可能把引导文件写进 NixOS 那块盘的 ESP。
@@ -917,7 +915,7 @@ Windows 的 ESP 默认只有 100MB 左右。要 1 GiB 得在安装界面按 Shif
 用 diskpart 自己建（`create partition efi size=1024` 等，完整脚本见
 ASUS_INSTALL.md 6.3 节）。装完在 Windows 里关快速启动、跑 `powercfg /h off`。
 
-装好 NixOS 之后**必须回来改 `hosts/asus/` 里这几处占位**，否则它们静默失效：
+装好 NixOS 之后**必须回来改 `hosts/asus/` 里这几处占位**，否则它们静默失效（asus 这一台已经全部改完，下面是下一台机器的清单）：
 
 - `hardware-configuration.nix`：换成 `nixos-generate-config` 生成的
 - `hwinfo.nix`：跑 `sudo refind-hwinfo` 生成
@@ -957,8 +955,8 @@ ASUS_INSTALL.md 6.3 节）。装完在 Windows 里关快速启动、跑 `powercf
 
 ## 7. 还原 `$HOME` 里 Nix 管不到的部分
 
-> **本节已实现并实测过**（2026-09-21）。`state-sync` 和 `migration-check`
-> 都在 PATH 上，本地状态仓库已建。**远程仓库还没建**，见 7.1。
+> **本节已实现并实测过**（2026-09-21，asus 上 2026-10-02 又走过选择性还原）。`state-sync` 和 `migration-check`
+> 都在 PATH 上，`dotfiles-state` 私有仓库已建并推到 GitHub（见 7.1）。
 
 ### 7.1 B 类状态
 
@@ -999,8 +997,8 @@ state-sync restore
 > `hosts/<主机>/default.nix` 里用 `custom.defaultTheme` 各自声明。）
 >
 > **在 asus 上实际是手工选择性还原的**（2026-10-02）：只把有价值的几项
-> 复制回去，核对过的做法如下。以后在新机器上照这个来，直到 `restore`
-> 有了路径参数为止（还没做）。
+> 复制回去，核对过的做法如下。以后在新机器上照这个来 ——
+> 给 `restore` 加路径参数的想法 toru 决定不做。
 >
 > ```bash
 > # Mozc 学习历史：asus 上原来没有 .history.db 和 .encrypt_key.db。
@@ -1498,7 +1496,7 @@ sudo refind-sync
 | 需要登录的服务 | 加进 7.3 的重新签发清单 |
 | 新的 GUI 程序 | 它的配置在 `~/.config/` 下，看是该进 Nix（A 类）还是进 `dotfiles-state`（B 类）|
 | 新的 Flatpak | 加进 `modules/flatpak.nix`，**别只装不声明** |
-| 新硬件类别（独显、无线网卡） | 第 5.2 节的 `tuning.nix` 要点里补一条 |
+| 新硬件类别（独显、无线网卡） | 第 5.2 节的 `tuning.nix` 要点里补一条。NVIDIA 的着色器缓存 `~/.nv` 是可重建的，已在 `ignoredHome` |
 | Telegram、Google Chrome、Steam（asus 上加的） | 登录态都是 C 类，不搬，新机器上重新登录。`~/.config/google-chrome`、`~/.local/share/TelegramDesktop`、Chrome 建的 `~/.local/share/pki` 都已加进 `home/migration.nix` 的 `ignored`。Chrome 的 profile（约 3.5G）和 Steam 游戏库都**不搬**，这是有意的决定 |
 | **新机器本身** | 公钥加进 `home/toru.nix` 的 `signingKeys`，否则别的机器验不了它签的提交 |
 
@@ -1539,7 +1537,7 @@ migration-check
 |------|------|
 | `users.users.toru` 没有密码字段，新机器装完账户是锁定的 | **有意不改**。密码属 C 类，塞进仓库是倒退。第 5.4 节的 `nixos-enter … passwd toru` 是正解 |
 | B 类清单是否还有该收未收的 | 加了新工具之后跑 `migration-check`，它会报出 `$HOME` 里没人认领的东西 |
-| 第 1-5 节没在全新机器上从头跑过 | 只能等下次真装新机器时验证，对不上的地方回来改 |
+| 第 1-5 节在全新机器上跑过几遍 | asus 真机从头走通；通用步骤和 asus 的差异（双盘、NVIDIA）见 ASUS_INSTALL.md。下次装别的机器时对不上的地方回来改 |
 | `~/.config/obsidian` | 已决定：归 `ignored`（只是这台机器打开过哪些库）。库本身是普通文件夹，走 Syncthing |
 | VS Code 的四个扩展仍是手工装的 | nixpkgs 里的版本比实际装的旧（claude-code 会退到 2.1.223），声明进 Nix 等于降级。归手工清单，`migration-check` 盯着 |
 
@@ -1550,7 +1548,7 @@ migration-check
   被当成核显；AMD APU 报了 512M 显存，被当成独显。判据改成：bus 00 算核显、
   NVIDIA 算独显、有显存节点且不小于 2048M 算独显、其余（含 AMD APU）算核显。
   用 asus、thinkpad、AMD 独显桌面三种形态的样例输入验证过逻辑，thinkpad 上重跑结果不变；
-  **asus 真机上重跑还没做**。AMD 厂商名 lspci 里是 "Advanced Micro Devices"，
+  asus 真机上重跑验证过（ASUS_INSTALL.md 附录 E 第 13 条）。AMD 厂商名 lspci 里是 "Advanced Micro Devices"，
   也顺带改成了 AMD。
 
 - **`~/.grok/` 的 A / B / C 划分**（2026-09-30）—— 登录用过之后逐项看过：
