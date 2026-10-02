@@ -1943,7 +1943,7 @@ KIOXIA 成了 `nvme0n1`、Samsung 成了 `nvme1n1`。`refind-sync` 的日志也�
 清单里 `fcitx5/profile`（键盘布局）、`monitors.xml`、目标机器已有的 `~/.claude/settings.json`
 都是跟着机器走的。asus 上实际是手工选择性还原的，核对过的做法写在 MIGRATION.md 7.1 节。
 **走到这一步才发现，说明这一类问题要在设计 B 类清单时就想：一项状态是跟着人走还是跟着机器走。**
-计划但还没做：给 `restore` 加路径参数。
+给 `restore` 加路径参数的想法 toru 决定不做，继续手工选择性还原。
 
 **24. 选择性还原的实际结果。**
 - Mozc：asus 上原来没有 `.history.db` 和 `.encrypt_key.db`，复制六个数据库文件、`chmod 600`、
@@ -2048,7 +2048,7 @@ VS Code 扩展（清单里本来就有，是提醒）。`state-sync status` 的 
 
 ### 待补
 
-- 华硕的 BIOS 键具体是哪个（启动菜单键已确认是 Esc）
-- 保险箱 secrets 现在两边都可写；asus 成为主力之后，把 thinkpad 和 Mac 上的「保险箱」文件夹改成「仅接收」
-- Grok 在 asus 上还要 toru 亲手做两件事：确认隐私提示、装 cloudflare 插件
-- 计划但还没做：给 `state-sync restore` 加路径参数；把 autoMode 拆成通用条目
+没有了。之前列的四项（记录 BIOS 键、保险箱改仅接收、Grok 隐私提示和 cloudflare 插件、
+`state-sync restore` 路径参数与 autoMode 拆分）toru 决定都不做，
+记在 [Lesson-Learn/0017](Lesson-Learn/0017_ASUS_DUAL_BOOT_INSTALL.md) 的「决定不做的事」里。
+整次装机的总结也在那一篇。

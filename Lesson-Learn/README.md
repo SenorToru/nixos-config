@@ -8,7 +8,7 @@
   想知道某个配置是怎么演变成现在这样的，从小到大读一遍即可。
 - **编号是 4 位大写十六进制**：`0000` → `0009` → `000A` → `000F` → `0010` → …
   一直到 `FFFF`。注意 `0009` 的下一个是 `000A` 而不是 `0010`。
-- **新增文档接着当前最大编号加一**。当前最大是 `0016`，**下一个是 `0017`**。
+- **新增文档接着当前最大编号加一**。当前最大是 `0017`，**下一个是 `0018`**。
   不要插空、不要复用编号。
 - 编号一旦分配就不再变动。文档作废时**加废弃横幅并指向新文档**，不删除、不重排 ——
   历史记录本身有价值，而且重排会让已有的交叉引用全部失效。
@@ -42,6 +42,7 @@
 | `0014` | [DNS_HIJACK_AND_DOT](0014_DNS_HIJACK_AND_DOT.md) | 路由器伪造 AAAA 应答导致虚拟机里 Claude Code 连不上；抓包定位 + 改用 DNS-over-TLS。含不预设网络知识的完整讲解 | ✅ 有效 |
 | `0015` | [CLAUDE_CODE_NEOVIDE_WORKFLOW](0015_CLAUDE_CODE_NEOVIDE_WORKFLOW.md) | Neovide 里用 Claude Code 的完整教程：会话的新开/切换/分叉/改名/删除、三层模式、面板跳转与调宽、Enter 换行、剪贴板统一；`Space a r` 参数被静默丢弃的根因 | 📖 常读 |
 | `0016` | [GROK_BUILD_VERSION_PINNING](0016_GROK_BUILD_VERSION_PINNING.md) | 装 xAI 的 Grok Build：发布分支停在 0.2.93，`overrideAttrs` 换版本号 + 哈希；用 `GROK_DISABLE_AUTOUPDATER` 挡住自更新另装一份 | ✅ 有效 |
+| `0017` | [ASUS_DUAL_BOOT_INSTALL](0017_ASUS_DUAL_BOOT_INSTALL.md) | asus 真机装机总结：Windows + NixOS 双 ESP 双 rEFInd、NVIDIA offload、钉 6.18 内核、状态与会话迁移；验证命令本身写错的坑、跟着人还是跟着机器走 | ✅ 有效 |
 
 ## 按主题快速定位
 
@@ -55,7 +56,8 @@
 - **Shell / CLI 环境** —— `000F`
 - **仓库分层（modules 与 hosts）** —— `000F`
 - **笔电硬件（zram / 温控 / 显卡 / 指纹）** —— `000F`
-- **引导（UEFI / rEFInd / systemd-boot / NVRAM）** —— `0013`
+- **引导（UEFI / rEFInd / systemd-boot / NVRAM / 双系统）** —— `0013`、`0017`
+- **装新机器 / 状态迁移** —— `0017`
 - **网络与 DNS** —— `0014`
 
 ## 反复出现的坑

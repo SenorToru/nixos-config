@@ -195,6 +195,7 @@ let
     "BraveSoftware"
     "Code"
     "GIMP"
+    "TelegramDesktop" # C 类：登录态，新机器重新登录
     "atuin"
     "autostart"
     "burn-my-windows"
@@ -247,6 +248,7 @@ let
     "gnome-settings-daemon"
     "gnome-shell"
     "gnome-software"
+    "google-chrome" # C 类：登录态和 profile，新机器重新登录
     "grilo-plugins"
     "gvfs-metadata"
     "icc"
@@ -254,7 +256,9 @@ let
     "keyrings" # C 类：秘密
     "neovide"
     "nvim" # lazy.nvim 插件，会自动重装
+    "obsidian" # 只是这台机器打开过哪些库，库本身走 Syncthing
     "org.gnome.TextEditor"
+    "pki" # Chrome 建的 NSS 证书库，随 Chrome 走，属 C 类
     "recently-used.xbel"
     "sounds"
     "themes"

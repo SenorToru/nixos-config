@@ -1499,7 +1499,7 @@ sudo refind-sync
 | 新的 GUI 程序 | 它的配置在 `~/.config/` 下，看是该进 Nix（A 类）还是进 `dotfiles-state`（B 类）|
 | 新的 Flatpak | 加进 `modules/flatpak.nix`，**别只装不声明** |
 | 新硬件类别（独显、无线网卡） | 第 5.2 节的 `tuning.nix` 要点里补一条 |
-| Telegram、Google Chrome、Steam（asus 上加的） | 登录态都是 C 类，不搬，新机器上重新登录。Chrome 的 profile（约 3.5G）和 Steam 游戏库都**不搬**，这是有意的决定 |
+| Telegram、Google Chrome、Steam（asus 上加的） | 登录态都是 C 类，不搬，新机器上重新登录。`~/.config/google-chrome`、`~/.local/share/TelegramDesktop`、Chrome 建的 `~/.local/share/pki` 都已加进 `home/migration.nix` 的 `ignored`。Chrome 的 profile（约 3.5G）和 Steam 游戏库都**不搬**，这是有意的决定 |
 | **新机器本身** | 公钥加进 `home/toru.nix` 的 `signingKeys`，否则别的机器验不了它签的提交 |
 
 **判据永远是第 0 节那三类。** 能进 Nix 就进 Nix（A 类），
@@ -1540,7 +1540,7 @@ migration-check
 | `users.users.toru` 没有密码字段，新机器装完账户是锁定的 | **有意不改**。密码属 C 类，塞进仓库是倒退。第 5.4 节的 `nixos-enter … passwd toru` 是正解 |
 | B 类清单是否还有该收未收的 | 加了新工具之后跑 `migration-check`，它会报出 `$HOME` 里没人认领的东西 |
 | 第 1-5 节没在全新机器上从头跑过 | 只能等下次真装新机器时验证，对不上的地方回来改 |
-| `~/.config/obsidian` 还没分类 | 只是这台机器打开过哪些库。第一次打开 Obsidian 后 `migration-check` 若报没人认领，再决定忽略还是收进 B 类。库本身是普通文件夹，要跨设备就用 Syncthing 同步那个目录 |
+| `~/.config/obsidian` | 已决定：归 `ignored`（只是这台机器打开过哪些库）。库本身是普通文件夹，走 Syncthing |
 | VS Code 的四个扩展仍是手工装的 | nixpkgs 里的版本比实际装的旧（claude-code 会退到 2.1.223），声明进 Nix 等于降级。归手工清单，`migration-check` 盯着 |
 
 **已解决**（原先列在这里）：
