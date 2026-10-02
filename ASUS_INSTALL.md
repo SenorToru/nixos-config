@@ -15,7 +15,6 @@
 > |------|--------|
 > | **本文件** | **asus 这一台机器**从头到尾怎么装 |
 > | [MIGRATION.md](MIGRATION.md) | 装任意新机器的通用流程和背后的道理（本文很多命令出自那里，想知道「为什么」去翻它） |
-> | [REHEARSAL.md](REHEARSAL.md) | 当初在虚拟机里演练的记录 |
 > | [Lesson-Learn/0013](Lesson-Learn/0013_REFIND_BOOT.md) | rEFInd 踩过的五个坑 |
 > | [README.md](README.md) | 装好之后的日常操作 |
 
@@ -102,15 +101,15 @@ KIOXIA 上的数据要到第 9.2 节才会被抹掉。
 |------|------|
 | Windows 11 的安装（第 6 章） | **真机走通，进了桌面。** 首次设置卡在联网界面，用本地账户绕过，见 6.5 节。diskpart 预建的 1 GiB ESP 和 1000 GiB 共享盘被安装器直接接受了（6.4 节的退路没用上）。Windows 装完后自己又建了一个约 892 MB 的恢复分区 |
 | NixOS 的分区、格式化、挂载、`nixos-install`（第 9 章） | **真机走通。** 其中 9.9 节手动建 `Linux Boot Manager` 启动项那步实际用过，重启后直接进了 systemd-boot → NixOS |
-| 首次进 NixOS（第 10 章） | **能进系统。** 10.3 的系统层验证和 10.4 的驱动加载已经通过（主机名、内核、压缩、zram、两个挂载点、`nvidia-smi`）；共享盘写入和 PRIME offload 实测也已通过；桌面与输入、Wi-Fi、应用还没有记录 |
+| 首次进 NixOS（第 10 章） | **全部验证完**：系统层、显卡与 PRIME offload、桌面与输入、Wi-Fi、应用（Steam、Chrome、Telegram、Obsidian 等，toru 亲自试过）、合盖睡眠唤醒、共享盘写入（附录 E 第 10、11、12、29 条） |
 | rEFInd 与双 ESP（第 11 章） | **真机走通，全部验证完**：两个 ESP 都写入，菜单、图标、进 NixOS 和 Windows、2560x1600 分辨率、Windows 侧 `bcdedit` 兜底都正常（附录 E 第 14、15、18 条） |
 | Windows 那一侧的第 7 章设置 | **已核实**：休眠关、快速启动不可用、BitLocker 关、UTC 已设置（附录 E 第 16 条）。共享盘在进过 Windows 之后仍可写，时间没有错开（附录 E 第 18 条） |
-| `hosts/asus/` 的运行时表现 | 系统层已经在 asus 上装进去并启动，但显卡、睡眠唤醒等要到第 10 节和附录 D.5 才验证 |
+| `hosts/asus/` 的运行时表现 | **验证完**：第 13 节的整体验证在 asus 上全部通过，唯一的失败服务是已知的背光那一个（附录 E 第 12 条） |
 | 华硕的启动菜单键、BIOS 键 | 启动菜单键是 **`Esc`**（实测）。BIOS 键还没记录 |
 
-三件虚拟机验证不了的事，还都没碰到：
-**GOP 分辨率**（第 11.4 节）、**NTFS 脏状态**（第 10.3 节）、**硬件探测的值**（第 11.1 节）。
-都要等第 10、11 章才会遇到。
+三件虚拟机验证不了的事，在真机上都碰到并解决了：
+**GOP 分辨率**（面板原生 2560x1600，固件有这个模式，第 11.4 节）、**NTFS 脏状态**（关了快速启动和休眠之后共享盘仍可写，第 7、10.3 节）、
+**硬件探测的值**（显卡两行判反，已修，附录 E 第 13 条）。
 
 **遇到和文档对不上的地方，把实际输出记下来。**
 这份文档就是靠这样一轮轮改对的，装完要按第 15 节回头更新它。
@@ -1428,10 +1427,9 @@ cd ~/nixos-config && find . ! -user toru -printf '%u  %p\n'   # 无输出
   记录真机上第一次遇到的问题和原因（编号取当前最大加一，同时更新
   `Lesson-Learn/README.md`）。**重点是双 ESP、GOP 分辨率、NTFS 共享盘、
   diskpart 预建分区这几件之前没在真机上验证过的事**
-- [ ] 确认 asus 真机双 ESP 完全跑通之后，**再**删虚拟机相关内容：
-  `hosts/vm/`、`flake.nix` 里的 `vm` 条目、`REHEARSAL.md`，
-  以及 README 和 MIGRATION 里指向它们的引用。
-  在那之前 `REHEARSAL.md` 第 4 节是这套方案的演练记录，留着有用
+- [x] asus 真机双 ESP 跑通之后，已经删掉虚拟机相关内容（2026-10-02）：`hosts/vm/`、`flake.nix` 里的 `vm` 条目、
+  `REHEARSAL.md`，以及 README 和 MIGRATION 里指向它们的引用。演练记录在 git 历史里，
+  需要时 `git log -- REHEARSAL.md` 找
 - [ ] thinkpad 上 `git pull`，再 `nrb`，让它认得 asus 的签名
 
 ---
@@ -2033,11 +2031,24 @@ Toru 同时运作几个事业，所以 `~/Documents/library` 的编号表在个�
 - 完成后 U 盘上的 `bluefin-backup` 里仍有原件（含恢复码明文、身份证件、私人媒体的原名），
   是否清掉由 Toru 决定，我们不替他删。
 
+**29. 第 13 节整体验证在 asus 上全部通过，并清理虚拟机相关内容。**
+由 asus 上的 Claude 跑只读命令，toru 亲手跑 `sudo ls`，应用由 toru 亲自逐项试过：
+主机名、内核 6.18.52、四个子卷 `zstd:3`、只有 zram、两个 Windows 分区挂载、NVIDIA 驱动和 offload、
+字体、zsh、`fwupd`、DNS（`192.0.2.1` 超时）、固件启动项（rEFInd 第一、`Linux Boot Manager` 在、
+`Boot0000` 指向 rEFInd）、两个 ESP 里都有 `refind.conf`、`refind_x64.efi`、`themes`、仓库没有 root 属主文件。
+`migration-check` 只多报了 `~/.nv`（NVIDIA 驱动的着色器缓存，能自动重建，已加进忽略清单）和 4 个手工装的
+VS Code 扩展（清单里本来就有，是提醒）。`state-sync status` 的 5 处差异都在预期内：`profile`、`conf`、
+`monitors.xml` 是每台机器各自的，`.grok/config.toml` 差 `[privacy]` 和 `[plugins]`，`mozc` 是还原之后又学了新词。
+**asus 真机双 ESP 跑通之后，删除了虚拟机相关内容**：`hosts/vm/`、`flake.nix` 里的 `vm` 条目、`REHEARSAL.md`，
+以及 README、MIGRATION 里指向它们的引用，`home/syncthing.nix` 里「vm 不参与文件同步」的特例也一并拿掉。
+保留：`signingKeys` 里 vm 的公钥（它签过的提交要能验）、`Lesson-Learn` 里的历史记录。
+演练记录在 git 历史里，需要时 `git log -- REHEARSAL.md`。
+一个小教训：我一直往同一个 `GIT_COMMIT_MESSAGE.txt` 里追加，toru 每次提交都用它，
+结果最近三个提交标题完全一样但内容不同。**每次提交前重写这个文件，只描述这一次的改动。**
+
 ### 待补
 
 - 华硕的 BIOS 键具体是哪个（启动菜单键已确认是 Esc）
-- 第 12 章剩下的：Steam 等应用的实际使用。备份归位已完成（附录 E 第 28 条）；U 盘 UMaster 上 bluefin-backup 里的原件是否清掉，由 toru 决定
 - 保险箱 secrets 现在两边都可写；asus 成为主力之后，把 thinkpad 和 Mac 上的「保险箱」文件夹改成「仅接收」
-- thinkpad 上这个正在写的 Claude 会话没有搬到 asus：等它结束之后单独复制那一个会话文件
 - Grok 在 asus 上还要 toru 亲手做两件事：确认隐私提示、装 cloudflare 插件
 - 计划但还没做：给 `state-sync restore` 加路径参数；把 autoMode 拆成通用条目

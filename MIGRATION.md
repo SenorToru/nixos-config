@@ -26,8 +26,8 @@
 **第 1-5 节已在虚拟机里完整跑通**（2026-09-21，Bluefin 上的 libvirt/KVM）。
 装完能进 GNOME，A 类复现逐条验证过：字体命中 `Sarasa Mono J` 不回退、
 登录 shell 是 zsh、`claude --version` 和 manifest 钉的版本一致、
-25 个 Agent Skill 全在。演练清单和沿途发现见
-[REHEARSAL.md](REHEARSAL.md)。
+25 个 Agent Skill 全在。（演练清单 REHEARSAL.md 已在 asus 真机跑通之后删除，需要时
+`git log -- REHEARSAL.md` 从历史里找。）
 
 **第 6 节（rEFInd）在 thinkpad 上验过**，连重启看菜单、图标、分辨率都做了，
 踩的五个坑记在 [Lesson-Learn/0013](Lesson-Learn/0013_REFIND_BOOT.md)。
@@ -409,7 +409,7 @@ nix-shell -p git --run '
 '
 cd /mnt/home/toru/nixos-config
 
-HOST=<新主机名>          # 例如 desktop、asus、vm
+HOST=<新主机名>          # 例如 desktop、asus
 mkdir -p hosts/$HOST
 cp /mnt/etc/nixos/hardware-configuration.nix hosts/$HOST/
 ```

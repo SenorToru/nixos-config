@@ -1,15 +1,11 @@
 {
   config,
-  lib,
-  osConfig,
   pkgs,
   ...
 }:
 
 let
   home = config.home.homeDirectory;
-  # vm 是演练机，不参与这套文件同步。
-  shareFiles = osConfig.custom.flakeHost != "vm";
   trash30 = {
     type = "trashcan";
     params.cleanoutDays = "30";
@@ -41,7 +37,7 @@ in
     enable = true;
     overrideDevices = false;
     overrideFolders = false;
-    settings = lib.mkIf shareFiles {
+    settings = {
       folders = {
         notes = {
           path = "${home}/Documents/notes";

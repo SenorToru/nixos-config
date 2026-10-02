@@ -132,6 +132,7 @@ let
     ".lesshst"
     ".dotnet"
     ".npm"
+    ".nv" # NVIDIA 驱动的着色器 / 计算缓存（GLCache、ComputeCache），能自动重建。只在有 NVIDIA 显卡的机器上出现
     ".pki"
     ".mozilla"
     ".var" # Flatpak 的应用数据，靠 flatpak.nix 声明重建

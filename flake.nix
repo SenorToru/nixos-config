@@ -75,16 +75,6 @@
             ./hosts/asus/default.nix
           ];
         };
-
-        # 虚拟机：演练装机流程 + 长期当回归测试用的第二台主机
-        vm = nixpkgs.lib.nixosSystem {
-          system = "x86_64-linux";
-          specialArgs = { inherit inputs; };
-          modules = [
-            nix-flatpak.nixosModules.nix-flatpak
-            ./hosts/vm/default.nix
-          ];
-        };
       };
     };
 }

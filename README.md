@@ -13,8 +13,7 @@
 
 > 本文件是**给人看的操作手册**。
 > 给 AI 协作用的约定在 [CLAUDE.md](CLAUDE.md)，
-> **装新机器和搬用户状态**在 [MIGRATION.md](MIGRATION.md)（演练清单见 [REHEARSAL.md](REHEARSAL.md)；
-> **asus 这一台**的完整重装步骤见 [ASUS_INSTALL.md](ASUS_INSTALL.md)），
+> **装新机器和搬用户状态**在 [MIGRATION.md](MIGRATION.md)（**asus 这一台**的完整重装步骤见 [ASUS_INSTALL.md](ASUS_INSTALL.md)），
 > 踩过的坑和排查过程在 [Lesson-Learn/](Lesson-Learn/README.md)。
 
 ---
@@ -43,7 +42,6 @@
 │   └── migration-tests.sh    state-sync 的回归测试（构建期执行）
 ├── Lesson-Learn/             知识库（按时间顺序编号）
 ├── MIGRATION.md              装新机器 + 搬 Nix 管不到的用户状态
-├── REHEARSAL.md              在虚拟机里演练装机流程的检查清单
 ├── ASUS_INSTALL.md           asus 重装指南：Windows + NixOS 双系统，从分区到 rEFInd 的完整步骤
 └── CLAUDE.md                 AI 协作约定
 ```
@@ -232,7 +230,7 @@ zsh 和 bash 各写一份。激活后出现在 `~/.zshrc` 和 `~/.bashrc`，
 
 仓库路径和 flake 属性名都不写死：路径从家目录推，属性名从
 `custom.flakeHost` 取。本机展开后是
-`/home/toru/nixos-config#thinkpad`；vm 上同一条别名展开成 `#vm`，
+`/home/toru/nixos-config#thinkpad`；
 asus 上展开成 `#asus`（在 asus 真机上用 `zsh -ic 'alias nrb nrt ncheck nhm ngen'` 核对过）。
 **所以新加一台机器时别名不用改**：只要它的 `hosts/<主机>/default.nix` 里设了
 `custom.flakeHost`，四个重建别名自动指向它自己。下面表格里的「本机展开」按 thinkpad 写。
