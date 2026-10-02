@@ -1167,7 +1167,15 @@ Settings → SSH and GPG keys，但是两个独立的条目：
 #    `ssh-keygen -lf ~/.ssh/id_ed25519.pub` 和报错里那串 SHA256 对一下。
 
 # 3. GitHub CLI
+#    **和第 1 步的 SSH 密钥是两套独立的凭据，不是重复。** git push / pull / clone
+#    走的是 SSH 密钥（remote 是 git@github.com:... 时）；gh 用的是它自己的 OAuth 令牌，
+#    管的是 GitHub API 那一侧：gh pr、gh issue、gh release、gh repo create 这些。
+#    另外 home/toru.nix 把 gh 配成了 https://github.com 的 git credential helper，
+#    所以 https 形式的 remote 也靠它认证。
+#    只用 SSH 的 remote、又从不用 gh 命令的话，不登录也不影响提交和推送；
+#    用 Claude Code 之类的工具去操作 PR 或 issue 时才会用到它。
 gh auth login
+#    问协议选 SSH；问「是否上传 SSH 公钥」选不上传（那把公钥已经在 GitHub 上登记过两次了）。
 
 # 4. Claude Code
 claude          # 首次启动会引导登录

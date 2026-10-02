@@ -232,7 +232,10 @@ zsh 和 bash 各写一份。激活后出现在 `~/.zshrc` 和 `~/.bashrc`，
 
 仓库路径和 flake 属性名都不写死：路径从家目录推，属性名从
 `custom.flakeHost` 取。本机展开后是
-`/home/toru/nixos-config#thinkpad`；vm 上同一条别名展开成 `#vm`。
+`/home/toru/nixos-config#thinkpad`；vm 上同一条别名展开成 `#vm`，
+asus 上展开成 `#asus`（在 asus 真机上用 `zsh -ic 'alias nrb nrt ncheck nhm ngen'` 核对过）。
+**所以新加一台机器时别名不用改**：只要它的 `hosts/<主机>/default.nix` 里设了
+`custom.flakeHost`，四个重建别名自动指向它自己。下面表格里的「本机展开」按 thinkpad 写。
 
 ### 重建
 
