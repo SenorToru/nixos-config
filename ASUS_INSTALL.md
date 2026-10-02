@@ -993,6 +993,10 @@ lspci -D | grep -E 'VGA|3D|Display'
 > **不要用 `state-sync restore` 把 thinkpad 的 profile 整份铺过来：** thinkpad 的是
 > JIS 日语键盘，profile 里是 `Default Layout=jp` 和 `keyboard-jp`，而 asus 是 US 键盘，
 > 铺过来键位会错。要还原的话，之后把这两处改成 `us` 和 `keyboard-us`。
+>
+> **默认输入法设成英文键盘，不要默认 Rime 或 Mozc。** 手动加完之后，把 `~/.config/fcitx5/profile` 里的
+> `DefaultIM` 改成这台机器键盘布局对应的那一项（US 键盘是 `keyboard-us`，JIS 键盘是 `keyboard-jp`），
+> 再 `fcitx5-remote -r`。其余不动，这个文件要保持可写（fcitx5 自己会改它）。见附录 E 第 26 条。
 
 ### 10.6 验证应用
 
@@ -1925,8 +1929,68 @@ KIOXIA 成了 `nvme0n1`、Samsung 成了 `nvme1n1`。`refind-sync` 的日志也�
 编号都只是示例，可能和你机器上实际的对调。同理，连着内置屏的 `card` 编号
 也会在重启之间变（附录 E 第 15 条）。
 
+### 2026-10-02
+
+**22. 主题改成每台机器声明，不再跨机器同步。**
+`~/.local/state/theme/current` 以前在 `state-sync` 的 B 类清单里，asus 一还原就会被 thinkpad 的
+主题盖掉，而且这个文件在 `$HOME` 里，重装系统就丢。改成每台机器在
+`hosts/<主机>/default.nix` 里用 `custom.defaultTheme` 声明（thinkpad 是 everforest，asus 是 kanagawa），
+状态文件没有内容时 `restoreTheme` 回落到它；`theme` 命令切到和声明不同的主题时会提醒。
+两台机器 `nrb` 之后主题没有变化，符合预期。
+
+**23. `state-sync restore` 是全量覆盖，不能整份还原到不同硬件的机器上。**
+读 `home/migration.nix` 时发现它对每个路径先 `rm -rf` 再 `cp -a`，没有只还原几项的参数；
+清单里 `fcitx5/profile`（键盘布局）、`monitors.xml`、目标机器已有的 `~/.claude/settings.json`
+都是跟着机器走的。asus 上实际是手工选择性还原的，核对过的做法写在 MIGRATION.md 7.1 节。
+**走到这一步才发现，说明这一类问题要在设计 B 类清单时就想：一项状态是跟着人走还是跟着机器走。**
+计划但还没做：给 `restore` 加路径参数。
+
+**24. 选择性还原的实际结果。**
+- Mozc：asus 上原来没有 `.history.db` 和 `.encrypt_key.db`，复制六个数据库文件、`chmod 600`、
+  `fcitx5-remote -r`，toru 亲自打日文验证学习记录带过来了。
+  **停 `mozc_server` 要用 `pkill -x`，不要用 `pkill -f`**：`-f` 匹配整条命令行，
+  写在含 `mozc_server` 字样的 `bash -c` 里会把执行它的 shell 自己杀掉（实际踩到，退出码 144，
+  后面的步骤没有跑、文件没被动过）。
+- `~/.claude/settings.json`：asus 上原来只有 55 字节（两个键），还原成和 thinkpad 逐字节一致，
+  包括 `autoMode`。thinkpad 后来给 Sonnet 5.5 单独设了 effort medium，再同步一次，三条
+  `modelSettings` 一致。`autoMode` 只在用户级设置里被读取（文档明确说项目里的 `.claude/settings.json`
+  和 `.claude/settings.local.json` 被故意忽略），所以必须放 `dotfiles-state`，不能放进 public 的仓库；
+  它由 Claude Code 的 `/auto-mode-setup` 生成，内容是你生产环境的描述（文件名、域名、服务名，
+  没有密钥），仓库 `dotfiles-state` 是 private，`nixos-config` 是 public，两者我都用 `gh` 核对过。
+- Grok：asus 上第一次运行之后自己生成了一份只有 7 行的 `config.toml`，把 thinkpad 的 `[ui]`、`[cli]`、
+  `[models]` 三段追加过去，包括 `permission_mode = "always-approve"`（toru 在动手前亲口确认）；
+  **不带 `[privacy]`**（那是在 thinkpad 上确认隐私提示的记录，asus 上要自己看一眼再确认）和
+  **`[plugins]`**（asus 上没装 cloudflare 插件）。TOML 用 Python 的 `tomllib` 校验合法，和 thinkpad 的
+  diff 正好只差那两段。
+
+**25. 会话历史和记忆一次性迁移（Claude Code 四个项目 + Grok），走外接 U 盘。**
+范围：Claude 的 nixos-config、amemusubi、craft-crm、shukuba 四个项目目录，Grok 的 `sessions`、`memory-v2`、
+`memtrace`。凭据（`auth.json`、`mcp_credentials.json`）、`agent_id`、`trusted_folders.toml` 不搬。
+要点和教训：
+- 里面是完整对话内容，**只走外接硬盘，用完删**，不进 git、不上云。U 盘上单独建一个目录，和原有的
+  备份分开。
+- 生成 `MANIFEST.sha256`，在目标机器上先校验 U 盘没读坏，复制完逐个文件和 U 盘比对
+  （171 + 385 = 556，和清单行数一致）。
+- **正在被写入的会话文件不要复制**：thinkpad 上当时在写的那一个单独留到会话结束之后。
+- **exFAT 存不了符号链接，也没有 Unix 权限位**：Grok 的 `poster-gen → post-gen` 别名要在目标机器上手工
+  补；复制过去的文件要把目录收紧成 700、文件收紧成 600。
+- Claude 用 `cp -rn` 不覆盖已有文件（目标机器上自己正在写的会话文件因此没被动）；
+  Grok 的三个目录因为里面有搜索索引 `session_search.sqlite` 和不按会话分的 `memory-v2/global`，
+  不能合并，用「先整体挪到备份、再整体替换」。
+- 迁移前先备份目标机器的现状，toru 亲自用 `claude --resume` 和 Grok 验证之后才删备份和 U 盘副本，
+  删之前 `ls` 一遍、路径写完整、不用通配符。
+- 搬完之后两台机器上同一个项目的会话和记忆各自继续长，**不会自动合并**。
+
+**26. 默认输入法改成英文键盘，两台机器各用各的布局。**
+thinkpad 把 `~/.config/fcitx5/profile` 里的 `DefaultIM` 改成 `keyboard-jp`（日语键盘布局输入英文），
+asus 改成 `keyboard-us`（英文键盘布局输入英文）。Rime 和 Mozc 都保留在列表里，需要时手动切；
+`Ctrl+Space` 在英文键盘和最近用过的输入法之间切换。`fcitx5-remote -r` 之后没有被 fcitx5 改写回去。
+这个文件是 B 类、跟着机器走，不要整份还原到另一台机器上。
+
 ### 待补
 
 - 华硕的 BIOS 键具体是哪个（启动菜单键已确认是 Esc）
-- 第 10 章还没验证的：Steam 等应用的实际使用
-- 第 12 章剩下的：`gh auth login`、state-sync（注意 fcitx5 的 profile 不要整份还原）、Syncthing 配对、Cryptomator 保险箱
+- 第 12 章剩下的：Syncthing 配对、Cryptomator 保险箱、备份文件归位（按 Documents/library 的规矩）、Steam 等应用的实际使用
+- thinkpad 上这个正在写的 Claude 会话没有搬到 asus：等它结束之后单独复制那一个会话文件
+- Grok 在 asus 上还要 toru 亲手做两件事：确认隐私提示、装 cloudflare 插件
+- 计划但还没做：给 `state-sync restore` 加路径参数；把 autoMode 拆成通用条目
