@@ -983,6 +983,45 @@ state-sync restore
 收哪些路径由 `home/migration.nix` 的 `stateFiles` 决定，
 `state-sync` 和 `migration-check` 共用同一份清单。
 
+> ### 硬件不同的机器上，不要直接 `state-sync restore`
+>
+> **`restore` 是全量覆盖：** 对清单里每个路径都是先 `rm -rf` 再 `cp -a`，
+> 没有「只还原其中几项」的参数。而清单里有几项是**跟着机器走**的，
+> 整份还原到另一台机器会出错：
+>
+> | 路径 | 为什么不能照搬 |
+> |------|----------------|
+> | `~/.config/fcitx5/profile` | 里面是键盘布局。thinkpad 是 JIS 的 `jp` / `keyboard-jp`，asus 是 US 键盘，覆盖过去键位会错 |
+> | `~/.config/monitors.xml` | 另一台机器的显示器布局 |
+> | `~/.claude/settings.json` | 目标机器上的 Claude Code 可能已经有它自己的设置 |
+>
+> （主题以前也在这个清单里，现在不在了：它改成每台机器在
+> `hosts/<主机>/default.nix` 里用 `custom.defaultTheme` 各自声明。）
+>
+> **在 asus 上实际是手工选择性还原的**（2026-10-02）：只把有价值的几项
+> 复制回去，核对过的做法如下。以后在新机器上照这个来，直到 `restore`
+> 有了路径参数为止（还没做）。
+>
+> ```bash
+> # Mozc 学习历史：asus 上原来没有 .history.db 和 .encrypt_key.db。
+> # 先停掉 mozc_server，否则它之后保存时会把内存里的旧数据写回去。
+> # 注意用 -x（按进程名精确匹配）。-f 会匹配整条命令行，
+> # 如果这条命令本身写在含 "mozc_server" 字样的脚本或 bash -c 里，会把自己也杀掉。
+> pkill -x mozc_server
+>
+> cd ~/dotfiles-state/.config/mozc
+> cp -f boundary.db cform.db segment.db .history.db .encrypt_key.db .registry.db ~/.config/mozc/
+> chmod 600 ~/.config/mozc/*.db ~/.config/mozc/.*.db   # 仓库里是 0644，mozc 自己建的是 0600
+> fcitx5-remote -r
+> ```
+>
+> 不要碰 `.server.lock`、`.session.ipc` 和日志文件，它们是运行时文件。
+> 还原前最好先把原来的 `~/.config/mozc` 备份一份。
+>
+> `~/.grok/config.toml` 要等目标机器上的 Grok 第一次运行、自己生成目录之后再还原：
+> 里面有「市场已自动安装」之类的完成标记，在它第一次运行之前放进去，
+> 可能让它以为已经装好了。
+
 `push` 会剔掉日志、锁文件和 `.session.ipc`。最后那个记的是**本机的
 套接字路径**，拷到新机器上是错的。
 
