@@ -994,9 +994,11 @@ lspci -D | grep -E 'VGA|3D|Display'
 > JIS 日语键盘，profile 里是 `Default Layout=jp` 和 `keyboard-jp`，而 asus 是 US 键盘，
 > 铺过来键位会错。要还原的话，之后把这两处改成 `us` 和 `keyboard-us`。
 >
-> **默认输入法设成英文键盘，不要默认 Rime 或 Mozc。** 手动加完之后，把 `~/.config/fcitx5/profile` 里的
-> `DefaultIM` 改成这台机器键盘布局对应的那一项（US 键盘是 `keyboard-us`，JIS 键盘是 `keyboard-jp`），
-> 再 `fcitx5-remote -r`。其余不动，这个文件要保持可写（fcitx5 自己会改它）。见附录 E 第 26 条。
+> **默认就是英文输入，不用另外设置。** 新窗口默认用哪个输入法，由两件事决定：
+> `~/.config/fcitx5/profile` 里排第一的那一项（手动加的时候保持键盘布局那一项排第一），
+> 以及 `~/.config/fcitx5/config` 里的 `ActiveByDefault=False`（默认值）。
+> **不要手工改 `profile` 里的 `DefaultIM`**：它不是「启动时用哪个」，fcitx5 会自己随你最近用过的
+> 输入法改写它（`Ctrl+Space` 在英文键盘和最近用过的输入法之间切换）。见附录 E 第 26 条。
 
 ### 10.6 验证应用
 
@@ -1981,16 +1983,61 @@ KIOXIA 成了 `nvme0n1`、Samsung 成了 `nvme1n1`。`refind-sync` 的日志也�
   删之前 `ls` 一遍、路径写完整、不用通配符。
 - 搬完之后两台机器上同一个项目的会话和记忆各自继续长，**不会自动合并**。
 
-**26. 默认输入法改成英文键盘，两台机器各用各的布局。**
-thinkpad 把 `~/.config/fcitx5/profile` 里的 `DefaultIM` 改成 `keyboard-jp`（日语键盘布局输入英文），
-asus 改成 `keyboard-us`（英文键盘布局输入英文）。Rime 和 Mozc 都保留在列表里，需要时手动切；
-`Ctrl+Space` 在英文键盘和最近用过的输入法之间切换。`fcitx5-remote -r` 之后没有被 fcitx5 改写回去。
-这个文件是 B 类、跟着机器走，不要整份还原到另一台机器上。
+**26. 默认输入法：不用手工改 `DefaultIM`，我原来的理解是错的。**
+toru 的要求是两台机器默认都用英文输入（thinkpad 用日语键盘布局输入英文，asus 用英文键盘布局），
+Rime 和 Mozc 都保留、需要时手动切。我最初以为 `profile` 里的 `DefaultIM` 是「启动时用哪个」，
+就把 thinkpad 改成 `keyboard-jp`、asus 改成 `keyboard-us`，`fcitx5-remote -r` 之后没被改回，
+asus 上 toru 看到新窗口是英文，就当作做成了。
+**这个判断站不住：**
+- `~/.config/fcitx5/config` 里 `ActiveByDefault=False`、`ShareInputState=No`，意思是每个新的输入上下文
+  一开始处于「未激活」状态，也就是 `profile` 里**排第一的那一项**（这两台都是键盘布局那一项）。
+  所以两台机器原来就是默认英文输入，和 `DefaultIM` 无关；asus 上「新窗口默认是英文」的验证
+  在我改之前大概也是成立的，没有区分度。
+- 之后看到 thinkpad 的 `profile` 在 14:59:34 被写回了 `DefaultIM=rime`。我没有证据证明是谁写的，
+  合理的推测是 fcitx5 自己：`DefaultIM` 更像「`Ctrl+Space` 激活时用哪个」，会随最近用过的输入法更新。
+  这一条是推测，没有查 fcitx5 的源码或文档。
+结论：**默认英文已经满足，不要手工管 `DefaultIM`。** asus 上我改的那处很可能同样会被 fcitx5 写回，无害，
+不用再改回来。这个文件仍是 B 类、跟着机器走（里面有键盘布局），不要整份还原到另一台机器上。
+
+**27. Syncthing 在两台机器之间配对完成，保险箱在 asus 上配好。**
+两边都是 Syncthing v2.1.3，只有用户服务在跑（asus 上系统级的 `syncthing.service` 是 inactive，不会抢数据库）。
+设备 ID 用 `syncthing device-id` 取（只读证书，不碰 `config.xml` 里的 API 密钥），在两边的网页界面里互相添加，
+再对六个文件夹各自在「共享」里勾上对方，**两边都要点**，因为文件夹两边都已经由 `home/syncthing.nix` 声明好了。
+配对前的摸底发现一个我记错的点：asus 的 `~/Pictures/library` 里不是空的，有我们 9 月 30 日存的 rEFInd 截图
+PNG；它是从 asus 同步到 thinkpad 的，方向和其他五个相反，无害。保险箱（`secrets`）先保持两边都可写，
+「只让 asus 能改保险箱」等 asus 成为主力之后再做。
+
+**28. Bluefin 的备份按「事业分开」归位到 asus（外接 U 盘，复制类批次）。**
+Toru 同时运作几个事业，所以 `~/Documents/library` 的编号表在个人事务（10–59）之外加了
+`70–79 事业`（71 TORU-LEATHERS 网店、72 BELLATECH 化妆品且正在退出）和 `80–89 软件开发项目`
+（81 CRAFT-CRM、82 poster-gen），事业编号下面每件东西自己一个文件夹。这份规矩文件
+`00 怎么放文件.md` 本身在 Syncthing 的 library 里，改完自动同步。
+分五批复制：A（library 里的个人和事业文件）、B（Obsidian 库进 `~/Documents/notes`、图片按修改日期进
+`Pictures/library/年/月`、bruno 进 `~/Documents/bruno` 且不同步）、C（私人媒体，不同步、中性编号名、
+不留对照表）、D（三个恢复码和生产密钥进 Cryptomator 保险箱 `~/Secrets`）、E（Downloads 里的 BELLATECH 和 Logo）。
+要点和教训：
+- **复制前先摸底**：名字、数量、大小，不打开内容，需要判断归属的才列名字。
+- **保险箱必须先解锁再复制，复制前用 `findmnt ~/Secrets` 确认是挂载点**；锁着时往里放会让明文落在磁盘上，
+  下次解锁还会失败。三个凭据文件复制时不打开、不回显，只报名字和大小。
+- **Obsidian 库自带旧机器的 `.stfolder`**：目的地本身已是 Syncthing 文件夹，用 `tar --exclude=./.stfolder`
+  复制，别把旧标记混进来。
+- **U 盘被 macOS 用过，里面有隐藏的 AppleDouble 元数据文件（`._名字`，4096 字节）**，`ls` 看不到，
+  `find` 会带上。批 C 的脚本没排除它们，它们排在最前面，占了 6 个视频和 46 个音频里的编号位置（5 个）。
+  用文件头魔数 `00 05 16 07` 确认是元数据后，删掉这两个副本目录、在 `find` 里加 `! -name '._*'`
+  重做，得到干净的编号。**以后在 macOS 用过的外接盘上复制，`find` 一律排除 `._*` 和 `.DS_Store`。**
+  源里被我误判成「有子目录」的数量差，其实就是这些隐藏文件。
+- exFAT 会把文件名规范成预组合的 Unicode 形式（NFC），一个日文文件名「ズ」在源里是 NFD 的两个字符、
+  到目的地变成一个字符，`diff -rq` 因此报不同而内容 `cmp` 一致。核对用内容和数量，别只靠 `diff`。
+- exFAT 没有 Unix 权限位，复制后文件都是 755，要手工收紧：身份证件和私人媒体 700/600，其余 755/644。
+- 删除（含重做时删掉自己复制出来的副本）一律要明确批准，且删之前先 `ls` 要删的东西、路径写完整。
+- 完成后 U 盘上的 `bluefin-backup` 里仍有原件（含恢复码明文、身份证件、私人媒体的原名），
+  是否清掉由 Toru 决定，我们不替他删。
 
 ### 待补
 
 - 华硕的 BIOS 键具体是哪个（启动菜单键已确认是 Esc）
-- 第 12 章剩下的：Syncthing 配对、Cryptomator 保险箱、备份文件归位（按 Documents/library 的规矩）、Steam 等应用的实际使用
+- 第 12 章剩下的：Steam 等应用的实际使用。备份归位已完成（附录 E 第 28 条）；U 盘 UMaster 上 bluefin-backup 里的原件是否清掉，由 toru 决定
+- 保险箱 secrets 现在两边都可写；asus 成为主力之后，把 thinkpad 和 Mac 上的「保险箱」文件夹改成「仅接收」
 - thinkpad 上这个正在写的 Claude 会话没有搬到 asus：等它结束之后单独复制那一个会话文件
 - Grok 在 asus 上还要 toru 亲手做两件事：确认隐私提示、装 cloudflare 插件
 - 计划但还没做：给 `state-sync restore` 加路径参数；把 autoMode 拆成通用条目
