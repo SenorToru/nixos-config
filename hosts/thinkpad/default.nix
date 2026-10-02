@@ -44,6 +44,11 @@
   # refind-hwinfo 的输出路径都靠它。选项定义在 modules/common.nix。
   custom.flakeHost = "thinkpad";
 
+  # 这台机器的默认主题。重装之后回到它；日常用 `theme` 命令切换，
+  # 选择记在 ~/.local/state/theme/current（重建、重启都保留）。
+  # 不和别的机器同步，每台各写各的。选项定义在 modules/common.nix。
+  custom.defaultTheme = "everforest";
+
   # UEFI 引导配置
   #
   # 两层结构：rEFInd 做顶层入口（好看 + 将来多系统选单），

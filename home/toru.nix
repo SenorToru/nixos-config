@@ -11,6 +11,10 @@ let
   repoPath = "${config.home.homeDirectory}/nixos-config";
   flakeHost = osConfig.custom.flakeHost;
 
+  # 这台机器声明的默认主题（hosts/<主机>/default.nix 的 custom.defaultTheme）。
+  # 状态文件不存在时 restoreTheme 回落到它，所以重装之后这台机器回到自己的主题。
+  hostTheme = osConfig.custom.defaultTheme;
+
   # ============================================
   # 提交签名：git 身份与各机器的公钥
   # ============================================
@@ -463,14 +467,20 @@ let
       # restoreTheme 每次开机都照它恢复，两边引用的是同一个事实。
       state_file="${themeStateFile}"
       current_name="default"
+      saved=""
       if [ -r "$state_file" ]; then
         saved=$(cat "$state_file")
-        # 记录的主题可能已经从 themes 表里删掉了。那种情况下
-        # restoreTheme 会警告一声然后保持默认，所以这里也报 default，
-        # 两边说法一致。不加这个判断的话列表里会一行标记都没有。
-        if [ -n "$saved" ] && { [ "$saved" = "default" ] || [ -d "$base/specialisation/$saved" ]; }; then
-          current_name="$saved"
-        fi
+      fi
+      # 状态文件不存在（比如刚重装完）时，当前主题就是这台机器声明的默认值。
+      # restoreTheme 在激活时也是这么回落的，两边说法一致。
+      if [ -z "$saved" ]; then
+        saved="${hostTheme}"
+      fi
+      # 记录的主题可能已经从 themes 表里删掉了。那种情况下
+      # restoreTheme 会警告一声然后保持默认，所以这里也报 default，
+      # 两边说法一致。不加这个判断的话列表里会一行标记都没有。
+      if [ -n "$saved" ] && { [ "$saved" = "default" ] || [ -d "$base/specialisation/$saved" ]; }; then
+        current_name="$saved"
       fi
 
       # 明暗对照表在构建期由 Nix 生成（见 home/toru.nix 的 themePolarity）。
@@ -578,6 +588,15 @@ let
       echo "已切到主题: $target"
       echo "GTK 程序已强制重载样式。Electron 程序（VSCode 等）和终端"
       echo "仍然要重开才会跟上 —— 它们的配色是启动时读的文件。"
+
+      # 选择记在 ~/.local/state，重建和重启都保留，但重装系统会丢。
+      # 和这台机器声明的默认值不同时提醒一句，免得以为「记住了」其实重装后会变回去。
+      if [ "$target" != "${hostTheme}" ]; then
+        echo
+        echo "这台机器声明的默认主题是 ${hostTheme}，重装系统后会回到它。"
+        echo "想让重装后也回到 $target：把 hosts/${flakeHost}/default.nix 里的"
+        echo "custom.defaultTheme 改成 \"$target\"，再重建。"
+      fi
     '';
   };
 in
@@ -628,23 +647,45 @@ in
   #
   # 失败不让它中断整个激活（|| true）：主题恢复不了顶多是配色不对，
   # 不该把 nixos-rebuild switch 拖成 CLAUDE.md 坑 4 那种半成功状态。
+  #
+  # **选哪套**：状态文件有内容就用它；没有（比如刚重装完，$HOME 里什么都没有）
+  # 就回落到这台机器声明的默认值 custom.defaultTheme（每台机器各写各的，
+  # 不跨机器同步）。所以「每台机器重装后记得自己的主题」靠的是仓库里的声明，
+  # 不是靠 $HOME 里那个丢得掉的状态文件。
+  # 状态文件里显式写了 default 的话照它办：那是用户用 `theme default` 主动选的。
   home.activation.restoreTheme = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
     state="${themeStateFile}"
+    want=""
     if [ -r "$state" ]; then
       want=$(cat "$state")
-      if [ -n "$want" ] && [ "$want" != "default" ]; then
-        if [ -x "$newGenPath/specialisation/$want/activate" ]; then
-          verboseEcho "restoreTheme: 恢复主题 $want"
-          run "$newGenPath/specialisation/$want/activate" || \
-            warnEcho "restoreTheme: 恢复 $want 失败，保持默认主题"
-        elif [ -d "$newGenPath/specialisation" ]; then
-          # 只在基础 generation 上报警告。specialisation 自己激活时
-          # 走不到这里（它没有 specialisation 目录），不会误报。
-          warnEcho "restoreTheme: 记录的主题 $want 已不存在，保持默认主题"
-        fi
+    fi
+    if [ -z "$want" ]; then
+      want="${hostTheme}"
+    fi
+    if [ -n "$want" ] && [ "$want" != "default" ]; then
+      if [ -x "$newGenPath/specialisation/$want/activate" ]; then
+        verboseEcho "restoreTheme: 恢复主题 $want"
+        run "$newGenPath/specialisation/$want/activate" || \
+          warnEcho "restoreTheme: 恢复 $want 失败，保持默认主题"
+      elif [ -d "$newGenPath/specialisation" ]; then
+        # 只在基础 generation 上报警告。specialisation 自己激活时
+        # 走不到这里（它没有 specialisation 目录），不会误报。
+        warnEcho "restoreTheme: 记录的主题 $want 已不存在，保持默认主题"
       fi
     fi
   '';
+
+  # 声明的默认主题必须真的存在，否则 restoreTheme 只会在激活时警告一声
+  # 然后静默回到基础主题，写错了名字很难发现。构建期就拦住。
+  assertions = [
+    {
+      assertion = hostTheme == "default" || themes ? ${hostTheme};
+      message = ''
+        custom.defaultTheme = "${hostTheme}" 不在 home/toru.nix 的 themes 表里。
+        可用的是 "default" 或者 themes 表里的键名（theme list 能看到）。
+      '';
+    }
+  ];
 
   # ============================================
   # theme —— 主题切换命令

@@ -59,7 +59,7 @@
 |------|--------|------|
 | `modules/*.nix` | 任何机器直接 `import` 就能用的 | 换台机器还成立 |
 | `hosts/<主机>/tuning.nix` | 绑死在这台硬件上的调优 | 只对这台成立 |
-| `hosts/<主机>/default.nix` | 主机名、引导、键盘、用户账户、模块拼装 | 本机身份 |
+| `hosts/<主机>/default.nix` | 主机名、引导、键盘、用户账户、默认主题（`custom.defaultTheme`）、模块拼装 | 本机身份 |
 | `hosts/<主机>/hardware-configuration.nix` | `nixos-generate-config` 生成 | 别手改 |
 | `hosts/<主机>/hwinfo.nix` | `refind-hwinfo` 生成：引导画面上那几行硬件 | 工具生成，改了硬件重跑 |
 | `home/toru.nix` | 用户级配置（shell、编辑器、浏览器策略） | 跟人走，不跟机器走 |

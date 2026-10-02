@@ -30,7 +30,10 @@ let
     ".config/mozc"
 
     # 零碎 UI 状态
-    ".local/state/theme/current" # 当前选的是 20 套主题里哪套
+    # 主题（~/.local/state/theme/current）**刻意不在这里**。
+    # 每台机器的主题各选各的，不跨机器同步；重装后回到哪套，靠仓库里每个主机的
+    # custom.defaultTheme 声明（hosts/<主机>/default.nix），那是 A 类，不是 B 类。
+    # 它以前在这个清单里，结果是 asus 一还原就会被 thinkpad 的主题盖掉。
     ".local/state/agent-skills/disabled" # 关掉了哪些 Agent Skill
     ".config/monitors.xml" # 多显示器布局（台式机上有用）
     ".config/user-dirs.dirs" # XDG 目录指向

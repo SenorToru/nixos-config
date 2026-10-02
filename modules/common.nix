@@ -29,6 +29,30 @@
     description = "这台机器在仓库里的名字（hosts/ 目录名 + flake 属性名）。";
   };
 
+  # ============================================
+  # 这台机器的默认主题
+  # ============================================
+  # **每台机器各声明各的，不跨机器同步。** 值是 home/toru.nix 里 themes 表的键名，
+  # 或者 "default"（基础主题，即 modules/stylix.nix 里的 gruvbox-dark-hard）。
+  #
+  # 它的用途只有一个：让重装之后这台机器回到它自己的主题。
+  # 日常选主题靠 `theme` 命令，选择记在 ~/.local/state/theme/current，
+  # 重建和重启都保留；但那个文件在 $HOME 里，重装系统就没了。
+  # home.activation.restoreTheme 在那个文件不存在时回落到这里的值。
+  #
+  # 放 common.nix 而不是 stylix.nix：stylix.nix 是纯配置没有 options 段，
+  # 要加选项得整个重排；这里已经有 options.custom.flakeHost 了。
+  # 和 flakeHost 一样，这是仓库级的通用选项，值才是每台机器自己的事。
+  #
+  # 为什么不放进 dotfiles-state（B 类）：B 类是「跟着人走」的状态，
+  # 而主题是「这台机器的外观」，两台机器本来就不该一样。
+  options.custom.defaultTheme = lib.mkOption {
+    type = lib.types.str;
+    default = "default";
+    example = "everforest";
+    description = "这台机器的默认主题（themes 表的键名或 default），重装后回到它。";
+  };
+
   config = {
     # 启用 Flakes 和命令行新特性
     nix.settings.experimental-features = [

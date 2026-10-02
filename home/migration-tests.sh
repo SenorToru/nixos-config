@@ -100,7 +100,7 @@ rm -rf "$root"
 # 3. 目录类条目整个搬（mozc 的 .encrypt_key.db 必须跟着走）
 #
 # 为什么值得测：清单里 .config/mozc 是**目录**，而
-# .local/state/theme/current 是**文件**。两种都要成立。
+# .config/user-dirs.dirs 是**文件**。两种都要成立。
 # mozc 少搬一个 .encrypt_key.db，学习记录就全丢且看不出来。
 # ---------------------------------------------------------------------
 root=$(newenv)

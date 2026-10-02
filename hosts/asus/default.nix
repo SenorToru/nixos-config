@@ -41,6 +41,11 @@
   # home/desktop-prefs.nix 靠它判断哪些偏好只在这台生效。
   custom.flakeHost = "asus";
 
+  # 这台机器的默认主题。重装之后回到它；日常用 `theme` 命令切换，
+  # 选择记在 ~/.local/state/theme/current（重建、重启都保留）。
+  # 不和别的机器同步，每台各写各的。选项定义在 modules/common.nix。
+  custom.defaultTheme = "kanagawa";
+
   # 引导：两层结构，和 thinkpad 一致。
   # rEFInd 做顶层入口，systemd-boot 管 generation 和回滚。
   boot.loader.systemd-boot.enable = true;

@@ -11,7 +11,7 @@ Toru 的 NixOS 多机配置仓库（flake，home-manager 作为 NixOS 模块）�
 |------|--------|------|
 | `modules/*.nix` | 任何机器都能直接 `import` 的共用配置 | 换台机器还成立 |
 | `hosts/<主机>/tuning.nix` | 绑死在这台硬件上的调优 | 只对这台成立 |
-| `hosts/<主机>/default.nix` | 主机名、引导、键盘布局、用户账户、模块拼装 | 本机身份 |
+| `hosts/<主机>/default.nix` | 主机名、引导、键盘布局、用户账户、默认主题（`custom.defaultTheme`）、模块拼装 | 本机身份 |
 | `hosts/<主机>/hardware-configuration.nix` | `nixos-generate-config` 自动生成，别手改 | — |
 | `hosts/<主机>/hwinfo.nix` | `refind-hwinfo` 生成：引导画面上那几行硬件 | 工具生成，换硬件重跑 |
 | `home/migration.nix` | `state-sync` / `migration-check`，以及 B 类状态清单 | 跟着用户走 |

@@ -50,7 +50,7 @@
 
 `nixos-rebuild switch` 一下就和这台一致，全部由 `flake.lock` 锁死：
 
-系统与桌面、GNOME 扩展、20 套 stylix 主题、字体、
+系统与桌面、GNOME 扩展、20 套 stylix 主题（每台机器的默认主题由 `custom.defaultTheme` 声明，各写各的，不同步）、字体、
 fcitx5 的插件组合（白霜拼音含那个 lua 补丁、mozc-ut 的 8 套词典）、
 neovim 配置、VS Code 的 `userSettings`、20 个 Agent Skill、zsh/tmux/starship
 那一整套交互环境。
@@ -68,7 +68,6 @@ neovim 配置、VS Code 的 `userSettings`、20 个 Agent Skill、zsh/tmux/stars
 | `~/.config/fcitx5/config` | 全局快捷键 |
 | `~/.config/fcitx5/conf/` | 各插件的设置 |
 | `~/.config/mozc/` | Mozc 学习历史（**整个目录**，含 `.encrypt_key.db`） |
-| `~/.local/state/theme/current` | 当前选的是 20 套主题里哪套 |
 | `~/.local/state/agent-skills/disabled` | 关掉了哪些 Agent Skill |
 | `~/.config/monitors.xml` | 多显示器布局（台式机上有用） |
 | `~/.config/user-dirs.dirs` | XDG 目录指向 |
