@@ -88,7 +88,7 @@
 | `dns.nix` | 加密 DNS：systemd-resolved + DNS-over-TLS（严格模式）、`dns-plain` / `dns-dot` 逃生舱（见下面「DNS」一节） |
 | `syncthing.nix` | Syncthing 的防火墙端口（22000、21027）。服务在 `home/syncthing.nix`，网页只听本机 8384 |
 | `development.nix` | 编辑器与工具链、claude-code、grok-build 与 dbeaver-bin 的版本覆写 overlay。Rust 不装在系统里，各项目自带 devShell（direnv 加载） |
-| `browsers.nix` | Zen / Brave / Google Chrome 与 chromium 扩展策略 |
+| `browsers.nix` | Zen / Brave / Google Chrome；chromium 扩展策略；**Firefox 与 Zen 共用的扩展清单**（`custom.firefoxPolicies`，`home/toru.nix` 的 Firefox 经 `osConfig` 读它，所以每台机器都必须 import 这个模块） |
 | `apps.nix` | 桌面应用（含 Telegram） |
 | `steam.nix` | Steam 客户端（`programs.steam`，不用 Flatpak 版）。**可选模块**：只有想装的主机才在自己的 `default.nix` 里引入，目前是 asus |
 | `flatpak.nix` | Flatpak 与 Flathub 自动安装 |

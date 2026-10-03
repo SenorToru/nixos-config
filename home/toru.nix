@@ -60,43 +60,6 @@ let
     lib.mapAttrsToList (host: key: "${gitEmail} namespaces=\"git\" ${key} ${host}") signingKeys
   );
 
-  baseExtensionPolicies = {
-    ExtensionUpdate = true;
-    ExtensionSettings = {
-      "*" = {
-        installation_mode = "allowed";
-      };
-      "uBlock0@raymondhill.net" = {
-        install_url = "https://addons.mozilla.org/firefox/downloads/latest/ublock-origin/latest.xpi";
-        installation_mode = "force_installed";
-      };
-      "78272b6fa58f4a1abaac99321d503a20@proton.me" = {
-        install_url = "https://addons.mozilla.org/firefox/downloads/file/4885390/latest.xpi";
-        installation_mode = "force_installed";
-      };
-      "addon@darkreader.org" = {
-        install_url = "https://addons.mozilla.org/firefox/downloads/latest/darkreader/latest.xpi";
-        installation_mode = "force_installed";
-      };
-      "sponsorBlocker@ajay.app" = {
-        install_url = "https://addons.mozilla.org/firefox/downloads/latest/sponsorblock/latest.xpi";
-        installation_mode = "force_installed";
-      };
-      "{b9acf540-acba-11e1-8ccb-001fd0e08bd4}" = {
-        install_url = "https://addons.mozilla.org/firefox/downloads/file/4997872/latest.xpi";
-        installation_mode = "force_installed";
-      };
-      # LINE 的 Chrome 扩展移植到 Firefox 的版本（非官方，作者 FoxRefire）。
-      # LINE 官方只出 Chrome 扩展，Firefox 上只有这个。
-      # 权限很宽：全部网站 + cookies，而且登录的是 LINE 账号 ——
-      # 装它等于信任这个第三方作者，不是信任 LINE。
-      "LINEPorted@FoxRefire" = {
-        install_url = "https://addons.mozilla.org/firefox/downloads/latest/line-firefox-ported/latest.xpi";
-        installation_mode = "force_installed";
-      };
-    };
-  };
-
   # ============================================
   # 别名（bash / zsh 共用同一份）
   # ============================================
@@ -721,7 +684,8 @@ in
   # ============================================
   programs.firefox = {
     enable = true;
-    policies = baseExtensionPolicies;
+    # 扩展清单和 Zen 共用一份，定义在 modules/browsers.nix 的 geckoExtensions
+    policies = osConfig.custom.firefoxPolicies;
   };
 
   # 把 Firefox 设为默认浏览器。
