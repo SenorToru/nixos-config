@@ -223,6 +223,78 @@ git push origin master
 
 ---
 
+## 更新软件版本
+
+版本都钉在仓库里：大部分在 `flake.lock`，claude-code 和 grok-build
+各有一个 JSON。**更新 = 改这几个文件**，然后照上面的六步重建。
+下面的命令都在 `~/nixos-config` 里跑，**全都不加 sudo**（见坑 5）。
+
+### 1. 绝大多数软件：`nix flake update`
+
+```bash
+nix flake update                 # 所有 input 一起更新
+nix flake update nixpkgs         # 只更新 nixpkgs（系统里绝大多数软件都来自它）
+nix flake update zen-browser     # 只更新某一个 input
+git diff flake.lock              # 看哪些 input 动了
+```
+
+input 的名字就是 `flake.nix` 里的那些：`nixpkgs`、`home-manager`、`stylix`、
+`zen-browser`、`nix-flatpak`、`matt-skills`、`refind-finn-term`。
+
+`nixpkgs` 跟的是 `nixos-26.05` **发布分支**，只收安全修复和小版本，
+**不会跳大版本**。要大版本得等 26.11 出来改分支，那是另一件事。
+
+### 2. 发布分支跟不上的：单独刷新
+
+这两个 `nix flake update` 动不了，原理见
+[Lesson-Learn/0010](Lesson-Learn/0010_CLAUDE_CODE_VERSION_PINNING.md) 和
+[0016](Lesson-Learn/0016_GROK_BUILD_VERSION_PINNING.md)。
+命令和 `modules/development.nix` 的注释是同一份，改一边就改另一边。
+
+**claude-code**：
+
+```bash
+V=$(curl -fsSL https://downloads.claude.ai/claude-code-releases/latest)
+curl -fsSL "https://downloads.claude.ai/claude-code-releases/$V/manifest.json" \
+  -o modules/claude-code-manifest.json
+```
+
+**grok-build**：
+
+```bash
+V=$(curl -fsSL https://x.ai/cli/stable)
+H=$(nix hash convert --hash-algo sha256 \
+  "$(nix-prefetch-url "https://x.ai/cli/grok-$V-linux-x86_64")")
+printf '{\n  "version": "%s",\n  "hashes": {\n    "x86_64-linux": "%s"\n  }\n}\n' \
+  "$V" "$H" > modules/grok-build-version.json
+```
+
+### 3. Agent Skills
+
+```bash
+skills-update        # 只 nix flake update 各个 skill 源的 input，跑完顺带构建两层
+```
+
+详见下面「Agent Skills」一节。
+
+### 不用管的
+
+- **浏览器扩展**：策略里写的是 `latest`，浏览器自己更新。
+- **Flatpak 应用**：自己更新。
+
+### 改完之后
+
+```bash
+ncheck && nhm        # 用户态构建两层，出错就停在这里
+nrb                  # 切换
+```
+
+**asus 的内核钉在 6.18**（NVIDIA 开源模块在更新的内核上编译不过）。
+更新 `nixpkgs` 后构建失败，先看报错是不是出在 NVIDIA 驱动上。
+构建失败不会动当前系统，`git checkout flake.lock` 就回到更新前。
+
+---
+
 ## 交互 shell 里的别名
 
 一共 **11 条**。定义在 `home/toru.nix` 的 `commonAliases`，

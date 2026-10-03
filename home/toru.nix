@@ -86,6 +86,14 @@ let
         install_url = "https://addons.mozilla.org/firefox/downloads/file/4997872/latest.xpi";
         installation_mode = "force_installed";
       };
+      # LINE 的 Chrome 扩展移植到 Firefox 的版本（非官方，作者 FoxRefire）。
+      # LINE 官方只出 Chrome 扩展，Firefox 上只有这个。
+      # 权限很宽：全部网站 + cookies，而且登录的是 LINE 账号 ——
+      # 装它等于信任这个第三方作者，不是信任 LINE。
+      "LINEPorted@FoxRefire" = {
+        install_url = "https://addons.mozilla.org/firefox/downloads/latest/line-firefox-ported/latest.xpi";
+        installation_mode = "force_installed";
+      };
     };
   };
 
