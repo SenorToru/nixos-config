@@ -114,14 +114,15 @@ grok-build = prev.grok-build.overrideAttrs (
 ### 升级办法
 
 ```bash
-V=$(curl -fsSL https://x.ai/cli/stable)
-H=$(nix hash convert --hash-algo sha256 \
-  "$(nix-prefetch-url "https://x.ai/cli/grok-$V-linux-x86_64")")
-printf '{\n  "version": "%s",\n  "hashes": {\n    "x86_64-linux": "%s"\n  }\n}\n' \
-  "$V" "$H" > modules/grok-build-version.json
+agents-update grok
 ```
 
-然后走正常的重建流程。只换 JSON，模块定义一个字不用动。
+版本来自 `https://x.ai/cli/stable`。要钉死某个号：`agents-update grok 1.0.44`。
+命令自己用 `nix-prefetch-url` 算**当前平台**的哈希，写进
+`modules/grok-build-version.json` 对应的那一格，然后用户态构建本机两层。
+只换 JSON，模块定义一个字不用动。它不 switch，也不 commit。
+
+不要 `grok update`。自更新装进 `~/.grok/bin/grok`，和 Nix 这份各过各的。
 
 ### 验证（2026-09-23 实测）
 

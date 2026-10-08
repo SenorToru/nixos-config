@@ -38,6 +38,7 @@
 ├── home/
 │   ├── toru.nix              home-manager 用户配置
 │   ├── agent-skills.nix      Agent Skills：一份 skill 喂给所有 AI 工具
+│   ├── agents-update.nix     claude-code 与 grok-build 的版本刷新命令
 │   ├── skills-tests.sh       skills 命令的回归测试（构建期执行）
 │   ├── migration.nix         state-sync + migration-check
 │   └── migration-tests.sh    state-sync 的回归测试（构建期执行）
@@ -104,6 +105,7 @@
 |------|------|
 | `toru.nix` | home-manager 主配置：别名、程序、20 套主题 specialisation 与 `theme` 命令（每台机器的默认主题和上次选择各记各的，不同步）、提交验签清单 `signingKeys` |
 | `agent-skills.nix` | Agent Skills 的安装、开关命令和使用指南生成（见下面「Agent Skills」一节） |
+| `agents-update.nix` | `agents-update`：刷新 claude-code 与 grok-build 的版本钉，并用户态构建本机两层 |
 | `skills-tests.sh` | `skills` 命令的回归测试，由 `agent-skills.nix` 在构建期执行 |
 | `migration.nix` | `state-sync`（搬 B 类用户状态）和 `migration-check`（查漂移）；B 类清单的单一真相 |
 | `syncthing.nix` | Syncthing 用户服务，声明六个同步文件夹（笔记、档案、保险箱、照片、音乐、视频）。界面是本机网页，不装托盘；另装 Cryptomator |
@@ -251,23 +253,22 @@ input 的名字就是 `flake.nix` 里的那些：`nixpkgs`、`home-manager`、`s
 [0016](Lesson-Learn/0016_GROK_BUILD_VERSION_PINNING.md)。
 命令和 `modules/development.nix` 的注释是同一份，改一边就改另一边。
 
-**claude-code**：
-
 ```bash
-V=$(curl -fsSL https://downloads.claude.ai/claude-code-releases/latest)
-curl -fsSL "https://downloads.claude.ai/claude-code-releases/$V/manifest.json" \
-  -o modules/claude-code-manifest.json
+agents-update            # claude-code 跟 latest，grok-build 跟 stable，然后构建本机两层
+agents-update claude     # 只更新其中一个
+agents-update grok 1.0.44   # 不跟频道，钉死这个版本号
 ```
 
-**grok-build**：
+`agents-update` 是 PATH 上的真二进制，定义在 `home/agents-update.nix`。
+它按 `custom.flakeHost` 构建**本机**，和 `nrb` 同一个来源。
+claude 拉的是 `manifest.json`，不是 `manifest.zst.json`。
+grok 的哈希只写入当前平台那一格。
 
-```bash
-V=$(curl -fsSL https://x.ai/cli/stable)
-H=$(nix hash convert --hash-algo sha256 \
-  "$(nix-prefetch-url "https://x.ai/cli/grok-$V-linux-x86_64")")
-printf '{\n  "version": "%s",\n  "hashes": {\n    "x86_64-linux": "%s"\n  }\n}\n' \
-  "$V" "$H" > modules/grok-build-version.json
-```
+它不替你 switch，也不替你 commit，**不带 sudo**。已经是要的版本时直接退出。
+不要用 `claude update` 或 `grok update`，那两个会把另一份二进制装进家目录。
+
+dbeaver-bin 也是发布分支跟不上的，但仍是手改 `modules/dbeaver-version.json`，
+不在这条命令里。做法见 `modules/development.nix` 里那段注释。
 
 ### 3. Agent Skills
 

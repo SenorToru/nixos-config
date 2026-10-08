@@ -27,15 +27,11 @@
   #       autoPatchelf 一遍。所以换掉 manifest 就等于换版本，
   #       包定义本身不用动。
   #
-  # manifest 的刷新办法（上游有 latest 端点）：
-  #
-  #   V=$(curl -fsSL https://downloads.claude.ai/claude-code-releases/latest)
-  #   curl -fsSL "https://downloads.claude.ai/claude-code-releases/$V/manifest.json" \
-  #     -o modules/claude-code-manifest.json
-  #
-  # 注意**不要**去取同目录下的 manifest.zst.json。那是 nixos-unstable 上
+  # 刷新用 `agents-update`（home/agents-update.nix）。它拉的是
+  # downloads.claude.ai 上 `$V/manifest.json`，V 来自 latest 端点。
+  # **不要**去取同目录的 manifest.zst.json。那是 nixos-unstable 上
   # 新包定义用的格式（二进制经 zstd 压缩，构建时需要 zstd 解压），
-  # 26.05 的包定义只认不带 .zst 的那份。
+  # 26.05 的包定义只认不带 .zst 的那份。也不要 `claude update`。
   #
   # 用 overlay 而不是在两处各写一次：claude-code 同时出现在下面的
   # systemPackages 和 home/toru.nix 的 programs.neovim.extraPackages 里
@@ -52,13 +48,9 @@
   # autoPatchelf，所以只换「版本号 + 哈希」，包定义照用。
   #
   # 和 claude-code 的区别：上游没有现成的 manifest 可拉，
-  # 版本号和哈希得自己算，存在 grok-build-version.json 里。刷新办法：
-  #
-  #   V=$(curl -fsSL https://x.ai/cli/stable)
-  #   H=$(nix hash convert --hash-algo sha256 \
-  #     "$(nix-prefetch-url "https://x.ai/cli/grok-$V-linux-x86_64")")
-  #   printf '{\n  "version": "%s",\n  "hashes": {\n    "x86_64-linux": "%s"\n  }\n}\n' \
-  #     "$V" "$H" > modules/grok-build-version.json
+  # 版本号和哈希得自己算，存在 grok-build-version.json 里。
+  # 刷新同样用 `agents-update`：版本来自 https://x.ai/cli/stable，
+  # 哈希用 nix-prefetch-url 算当前平台的那一个。不要 `grok update`。
   #
   # 目前只有 x86_64-linux 一个哈希。加 ARM 机器时补一个
   # aarch64-linux（文件名后缀是 linux-aarch64），否则求值时直接报缺键。

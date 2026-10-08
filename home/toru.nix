@@ -578,6 +578,9 @@ in
     # 塞进这个文件会把本来就长的 toru.nix 顶到没法读。
     ./agent-skills.nix
 
+    # claude-code / grok-build 的版本刷新。不跟着 nix flake update 走。
+    ./agents-update.nix
+
     # state-sync（搬 B 类用户状态）和 migration-check（查漂移）。
     # 同样自带命令和构建期测试，拆出去。见 MIGRATION.md 第 7 和第 10 节。
     ./migration.nix

@@ -474,7 +474,7 @@ bash 保持完全可用，两者配的是同一套基线。
   格式化是 PATH 上的 `nixfmt`，没有名叫 `nfmt` 的别名。
   `zsh -c 'll'` / `bash -c 'll'` 一律 command not found。
   `eza` `bat` `fzf` `zoxide` `atuin` `btop` `lazygit` `tmux` `dua` `duf` `direnv` `starship`
-  `skills` `skills-update` `state-sync` `migration-check`
+  `skills` `skills-update` `agents-update` `state-sync` `migration-check`
   都是真二进制（在 `/etc/profiles/per-user/toru/bin`），可以直接调用。
   `refind-sync` `refind-hwinfo` `efibootmgr` 在系统层
   （`/run/current-system/sw/bin`），同样是真二进制。
@@ -501,6 +501,17 @@ asus 的 `boot.kernelPackages = pkgs.linuxPackages_6_18`，thinkpad 跟 `linuxPa
 `nixosConfigurations.asus` 能构建**，别只看 nixpkgs 有没有更新的驱动。
 6.18 到期时 nixpkgs 会删掉那个属性，构建在 `switch` 之前就报错，当前系统不受影响；
 退役预案在 ASUS_INSTALL.md 附录 D。
+
+## 升级 claude-code 和 grok-build
+
+这两个不跟着 `nix flake update` 走。版本钉在
+`modules/claude-code-manifest.json` 和 `modules/grok-build-version.json`，
+刷新命令是 `agents-update`（`home/agents-update.nix`）。
+它按 `custom.flakeHost` 用户态构建本机两层，不 switch，不 commit。
+
+- claude 只拉 `manifest.json`。不要拉 `manifest.zst.json`。
+- 不要跑 `claude update` 或 `grok update`。那两份会装进家目录，脱离 Nix。
+- dbeaver-bin 是同一类钉法，但不在 `agents-update` 里，手改 `dbeaver-version.json`。
 
 ## 不要自动提交
 
