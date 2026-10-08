@@ -136,7 +136,8 @@ skills-update
 
 它做的事，按顺序：`nix flake update`（**不带 sudo**，见
 [`0011`](0011_ROOT_OWNED_FILES_IN_REPO.md)）→ 打印新旧 rev →
-用户态构建系统层和 home 层 → 告诉你自己去 `nrb`。
+用户态构建**本机**系统层和 home 层 → 告诉你自己去 `nrb`。
+构建哪台由 `custom.flakeHost` 决定，和 `nrb` 同一个来源，不写死某台机器。
 **它不替你 switch，也不替你 commit。**
 
 `nrb` 的时候会自动 `skills sync` + 刷新本文的生成表，
@@ -238,32 +239,34 @@ find . ! -user toru -printf '%u  %p\n'    # 应该没有任何输出（坑 5）
 > **别手改**，改动会被下一次生成覆盖；要改就去改生成逻辑
 > （`home/agent-skills.nix` 里的 `cmd_doc`）。
 >
-> 对应的 skill 池：`/nix/store/w2hin50lfs8dqlkqiqcbij3a3lhz1zdx-agent-skills`
+> 对应的 skill 池：`/nix/store/9ij4hxdqar8bgqm0ivxkmxgb7yw3sjfp-agent-skills`
 
 | Skill | 调用方式 | 常驻 tok | 调用 tok | 附属 tok | 用途（作者原文 description，这也是模型看到的触发条件） |
 |---|---|---:|---:|---:|---|
-| `ask-matt` | 打 `/ask-matt` | 23 | 2813 | 1097 | Ask which skill or flow fits your situation. A router over the skills in this repo. |
+| `ask-matt` | 打 `/ask-matt` | 23 | 3108 | 1097 | Ask which skill or flow fits your situation. A router over the skills in this repo. |
 | `codebase-design` | 模型自动 / 也可手打 | 70 | 1440 | 1330 | Shared vocabulary for designing deep modules. Use when the user wants to design or improve a module's interface, find deepening opportunities, decide where a seam goes, make code more testable or AI-navigable, or when another skill needs the deep-module vocabulary. |
-| `diagnosing-bugs` | 模型自动 / 也可手打 | 43 | 2082 | 355 | Diagnosis loop for hard bugs and performance regressions. Use when the user says "diagnose"/"debug this", or reports something broken/throwing/failing/slow. |
-| `domain-modeling` | 模型自动 / 也可手打 | 42 | 754 | 1281 | Build and sharpen a project's domain model. Use when discussing codebase terminology, writing or editing a CONTEXT.md, or recording or editing an ADR. |
+| `diagnosing-bugs` | 模型自动 / 也可手打 | 43 | 2116 | 355 | Diagnosis loop for hard bugs and performance regressions. Use when the user says "diagnose"/"debug this", or reports something broken/throwing/failing/slow. |
+| `domain-modeling` | 模型自动 / 也可手打 | 42 | 757 | 1284 | Build and sharpen a project's domain model. Use when discussing codebase terminology, writing or editing a GLOSSARY.md, or recording or editing an ADR. |
 | `grill-me` | 打 `/grill-me` | 15 | 10 | 35 | A relentless interview to sharpen a plan or design. |
 | `grill-with-docs` | 打 `/grill-with-docs` | 31 | 17 | 37 | A relentless interview to sharpen a plan or design, which also creates docs (ADR's and glossary) as we go. |
-| `grilling` | 模型自动 / 也可手打 | 40 | 447 | 29 | Grill the user relentlessly about a plan, decision, or idea. Use when the user wants to stress-test their thinking, or uses any 'grill' trigger phrases. |
-| `handoff` | 打 `/handoff` | 24 | 171 | 36 | Compact the current conversation into a handoff document for another agent to pick up. |
-| `implement` | 打 `/implement` | 18 | 76 | 35 | "Implement a piece of work based on a spec or set of tickets." |
-| `improve-codebase-architecture` | 打 `/improve-codebase-architecture` | 39 | 1445 | 1702 | Scan a codebase for deepening opportunities, present them as a visual HTML report, then grill through whichever one you pick. |
-| `matt-code-review` | 模型自动 / 也可手打 | 110 | 1525 | 25 | "Review the changes since a fixed point (commit, branch, tag, or merge-base) along two axes: Standards (does the code follow this repo's documented coding standards?) and Spec (does the code match what the originating issue/spec asked for?). Runs both reviews in parallel sub-agents and reports them side by side. Use when the user wants to review a branch, a PR, work-in-progress changes, or asks to \"review since X\"." |
+| `grilling` | 模型自动 / 也可手打 | 40 | 462 | 29 | Grill the user relentlessly about a plan, decision, or idea. Use when the user wants to stress-test their thinking, or uses any 'grill' trigger phrases. |
+| `handoff` | 打 `/handoff` | 24 | 183 | 36 | Compact the current conversation into a handoff document for another agent to pick up. |
+| `implement` | 打 `/implement` | 18 | 123 | 35 | "Implement a piece of work based on a spec or set of tickets." |
+| `implement-spec` | 打 `/implement-spec` | 19 | 662 | 42 | "Implement the result of /to-spec and /to-tickets in code." |
+| `improve-codebase-architecture` | 打 `/improve-codebase-architecture` | 39 | 1446 | 1702 | Scan a codebase for deepening opportunities, present them as a visual HTML report, then grill through whichever one you pick. |
+| `matt-code-review` | 模型自动 / 也可手打 | 110 | 1545 | 25 | "Review the changes since a fixed point (commit, branch, tag, or merge-base) along two axes: Standards (does the code follow this repo's documented coding standards?) and Spec (does the code match what the originating issue/spec asked for?). Runs both reviews in parallel sub-agents and reports them side by side. Use when the user wants to review a branch, a PR, work-in-progress changes, or asks to \"review since X\"." |
+| `pr` | 模型自动 / 也可手打 | 8 | 965 | 175 | "Use when writing a PR body." |
 | `prototype` | 模型自动 / 也可手打 | 47 | 677 | 3263 | Build a throwaway prototype to answer a design question. Use when the user wants to sanity-check whether a state model or logic feels right, or explore what a UI should look like. |
 | `research` | 模型自动 / 也可手打 | 62 | 130 | 24 | Investigate a question against high-trust primary sources and capture the findings as a Markdown file in the repo. Use when the user wants a topic researched, docs or API facts gathered, or reading legwork delegated to a background agent. |
-| `resolving-merge-conflicts` | 模型自动 / 也可手打 | 25 | 198 | 29 | "Use when you need to resolve an in-progress git merge/rebase conflict." |
-| `setup-matt-pocock-skills` | 打 `/setup-matt-pocock-skills` | 52 | 1644 | 3145 | "Configure this repo for the engineering skills: set up its issue tracker, triage label vocabulary, and domain doc layout. Run once before first use of the other engineering skills." |
-| `tdd` | 模型自动 / 也可手打 | 38 | 840 | 946 | Test-driven development. Use when the user wants to build features or fix bugs test-first, mentions "red-green-refactor", or wants integration tests. |
-| `teach` | 打 `/teach` | 17 | 2332 | 2118 | Teach the user a new skill or concept, within this workspace. |
+| `retro` | 打 `/retro` | 13 | 1065 | 37 | "Conduct a retrospective on a coding session." |
+| `setup-matt-pocock-skills` | 打 `/setup-matt-pocock-skills` | 52 | 1678 | 3249 | "Configure this repo for the engineering skills: set up its issue tracker, triage label vocabulary, and domain doc layout. Run once before first use of the other engineering skills." |
+| `tdd` | 模型自动 / 也可手打 | 38 | 860 | 946 | Test-driven development. Use when the user wants to build features or fix bugs test-first, mentions "red-green-refactor", or wants integration tests. |
+| `teach` | 打 `/teach` | 17 | 2389 | 2118 | Teach the user a new skill or concept, within this workspace. |
 | `wait-what` | 打 `/wait-what` | 16 | 69 | 40 | "Stop. That last message did not land: re-pitch it." |
-| `wizard` | 模型自动 / 也可手打 | 80 | 942 | 2166 | Generate an interactive bash wizard that walks a human through steps only they can perform. Use when provisioning infrastructure, setting up credentials or CI secrets, walking an unfamiliar third-party dashboard, or running a one-off migration or cutover. Don't invoke this for steps the agent can perform itself. |
+| `wizard` | 模型自动 / 也可手打 | 80 | 942 | 2286 | Generate an interactive bash wizard that walks a human through steps only they can perform. Use when provisioning infrastructure, setting up credentials or CI secrets, walking an unfamiliar third-party dashboard, or running a one-off migration or cutover. Don't invoke this for steps the agent can perform itself. |
 | `writing-for-agents` | 模型自动 / 也可手打 | 31 | 2683 | 683 | Writing documents for agents. Use when creating or editing skills, or modifying AGENTS.md or CLAUDE.md. |
 
-合计 **20** 个 skill：常驻 ≈ **815 tokens**（每个会话都付），正文全加起来 ≈ 20288 tokens，附属文件另计 ≈ 18368 tokens。
+合计 **22** 个 skill：常驻 ≈ **830 tokens**（每个会话都付），正文全加起来 ≈ 23320 tokens，附属文件另计 ≈ 18819 tokens。
 
 token 数是字符数 ÷ 4 的英文经验估算，误差约 ±15%。
 

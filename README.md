@@ -272,7 +272,7 @@ printf '{\n  "version": "%s",\n  "hashes": {\n    "x86_64-linux": "%s"\n  }\n}\n
 ### 3. Agent Skills
 
 ```bash
-skills-update        # 只 nix flake update 各个 skill 源的 input，跑完顺带构建两层
+skills-update        # 只 nix flake update 各个 skill 源的 input，跑完顺带构建本机两层
 ```
 
 详见下面「Agent Skills」一节。
@@ -908,13 +908,19 @@ Zed 和 Gemini CLI 读 `~/.agents/skills/`，Copilot 三个都读。
 ### 升级
 
 ```bash
-skills-update                                          # 更新 lock + 用户态构建两层
-sudo nixos-rebuild switch --flake /home/toru/nixos-config#thinkpad   # 别名 nrb
+skills-update                                          # 更新 lock + 用户态构建本机两层
+nrb                                                    # 切换本机
 git add -A && git commit -F GIT_COMMIT_MESSAGE.txt     # flake.lock 和指南一起提交
 ```
 
-`skills-update` 内部跑的是 `nix flake update`，**不带 sudo**（见坑 5）。
-它不替你 switch，也不替你 commit。没有新版本时会直接说「已是最新」并退出。
+`skills list` / `on` / `off` / `sync` / `doc` 不挑机器。
+`skills-update` 构建的是**生成这条命令的那台机器**：主机名在构建时从
+`custom.flakeHost` 写进脚本，和 `nrb` 同一个来源。asus 上构建 asus，
+thinkpad 上构建 thinkpad。加新机器不用改 `home/agent-skills.nix`。
+
+它内部的 `nix flake update` **不带 sudo**（见坑 5），只更新 skill 源
+那些 input。它不替你 switch，也不替你 commit。没有新版本时会直接说
+「已是最新」并退出。跑完打印的 `switch` 那一行就是本机。
 
 `nrb` 的时候 home-manager 会自动 `skills sync` + `skills doc`，
 所以升级之后 `Lesson-Learn/0012_AGENT_SKILLS.md` 会跟着变 —— 那是生成物，

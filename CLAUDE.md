@@ -230,7 +230,7 @@ find . ! -user toru -printf '%u  %p\n'
 完整说明见 [Lesson-Learn/0012_AGENT_SKILLS.md](Lesson-Learn/0012_AGENT_SKILLS.md)
 和 [README.md](README.md) 的「Agent Skills」一节。
 
-改这块之前必须知道的五件事：
+改这块之前必须知道的六件事：
 
 1. **分两层，别把它们合并回去。**
    `~/.local/share/agent-skills` 由 home-manager 管（声明式，flake.lock 钉版本）；
@@ -254,6 +254,11 @@ find . ! -user toru -printf '%u  %p\n'
    `code-review` 就是被 Claude Code 的内建盖掉的，已改名成 `matt-code-review`
    （配在 `skillSources.<源>.rename`，目录名和 frontmatter 的 `name:` 一起改）。
    装新 skill 集合之后要数一遍：`skills list` 的数量和每个工具里能看见的对得上吗。
+6. **`skills-update` 的构建目标是 `custom.flakeHost`，不要写死某台机器。**
+   `skills` 的 list / on / off / sync / doc 不挑机器。
+   `skills-update` 会用户态构建系统层和 home 层，主机名在**构建这条命令时**
+   从 `osConfig.custom.flakeHost` 写进脚本，和 `nrb` 同一个来源。
+   写死成 `thinkpad` 的话，asus 上跑就会去构建 thinkpad。
 
 加新 skill 源要同时改 `flake.nix`（加 `flake = false` 的 input）和
 `skillSources` 表，两处缺一不可。

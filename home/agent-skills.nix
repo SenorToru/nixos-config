@@ -38,15 +38,16 @@
   lib,
   pkgs,
   inputs,
+  osConfig,
   ...
 }:
 
 let
-  # flake 里 nixosConfigurations 的属性名。
-  # 注意它不是 networking.hostName（那个是 thinkpad-nixos）。
-  # 和 home/toru.nix 里 nrb / ncheck 等别名硬编码的是同一个东西，
-  # 加新机器时这两处要一起改。
-  nixosHost = "thinkpad";
+  # flake 里 nixosConfigurations 的属性名，和 home/toru.nix 的重建别名
+  # 同一个来源：hosts/<主机>/default.nix 的 custom.flakeHost。
+  # 不是 networking.hostName（thinkpad 那台是 thinkpad-nixos）。
+  # 构建 skills-update 时写进脚本，所以每台机器的命令构建自己。
+  nixosHost = osConfig.custom.flakeHost;
 
   # ============================================================
   # skill 源
