@@ -1,7 +1,16 @@
 # Agent Skills 使用指南
 
-装的是 [mattpocock/skills](https://github.com/mattpocock/skills) 的 20 个
-skill，全局安装，**Claude Code、GitHub Copilot、Zed、Gemini CLI 共用同一份**。
+全局安装，**Claude Code、GitHub Copilot、Zed、Gemini CLI 共用同一份**。
+两份源：
+
+- [mattpocock/skills](https://github.com/mattpocock/skills) 的 22 个
+  （源里另有 5 个在 `exclude` 里，不装）
+- [ui-ux-pro-max-skill](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill)
+  的 7 个：`ui-ux-pro-max`、`uupm-design`（上游目录名是 `design`）、
+  `brand`、`design-system`、`slides`、`banner-design`、`ui-styling`
+
+下面那张表要等下一次 `nrb` 跑过 `skills doc` 才会列出新的 7 个。
+在那之前它还是上一版池子的 22 个。
 
 配置在 [`home/agent-skills.nix`](../home/agent-skills.nix)，
 版本由 `flake.lock` 钉死，升级用 `skills-update`。
@@ -25,7 +34,8 @@ skill，全局安装，**Claude Code、GitHub Copilot、Zed、Gemini CLI 共用�
 | 附属 | 正文里指向的 `.md` / `.sh` / `.yaml` | 正文让它读的时候才花 |
 
 所以「多装几个 skill」的代价不是正文那几千 token，而是**常驻的那一行描述**。
-20 个加起来常驻约 1k token —— 基本可以忽略，所以**不必为了省 token 精简**。
+mattpocock 那 22 个常驻大约 800 token。ui-ux-pro-max 那 7 个的正文比这边长，
+常驻仍然只是各自 description 那一行，精确数字看生成表。
 源里另外 5 个没装，是因为用不上（`home/agent-skills.nix` 的 `exclude` 注释里写了理由），不是为了省钱。
 
 想看实时数字：
@@ -87,7 +97,7 @@ skill 同样可能被模型自己捡起来。跨工具用的时候心里有数�
 
 ## 四、和工具内建 skill 撞名
 
-**`code-review` 装进来时会被改名成 `matt-code-review`。**
+**两处改名：`code-review` → `matt-code-review`，`design` → `uupm-design`。**
 
 原因：Claude Code 自带一个内建的 `code-review`（就是 `/code-review`，
 云端多 agent 审查）。同名的时候**内建赢** —— 文件确实装上了，
@@ -98,12 +108,17 @@ skill 目录里也不会列出来。
 Claude Code 里是内建那个、在 Copilot / Zed / Gemini 里是 Matt 那个 ——
 同名不同物比单纯用不了难查得多。
 
+`design` 是同一类问题的另一边：Grok 自带的 design 是写设计文档，
+ui-ux-pro-max 仓库里的 design 是做界面。不改名的话 Grok 里够不着后者。
+改名之后两个都在，调用后者用 `/uupm-design`。
+
 改名在 `home/agent-skills.nix` 的 `skillSources.<源>.rename` 里配：
 
 ```nix
 rename = {
   code-review = "matt-code-review";
 };
+# ui-ux-pro-max 那条是 design = "uupm-design";
 ```
 
 它会**同时**改目录名和 `SKILL.md` frontmatter 里的 `name:` —— 只改目录名不够，
@@ -148,7 +163,10 @@ skills-update
 两处都要改，缺一不可：
 
 1. `flake.nix` 加一个 `flake = false` 的 input；
-2. `home/agent-skills.nix` 的 `skillSources` 表加一条，写明要装哪些类别。
+2. `home/agent-skills.nix` 的 `skillSources` 表加一条。
+   按类别放的写 `categories`。
+   放在 `.claude/skills/<名字>/` 这种「下一级就是 skill」的，写 `root` 和 `names`，
+   不要再去扫 `skills/<类别>/`。上游写死的路径放在这条的 `postCopy` 里改。
 
 `skills-update` 会自动把表里所有源一起更新，不用再改它。
 
@@ -225,9 +243,10 @@ find . ! -user toru -printf '%u  %p\n'    # 应该没有任何输出（坑 5）
 然后在 Claude Code 里打 `/tdd`，在 VS Code Copilot 里问一个该触发
 `diagnosing-bugs` 的问题，各验一次。
 
-**还要数一遍数量。** `skills list` 说 20 个，就去每个工具的 skill 列表里数，
+**还要数一遍数量。** `skills list` 的个数，和每个工具里能看见的个数，要对上。
 少了就是和该工具的内建撞了名（见第四节）。`code-review` 就是这么发现的 ——
 它在 Claude Code 里既不报错也不出现，只是静悄悄地少一个。
+`uupm-design` 在 Grok 里应该和自带的 `design` 同时在。
 
 ---
 
@@ -239,12 +258,15 @@ find . ! -user toru -printf '%u  %p\n'    # 应该没有任何输出（坑 5）
 > **别手改**，改动会被下一次生成覆盖；要改就去改生成逻辑
 > （`home/agent-skills.nix` 里的 `cmd_doc`）。
 >
-> 对应的 skill 池：`/nix/store/9ij4hxdqar8bgqm0ivxkmxgb7yw3sjfp-agent-skills`
+> 对应的 skill 池：`/nix/store/kj9682qcz0q1czgr5g2ksxczr18j1gjk-agent-skills`
 
 | Skill | 调用方式 | 常驻 tok | 调用 tok | 附属 tok | 用途（作者原文 description，这也是模型看到的触发条件） |
 |---|---|---:|---:|---:|---|
 | `ask-matt` | 打 `/ask-matt` | 23 | 3108 | 1097 | Ask which skill or flow fits your situation. A router over the skills in this repo. |
+| `banner-design` | 模型自动 / 也可手打 | 115 | 1603 | 1249 | "Design banners for social media, ads, website heroes, creative assets, and print. Multiple art direction options with optional generated or supplied visuals. Actions: design, create, generate banner. Platforms: Facebook, Twitter/X, LinkedIn, YouTube, Instagram, Google Display, website hero, print. Styles: minimalist, gradient, bold typography, photo-based, illustrated, geometric, retro, glassmorphism, 3D, neon, duotone, editorial, collage." |
+| `brand` | 模型自动 / 也可手打 | 47 | 901 | 26088 | Brand voice, visual identity, messaging frameworks, asset management, brand consistency. Activate for branded content, tone of voice, marketing assets, brand compliance, style guides. |
 | `codebase-design` | 模型自动 / 也可手打 | 70 | 1440 | 1330 | Shared vocabulary for designing deep modules. Use when the user wants to design or improve a module's interface, find deepening opportunities, decide where a seam goes, make code more testable or AI-navigable, or when another skill needs the deep-module vocabulary. |
+| `design-system` | 模型自动 / 也可手打 | 73 | 1751 | 43796 | Token architecture, component specifications, and slide generation. Three-layer tokens (primitive→semantic→component), CSS variables, spacing/typography scales, component specs, strategic slide creation. Use for design tokens, systematic design, brand-compliant presentations. |
 | `diagnosing-bugs` | 模型自动 / 也可手打 | 43 | 2116 | 355 | Diagnosis loop for hard bugs and performance regressions. Use when the user says "diagnose"/"debug this", or reports something broken/throwing/failing/slow. |
 | `domain-modeling` | 模型自动 / 也可手打 | 42 | 757 | 1284 | Build and sharpen a project's domain model. Use when discussing codebase terminology, writing or editing a GLOSSARY.md, or recording or editing an ADR. |
 | `grill-me` | 打 `/grill-me` | 15 | 10 | 35 | A relentless interview to sharpen a plan or design. |
@@ -260,13 +282,17 @@ find . ! -user toru -printf '%u  %p\n'    # 应该没有任何输出（坑 5）
 | `research` | 模型自动 / 也可手打 | 62 | 130 | 24 | Investigate a question against high-trust primary sources and capture the findings as a Markdown file in the repo. Use when the user wants a topic researched, docs or API facts gathered, or reading legwork delegated to a background agent. |
 | `retro` | 打 `/retro` | 13 | 1065 | 37 | "Conduct a retrospective on a coding session." |
 | `setup-matt-pocock-skills` | 打 `/setup-matt-pocock-skills` | 52 | 1678 | 3249 | "Configure this repo for the engineering skills: set up its issue tracker, triage label vocabulary, and domain doc layout. Run once before first use of the other engineering skills." |
+| `slides` | 模型自动 / 也可手打 | 37 | 364 | 4526 | Create strategic HTML presentations with Chart.js, design tokens, responsive layouts, copywriting formulas, and contextual slide strategies. |
 | `tdd` | 模型自动 / 也可手打 | 38 | 860 | 946 | Test-driven development. Use when the user wants to build features or fix bugs test-first, mentions "red-green-refactor", or wants integration tests. |
 | `teach` | 打 `/teach` | 17 | 2389 | 2118 | Teach the user a new skill or concept, within this workspace. |
+| `ui-styling` | 模型自动 / 也可手打 | 125 | 2580 | 1437662 | Create beautiful, accessible user interfaces with shadcn/ui components (built on Radix UI + Tailwind), Tailwind CSS utility-first styling, and canvas-based visual designs. Use when building user interfaces, implementing design systems, creating responsive layouts, adding accessible components (dialogs, dropdowns, forms, tables), customizing themes and colors, implementing dark mode, generating visual designs and posters, or establishing consistent styling patterns across applications. |
+| `ui-ux-pro-max` | 模型自动 / 也可手打 | 128 | 3835 | 891774 | "UI/UX design intelligence for web, mobile, and desktop. This skill should be used when designing, building, reviewing, or fixing interfaces, including pages, components, design systems, accessibility, interaction, responsive layout, typography, color, charts, and stack-specific UI implementation. Searchable local data: 79 searchable styles (50 active), 192 product palettes and reasoning profiles, 74 font pairings, 119 UX guidelines, 105 icons, 17 GSAP presets, 25 chart types, and 22 stacks." |
+| `uupm-design` | 模型自动 / 也可手打 | 163 | 3339 | 69061 | "Comprehensive design skill: brand identity, design tokens, UI styling, logo generation (55 styles, Gemini, Atlas Cloud, or MuAPI AI), corporate identity program (50 deliverables, CIP mockups), HTML presentations (Chart.js), banner design (22 styles, social/ads/web/print), icon design (15 styles, SVG, Gemini 3.1 Pro), social photos (HTML→screenshot, multi-platform). Actions: design logo, create CIP, generate mockups, build slides, design banner, generate icon, create social photos, social media images, brand identity, design system. Platforms: Facebook, Twitter, LinkedIn, YouTube, Instagram, Pinterest, TikTok, Threads, Google Ads." |
 | `wait-what` | 打 `/wait-what` | 16 | 69 | 40 | "Stop. That last message did not land: re-pitch it." |
-| `wizard` | 模型自动 / 也可手打 | 80 | 942 | 2286 | Generate an interactive bash wizard that walks a human through steps only they can perform. Use when provisioning infrastructure, setting up credentials or CI secrets, walking an unfamiliar third-party dashboard, or running a one-off migration or cutover. Don't invoke this for steps the agent can perform itself. |
+| `wizard` | 模型自动 / 也可手打 | 80 | 942 | 2399 | Generate an interactive bash wizard that walks a human through steps only they can perform. Use when provisioning infrastructure, setting up credentials or CI secrets, walking an unfamiliar third-party dashboard, or running a one-off migration or cutover. Don't invoke this for steps the agent can perform itself. |
 | `writing-for-agents` | 模型自动 / 也可手打 | 31 | 2683 | 683 | Writing documents for agents. Use when creating or editing skills, or modifying AGENTS.md or CLAUDE.md. |
 
-合计 **22** 个 skill：常驻 ≈ **830 tokens**（每个会话都付），正文全加起来 ≈ 23320 tokens，附属文件另计 ≈ 18819 tokens。
+合计 **29** 个 skill：常驻 ≈ **1515 tokens**（每个会话都付），正文全加起来 ≈ 37690 tokens，附属文件另计 ≈ 2493085 tokens。
 
 token 数是字符数 ÷ 4 的英文经验估算，误差约 ±15%。
 

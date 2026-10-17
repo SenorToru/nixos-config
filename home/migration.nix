@@ -283,6 +283,9 @@ let
     ".server.lock"
     ".session.ipc"
     "cached_layouts"
+    # 候选窗配色由 home/fcitx-candidate.nix 按当前主题生成，跟着机器走。
+    # 收进 dotfiles-state 的话，restore 会把另一台机器的 store 链接铺回来。
+    "classicui.conf"
   ];
 
   # VS Code 扩展：手工装的那几个。**不声明进 Nix 是有意的** ——

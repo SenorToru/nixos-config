@@ -141,6 +141,9 @@
     nil
     nixfmt
     nodejs_24
+    # ui-ux-pro-max 的搜索脚本是 Python 标准库，品牌脚本是 node。
+    # 只把解释器放进 PATH。不要在这里 pip install，也不要写 API key。
+    python3
     # GitHub CLI 用于 Copilot 认证
     # 如果希望仅使用 VSCode 认证而不使用 GitHub CLI，可注释掉此行
     github-cli

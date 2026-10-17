@@ -223,8 +223,9 @@ find . ! -user toru -printf '%u  %p\n'
 
 ## Agent Skills
 
-`home/agent-skills.nix` 把 [mattpocock/skills](https://github.com/mattpocock/skills)
-的 20 个 skill 装成**全局**的，Claude Code / Copilot / Zed / Gemini 共用一份。
+`home/agent-skills.nix` 把 skill 装成**全局**的，Claude Code / Copilot / Zed / Gemini 共用一份。
+目前两份源：mattpocock 的 22 个，加上 ui-ux-pro-max 的 7 个
+（`design` 改名为 `uupm-design`，避开 Grok 自带的 design）。
 长期不要的 skill 写进 `skillSources.<源>.exclude`（构建时就不装），**不用 `skills off`** ——
 后者是 `~/.local/state` 里的可变状态，换机器要搬，只适合临时关一下。
 完整说明见 [Lesson-Learn/0012_AGENT_SKILLS.md](Lesson-Learn/0012_AGENT_SKILLS.md)
@@ -251,8 +252,10 @@ find . ! -user toru -printf '%u  %p\n'
    把剪枝条件临时改成无条件 `rm -f`，构建必须失败。
 5. **撞名分两种，构建期只拦得住一种。**
    源与源之间撞名构建会直接失败；和**工具内建 skill** 撞名查不出来 ——
-   `code-review` 就是被 Claude Code 的内建盖掉的，已改名成 `matt-code-review`
-   （配在 `skillSources.<源>.rename`，目录名和 frontmatter 的 `name:` 一起改）。
+   `code-review` 就是被 Claude Code 的内建盖掉的，已改名成 `matt-code-review`。
+   ui-ux-pro-max 的 `design` 和 Grok 自带的 design 不是同一个 skill，
+   改名成 `uupm-design`。两处都配在 `skillSources.<源>.rename`，
+   目录名和 frontmatter 的 `name:` 一起改。
    装新 skill 集合之后要数一遍：`skills list` 的数量和每个工具里能看见的对得上吗。
 6. **`skills-update` 的构建目标是 `custom.flakeHost`，不要写死某台机器。**
    `skills` 的 list / on / off / sync / doc 不挑机器。
@@ -261,7 +264,11 @@ find . ! -user toru -printf '%u  %p\n'
    写死成 `thinkpad` 的话，asus 上跑就会去构建 thinkpad。
 
 加新 skill 源要同时改 `flake.nix`（加 `flake = false` 的 input）和
-`skillSources` 表，两处缺一不可。
+`skillSources` 表，两处缺一不可。按类别放的写 `categories`；
+放在 `root/<名字>/SKILL.md` 的（ui-ux-pro-max 是 `.claude/skills/`）写 `root` 和 `names`。
+第二种布局不是「类别」，别再扫 `skills/<类别>/`。
+上游如果写死了 `${CLAUDE_PLUGIN_ROOT}` 或 `python`，改写放在该源的 `postCopy`，
+这样 `skills-update` 重新拉源之后还会再改一遍。
 
 ## 引导：rEFInd 叠在 systemd-boot 之上
 

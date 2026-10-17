@@ -50,7 +50,8 @@
 
 系统与桌面、GNOME 扩展、20 套 stylix 主题（每台机器的默认主题由 `custom.defaultTheme` 声明，各写各的，不同步）、字体、
 fcitx5 的插件组合（白霜拼音含那个 lua 补丁、mozc-ut 的 8 套词典）、
-neovim 配置、VS Code 的 `userSettings`、20 个 Agent Skill、zsh/tmux/starship
+候选窗配色（`home/fcitx-candidate.nix`，跟着当前主题生成，不进 `dotfiles-state`）、
+neovim 配置、VS Code 的 `userSettings`、Agent Skill（mattpocock 的 22 个加上 ui-ux-pro-max 的 7 个）、zsh/tmux/starship
 那一整套交互环境。
 
 **这一类不需要你做任何事**，跑一遍构建就有了。
@@ -64,7 +65,7 @@ neovim 配置、VS Code 的 `userSettings`、20 个 Agent Skill、zsh/tmux/stars
 |------|------|
 | `~/.config/fcitx5/profile` | 启用了哪些输入法、顺序 |
 | `~/.config/fcitx5/config` | 全局快捷键 |
-| `~/.config/fcitx5/conf/` | 各插件的设置 |
+| `~/.config/fcitx5/conf/` | 各插件的设置。里面的 `classicui.conf` 是生成的，`push` 会丢掉它，不入库 |
 | `~/.config/mozc/` | Mozc 学习历史（**整个目录**，含 `.encrypt_key.db`） |
 | `~/.local/state/agent-skills/disabled` | 关掉了哪些 Agent Skill |
 | `~/.config/monitors.xml` | 多显示器布局（台式机上有用） |
@@ -1020,8 +1021,12 @@ state-sync restore
 > 里面有「市场已自动安装」之类的完成标记，在它第一次运行之前放进去，
 > 可能让它以为已经装好了。
 
-`push` 会剔掉日志、锁文件和 `.session.ipc`。最后那个记的是**本机的
-套接字路径**，拷到新机器上是错的。
+`push` 会剔掉日志、锁文件、`.session.ipc` 和 `classicui.conf`。
+`.session.ipc` 记的是**本机的套接字路径**，拷到新机器上是错的。
+`classicui.conf` 是候选窗配色，由 `home/fcitx-candidate.nix` 按这台机器当前的主题生成，跟着主题走，不跟着人走。
+
+`restore` 对 `conf/` 是整目录覆盖，会把家目录里那份生成的 `classicui.conf` 先删掉。
+还原之后跑一次 `theme`（或下一次 `nrb`）会把它写回来。
 
 > ### 这个仓库必须是 private
 >
@@ -1491,6 +1496,7 @@ sudo refind-sync
 | 加了什么 | 要检查 |
 |----------|--------|
 | 新的语言工具链（Rust / Go / Python…） | 有没有用户级的 registry / 缓存 / 凭据（`~/.cargo/credentials`、`~/.npmrc`）|
+| `python3`（`modules/development.nix`） | 只是解释器，给 ui-ux-pro-max 的搜索脚本用。不 `pip install`，不在 `$HOME` 里留包。出图用的 `google-genai` / `pillow` 和 API key 都不进 Nix |
 | Rust | **不装在系统里，也不用 rustup。** 每个需要 Rust 的项目自己带 `flake.nix` 的 devShell（`~/Projects/dev` 下的 shukuba 和 poster-gen，直接用 nixpkgs 的 `rustc`、`cargo`、`clippy`、`rustfmt`、`lld`、`trunk`、`worker-build`），进目录时 direnv 自动加载。旧的 `~/.cargo` 和 `~/.rustup` 加起来一个多 GB，是 rustup 装法遗留的，**删掉，不迁移**。新机器上每个项目 clone 下来后 `direnv allow` 一次即可。**如果将来某个项目用了 `cargo install` 装东西，`~/.cargo/credentials.toml`（crates.io 令牌）是 C 类，别进版本库** |
 | 虚拟机（QEMU / VirtualBox / Docker） | 镜像和虚拟磁盘在哪、要不要搬 |
 | 需要登录的服务 | 加进 7.3 的重新签发清单 |

@@ -26,6 +26,12 @@
     matt-skills.url = "github:mattpocock/skills";
     matt-skills.flake = false;
 
+    # UI/UX Pro Max。同样不是 flake。skill 不在 skills/<类别>/<名字>/ 下，
+    # 而在 .claude/skills/<名字>/，拷贝规则见 home/agent-skills.nix。
+    # 搜索脚本要 python3，系统 PATH 在 modules/development.nix 里补。
+    ui-ux-pro-max-skill.url = "github:nextlevelbuilder/ui-ux-pro-max-skill";
+    ui-ux-pro-max-skill.flake = false;
+
     # rEFInd 主题 finn-term。和上面的 skill 源同一个机制：不是 flake，
     # 只是一棵源码树，版本由 flake.lock 钉死。
     #

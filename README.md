@@ -104,6 +104,7 @@
 | 文件 | 负责 |
 |------|------|
 | `toru.nix` | home-manager 主配置：别名、程序、20 套主题 specialisation 与 `theme` 命令（每台机器的默认主题和上次选择各记各的，不同步）、提交验签清单 `signingKeys` |
+| `fcitx-candidate.nix` | 候选窗配色：按当前 stylix 主题生成，Rime 和 Mozc 共用。`theme` 切换后会让 fcitx5 重新加载 |
 | `agent-skills.nix` | Agent Skills 的安装、开关命令和使用指南生成（见下面「Agent Skills」一节） |
 | `agents-update.nix` | `agents-update`：刷新 claude-code 与 grok-build 的版本钉，并用户态构建本机两层 |
 | `skills-tests.sh` | `skills` 命令的回归测试，由 `agent-skills.nix` 在构建期执行 |
@@ -865,10 +866,13 @@ STATE_SYNC_BIN=$(command -v state-sync) bash home/migration-tests.sh   # 手动�
 
 ## Agent Skills
 
-装了 [mattpocock/skills](https://github.com/mattpocock/skills) 的 20 个 skill（源里另有 5 个用不上，
-在 `home/agent-skills.nix` 的 `exclude` 里排除），
-**全局**安装 —— Claude Code、GitHub Copilot、Zed、Gemini CLI 共用同一份。
+两份源，全局安装，Claude Code、GitHub Copilot、Zed、Gemini CLI 共用同一份。
 配置在 [`home/agent-skills.nix`](home/agent-skills.nix)。
+
+- [mattpocock/skills](https://github.com/mattpocock/skills)：目前 22 个。源里另有 5 个用不上，在 `exclude` 里排除。
+- [ui-ux-pro-max-skill](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill)：7 个，从仓库的 `.claude/skills/` 点名安装，不是按类别扫的。`design` 改名为 `uupm-design`，避开 Grok 自带的 design。
+
+搜索脚本用系统里的 `python3`（`modules/development.nix`）。出图要自己的 `GEMINI_API_KEY` 或 `MUAPI_API_KEY`，以及 `google-genai` / `pillow`，这两样没有装，不跑出图就不会向供应商计费。
 
 完整使用指南（每个 skill 的调用方式和 token 消耗）见
 [Lesson-Learn/0012_AGENT_SKILLS.md](Lesson-Learn/0012_AGENT_SKILLS.md)。
@@ -929,9 +933,10 @@ thinkpad 上构建 thinkpad。加新机器不用改 `home/agent-skills.nix`。
 
 ### 和工具内建 skill 撞名
 
-`code-review` 装进来时会被改名成 `matt-code-review` —— Claude Code 自带一个
-内建的 `/code-review`，同名时内建赢，Matt 那个会静悄悄地够不着。
-改名配在 `skillSources.<源>.rename`，目录名和 frontmatter 的 `name:` 一起改。
+两处改名，都配在 `skillSources.<源>.rename`，目录名和 frontmatter 的 `name:` 一起改：
+
+- `code-review` → `matt-code-review`。Claude Code 自带 `/code-review`，同名时内建赢。
+- `design` → `uupm-design`。Grok 自带的 design 是写设计文档，和这份 UI 设计不是同一个 skill。
 
 **构建期的撞名检查只管源与源之间，查不到和工具内建撞。**
 装完新 skill 集合之后，`skills list` 的数量要和每个工具里实际能看见的数量对一遍。
@@ -954,7 +959,7 @@ SKILLS_BIN=$(command -v skills) bash home/skills-tests.sh   # 手动跑
 两处都要改：
 
 1. `flake.nix` 加一个 `flake = false` 的 input；
-2. `home/agent-skills.nix` 的 `skillSources` 表加一条，写明装哪些类别。
+2. `home/agent-skills.nix` 的 `skillSources` 表加一条。按类别放的写 `categories`；像 ui-ux-pro-max 这样放在 `.claude/skills/<名字>/` 的，写 `root` 和 `names`。
 
 `skills-update` 会自动把表里所有源一起更新。skill 名字撞车时构建会直接失败
 并报出是哪两个源撞了 —— 四家工具都只按目录名认 skill，悄悄覆盖比构建失败难查。
@@ -969,8 +974,9 @@ readlink -f ~/.local/share/agent-skills   # 应落在 /nix/store 里
 然后在 Claude Code 里打一次 `/tdd`，在 VS Code 的 Copilot 里问一个该触发
 `diagnosing-bugs` 的问题 —— 构建通过不等于工具真的认这些符号链接。
 
-**再数一遍数量。** `skills list` 说 20 个，就去每个工具的 skill 列表里数，
+**再数一遍数量。** `skills list` 的个数要和每个工具里实际能看见的对上。
 少了就是撞了那个工具的内建 skill（见上面「和工具内建 skill 撞名」）。
+`uupm-design` 在 Grok 里应该和自带的 `design` 同时在，两个都要数到。
 
 ---
 

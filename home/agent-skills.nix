@@ -56,14 +56,21 @@ let
   # 再在这张表里加一条，两处都要改。skills-update 会把表里所有源
   # 一起 nix flake update。
   #
-  # categories：源仓库把 skill 按 skills/<类别>/<名字>/SKILL.md 分目录放，
-  #   这里列出要装的类别，装的时候会**拍平**成 <名字>/SKILL.md ——
-  #   因为四家工具都只认「skills 目录下一级就是 skill 名」，不递归。
-  # exclude：类别里个别不要的。
+  # 两种布局，一套拷贝逻辑：
+  #
+  # categories：源仓库按 skills/<类别>/<名字>/SKILL.md 分目录放。
+  #   装的时候拍平成 <名字>/SKILL.md —— 四家工具都只认
+  #   「skills 目录下一级就是 skill 名」，不递归。
+  # names + root：源仓库把 skill 直接放在 root/<名字>/SKILL.md
+  #   （ui-ux-pro-max 在 .claude/skills/ 下，不是按类别分的）。
+  #   names 写死要装哪几个，缺一个构建就失败。
+  # exclude：个别不要的，写源仓库里的原名。
   # rename：装进去的时候换个名字，**目录名和 frontmatter 的 `name:` 一起改**。
   #   只改目录名不够 —— 各家工具认 skill 的依据不完全一样，Claude Code 按
   #   目录名，别家可能按 frontmatter，两边不一致会出现「目录叫 A、工具里
   #   显示成 B」的错位，比撞名本身更难查。
+  # postCopy：拷完之后对这个源的每个 skill 再跑一段 shell。
+  #   $out/$target 是池子里的目录。用来改写上游写死的路径。
   #
   # mattpocock 的 in-progress/ 和 misc/ 两个类别故意不装：前者是作者自己
   # 标了半成品的；后者里的 git-guardrails-claude-code 会和本仓库 CLAUDE.md
@@ -103,9 +110,100 @@ let
         code-review = "matt-code-review";
       };
     };
+
+    # 上游可装的是 .claude/skills/ 下这 7 个，不是仓库另一套按类别分的目录。
+    # design 和 Grok 自带的 design（设计文档那份）不是同一个 skill，
+    # 同名时自带的那份赢，所以改名。和 code-review → matt-code-review 同一条规则。
+    # 兄弟目录要留在同一个池子里：design / brand 用 ../ui-ux-pro-max、../brand
+    # 这种相对路径互相调用。
+    ui-ux-pro-max = {
+      input = "ui-ux-pro-max-skill";
+      src = inputs.ui-ux-pro-max-skill;
+      root = ".claude/skills";
+      names = [
+        "ui-ux-pro-max"
+        "design"
+        "brand"
+        "design-system"
+        "slides"
+        "banner-design"
+        "ui-styling"
+      ];
+      rename = {
+        design = "uupm-design";
+      };
+      # SKILL.md 写死了 Claude 插件根和 `python`。池子是拍平后的一份，
+      # 四个工具共用，所以改成家目录里的 pool，解释器用系统的 python3。
+      # skills-update 重新拉源之后这段还会再跑。
+      postCopy = ''
+        find "$out/$target" -type f \( -name '*.md' -o -name '*.py' -o -name '*.js' -o -name '*.mjs' -o -name '*.sh' \) -print0 |
+          xargs -0 -r sed -i \
+            -e 's|''${CLAUDE_PLUGIN_ROOT}/.claude/skills/ui-ux-pro-max|$HOME/.local/share/agent-skills/ui-ux-pro-max|g' \
+            -e 's|''${CLAUDE_PLUGIN_ROOT}|$HOME/.local/share/agent-skills/ui-ux-pro-max|g' \
+            -e 's|\.\./design-system|__UUPM_DS__|g' \
+            -e 's|\.\./design/|../uupm-design/|g' \
+            -e 's|\.\./design"|../uupm-design"|g' \
+            -e 's|__UUPM_DS__|../design-system|g' \
+            -e 's/python3/__PY3__/g' \
+            -e 's/python/python3/g' \
+            -e 's/__PY3__/python3/g'
+      '';
+    };
   };
 
   updateInputs = lib.unique (lib.mapAttrsToList (_: s: s.input) skillSources);
+
+  # 缩进字符串里写不出一个干净的 '${…}'，所以先放进普通字符串。
+  pluginRoot = "\${CLAUDE_PLUGIN_ROOT}";
+
+  # d 已设好。缺 SKILL.md 时：类别扫描跳过，点名安装则失败。
+  installOne =
+    sname: origin: s: onMissing:
+    let
+      exclude = s.exclude or [ ];
+      rename = s.rename or { };
+      postCopy = s.postCopy or "";
+    in
+    ''
+      n=$(basename "$d")
+      if [ ! -f "$d/SKILL.md" ]; then
+        ${onMissing}
+      else
+        skipped=0
+        case " ${lib.concatStringsSep " " exclude} " in
+          *" $n "*) skipped=1 ;;
+        esac
+        if [ "$skipped" -eq 0 ]; then
+          target="$n"
+          case "$n" in
+            ${lib.concatStrings (
+              lib.mapAttrsToList (from: to: ''
+                ${from}) target=${to} ;;
+              '') rename
+            )}
+            *) ;;
+          esac
+          if [ -e "$out/$target" ]; then
+            echo "agent-skills: skill 名字冲突：$target（${sname}/${origin} 和已有的撞了）" >&2
+            exit 1
+          fi
+          cp -r "$d" "$out/$target"
+          chmod -R u+w "$out/$target"
+          # 改名的话 frontmatter 的 name 也要跟着改，只改目录名会错位。
+          if [ "$target" != "$n" ]; then
+            awk -v new="$target" '
+              NR == 1 && /^---$/  { print; inside = 1; next }
+              inside && /^---$/   { inside = 0; print; next }
+              inside && /^name:/  { print "name: " new; next }
+                                  { print }
+            ' "$d/SKILL.md" > "$out/$target/SKILL.md"
+          fi
+          ${postCopy}
+          printf '%s\t%s\t%s\t%s\n' "$target" "${sname}" "${origin}" "$n" \
+            >> "$out/.manifest"
+        fi
+      fi
+    '';
 
   # ============================================================
   # skill 池：把所有源拍平进一个 store 路径
@@ -120,41 +218,28 @@ let
         sname: s:
         lib.concatMapStrings (cat: ''
           for d in ${s.src}/skills/${cat}/*/; do
-            n=$(basename "$d")
-            # 没有 SKILL.md 的目录不是 skill（比如类别自己的 README）
-            [ -f "$d/SKILL.md" ] || continue
-            case " ${lib.concatStringsSep " " s.exclude} " in
-              *" $n "*) continue ;;
-            esac
-            target="$n"
-            case "$n" in
-              ${lib.concatStrings (
-                lib.mapAttrsToList (from: to: ''
-                  ${from}) target=${to} ;;
-                '') s.rename
-              )}
-            esac
-            if [ -e "$out/$target" ]; then
-              echo "agent-skills: skill 名字冲突：$target（${sname}/${cat} 和已有的撞了）" >&2
-              exit 1
-            fi
-            cp -r "$d" "$out/$target"
-            chmod -R u+w "$out/$target"
-            # 改名的话 frontmatter 的 name 也要跟着改，只改目录名会错位。
-            if [ "$target" != "$n" ]; then
-              awk -v new="$target" '
-                NR == 1 && /^---$/  { print; inside = 1; next }
-                inside && /^---$/   { inside = 0; print; next }
-                inside && /^name:/  { print "name: " new; next }
-                                    { print }
-              ' "$d/SKILL.md" > "$out/$target/SKILL.md"
-            fi
-            printf '%s\t%s\t%s\t%s\n' "$target" "${sname}" "${cat}" "$n" \
-              >> "$out/.manifest"
+            ${installOne sname cat s ''
+              # 没有 SKILL.md 的目录不是 skill（比如类别自己的 README）
+              :
+            ''}
           done
-        '') s.categories
+        '') (s.categories or [ ])
+        + lib.concatMapStrings (name: ''
+          d=${s.src}/${s.root}/${name}
+          ${installOne sname s.root s ''
+            echo "agent-skills: ${sname} 缺少 ${s.root}/${name}/SKILL.md" >&2
+            exit 1
+          ''}
+        '') (s.names or [ ])
       ) skillSources
     )
+    + ''
+      if grep -R -l -F '${pluginRoot}' "$out" >/dev/null 2>&1; then
+        echo "agent-skills: 还有文件写着 CLAUDE_PLUGIN_ROOT，postCopy 没改干净" >&2
+        grep -R -n -F '${pluginRoot}' "$out" >&2 || true
+        exit 1
+      fi
+    ''
   );
 
   # ============================================================

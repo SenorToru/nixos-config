@@ -555,10 +555,18 @@ let
         fi
       fi
 
+      # 候选窗的 theme.conf 已经由这次 activate 换成这套主题的颜色，
+      # 但正在跑的 fcitx5 不会自己重读。只在这条命令里重启，
+      # 不放进 home.activation：nrb 不该为了配色把输入法打掉。
+      if command -v fcitx5-remote >/dev/null 2>&1; then
+        fcitx5-remote -r >/dev/null 2>&1 || true
+      fi
+
       echo
       echo "已切到主题: $target"
       echo "GTK 程序已强制重载样式。Electron 程序（VSCode 等）和终端"
       echo "仍然要重开才会跟上 —— 它们的配色是启动时读的文件。"
+      echo "候选词窗口已让 fcitx5 重新加载。正在输入的框要重新点一下才会用上新配色。"
 
       # 选择记在 ~/.local/state，重建和重启都保留，但重装系统会丢。
       # 和这台机器声明的默认值不同时提醒一句，免得以为「记住了」其实重装后会变回去。
@@ -590,6 +598,9 @@ in
 
     # 鼠标、快捷键（共用）和触摸板、电源（只在 asus 生效）。
     ./desktop-prefs.nix
+
+    # 候选窗配色跟着 stylix 走，所以必须在这个模块里，specialisation 才会重算。
+    ./fcitx-candidate.nix
   ];
 
   home.username = "toru";
