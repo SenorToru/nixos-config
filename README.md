@@ -104,7 +104,7 @@
 | 文件 | 负责 |
 |------|------|
 | `toru.nix` | home-manager 主配置：别名、程序、20 套主题 specialisation 与 `theme` 命令（每台机器的默认主题和上次选择各记各的，不同步）、提交验签清单 `signingKeys` |
-| `fcitx-candidate.nix` | 候选窗配色：按当前 stylix 主题生成，Rime 和 Mozc 共用。`theme` 切换后会让 fcitx5 重新加载 |
+| `fcitx-candidate.nix` | 候选窗配色：按当前 stylix 主题生成，Rime 和 Mozc 共用。GNOME 上画出来的是 kimpanel（字号在 dconf，颜色接在 gnome-shell.css 末尾）；classic UI 的 theme.conf 是同一份颜色的备用。`theme` 会重载 Shell 主题 |
 | `agent-skills.nix` | Agent Skills 的安装、开关命令和使用指南生成（见下面「Agent Skills」一节） |
 | `agents-update.nix` | `agents-update`：刷新 claude-code 与 grok-build 的版本钉，并用户态构建本机两层 |
 | `skills-tests.sh` | `skills` 命令的回归测试，由 `agent-skills.nix` 在构建期执行 |

@@ -50,7 +50,7 @@
 
 系统与桌面、GNOME 扩展、20 套 stylix 主题（每台机器的默认主题由 `custom.defaultTheme` 声明，各写各的，不同步）、字体、
 fcitx5 的插件组合（白霜拼音含那个 lua 补丁、mozc-ut 的 8 套词典）、
-候选窗配色（`home/fcitx-candidate.nix`，跟着当前主题生成，不进 `dotfiles-state`）、
+候选窗配色（`home/fcitx-candidate.nix`，跟着当前主题生成，不进 `dotfiles-state`；GNOME 上由 kimpanel 画，字号在 dconf）、
 neovim 配置、VS Code 的 `userSettings`、Agent Skill（mattpocock 的 22 个加上 ui-ux-pro-max 的 7 个）、zsh/tmux/starship
 那一整套交互环境。
 
@@ -1023,7 +1023,7 @@ state-sync restore
 
 `push` 会剔掉日志、锁文件、`.session.ipc` 和 `classicui.conf`。
 `.session.ipc` 记的是**本机的套接字路径**，拷到新机器上是错的。
-`classicui.conf` 是候选窗配色，由 `home/fcitx-candidate.nix` 按这台机器当前的主题生成，跟着主题走，不跟着人走。
+`classicui.conf` 是 classic UI 的候选窗配色，由 `home/fcitx-candidate.nix` 按这台机器当前的主题生成，跟着主题走，不跟着人走。GNOME 上实际画候选词的是 kimpanel，不读这个文件；那一块的颜色在 Shell 主题里，字号在 dconf。
 
 `restore` 对 `conf/` 是整目录覆盖，会把家目录里那份生成的 `classicui.conf` 先删掉。
 还原之后跑一次 `theme`（或下一次 `nrb`）会把它写回来。

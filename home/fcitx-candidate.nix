@@ -1,7 +1,18 @@
-# fcitx5 候选窗（Rime 和 Mozc 共用 classic UI）。
+# 候选窗配色（Rime 和 Mozc 共用）。
+#
+# GNOME 上看得见的那一块是扩展 kimpanel，不是 fcitx5 classic UI。
+# kimpanel 的字号来自 dconf（home/toru.nix 里的 Pango 字体描述），
+# 颜色来自 GNOME Shell 主题的 popup 样式。classic UI 的 theme.conf
+# 它根本不读 —— 只改那份文件的话，nrb、重启、theme 都不会让画面变。
+# 所以同一套颜色写两处：
+#   classic UI 的 theme.conf：kimpanel 没画的时候（别的桌面）用
+#   gnome-shell.css 末尾：现在这块面板用
+# 字号不写进 CSS。扩展把 dconf 里的字体设成 inline style，会盖过样式表。
+#
 # 每种 stylix 主题各生成一份：字用和底色反差最大的那一档，
-# 选中行用更亮的底，边框用同一个亮色顶替荧光
-# （装上的主题格式没有 Shadow / Blur / Glow）。
+# 选中行用更亮的底，面板留一圈艳色边。
+# 荧光只画在候选文字上（St.Label 的 text-shadow），不画在整块面板上。
+# classic 主题格式没有文字阴影，那边只有这圈亮边。
 # 放在 home 模块里，specialisation 激活时会按那套颜色重写。
 {
   config,
@@ -231,15 +242,68 @@ let
   '';
 
   classicui = pkgs.writeText "classicui.conf" ''
-    Font="Sarasa Gothic J 18"
-    MenuFont="Sarasa Gothic J 18"
+    Font="Sarasa Gothic J 14"
+    MenuFont="Sarasa Gothic J 14"
     Theme=stylix
     PerScreenDPI=True
     UseAccentColor=False
     UseDarkTheme=False
   '';
+
+  # 选择器要比 stylix 的 .popup-menu-item:active 更具体。
+  # 扩展自己的 stylesheet.css 几乎没写颜色，而且后加载；
+  # 多一个类名之后，谁后加载都盖不住。
+  # 候选行是 St.Label，选中靠 panel.js 加上 :active，不是菜单控件自带的。
+  kimpanelCss = pkgs.writeText "kimpanel-candidate.css" ''
+    .popup-menu-boxpointer.kimpanel-popup-boxpointer {
+      -arrow-background-color: #${bg};
+      -arrow-border-color: #${border};
+      -arrow-border-width: 2px;
+      color: #${text};
+    }
+
+    .popup-menu-content.kimpanel-popup-content {
+      background-color: #${bg};
+      color: #${text};
+      border: 2px solid #${border};
+    }
+
+    .kimpanel-label {
+      color: #${text};
+    }
+
+    /* :active 是另一套样式节点，不写的话选中时阴影会丢。 */
+    .popup-menu-item.kimpanel-candidate-item,
+    .popup-menu-item.kimpanel-candidate-item:hover,
+    .popup-menu-item.kimpanel-candidate-item:active,
+    .popup-menu-item.kimpanel-candidate-item:active:hover,
+    .popup-menu-item.kimpanel-candidate-item:active:focus {
+      text-shadow: 0 0 4px #${border};
+    }
+
+    .popup-menu-item.kimpanel-candidate-item:hover,
+    .popup-menu-item.kimpanel-candidate-item:active,
+    .popup-menu-item.kimpanel-candidate-item:active:hover,
+    .popup-menu-item.kimpanel-candidate-item:active:focus {
+      background-color: #${hi};
+      color: #${hiText};
+    }
+  '';
+
+  # 读 stylix 已经生成的那份 css，再接上上面这段。
+  # 不要 mkForce xdg.dataFile 的 source：那会把 stylix 的产物整个换掉，
+  # 这里又读不到它，两边就循环了。home.file 这条只盖最终链接的目标。
+  stylixShellCss = config.xdg.dataFile."themes/Stylix/gnome-shell/gnome-shell.css".source;
+  gnomeShellCss = pkgs.runCommand "gnome-shell-with-kimpanel.css" { } ''
+    cat ${stylixShellCss} > "$out"
+    printf '\n' >> "$out"
+    cat ${kimpanelCss} >> "$out"
+  '';
 in
 {
   home.file.".config/fcitx5/themes/stylix".source = themeDir;
   home.file.".config/fcitx5/conf/classicui.conf".source = classicui;
+
+  home.file."${config.xdg.dataHome}/themes/Stylix/gnome-shell/gnome-shell.css".source =
+    lib.mkForce gnomeShellCss;
 }

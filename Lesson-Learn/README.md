@@ -8,7 +8,7 @@
   想知道某个配置是怎么演变成现在这样的，从小到大读一遍即可。
 - **编号是 4 位大写十六进制**：`0000` → `0009` → `000A` → `000F` → `0010` → …
   一直到 `FFFF`。注意 `0009` 的下一个是 `000A` 而不是 `0010`。
-- **新增文档接着当前最大编号加一**。当前最大是 `0017`，**下一个是 `0018`**。
+- **新增文档接着当前最大编号加一**。当前最大是 `0018`，**下一个是 `0019`**。
   不要插空、不要复用编号。
 - 编号一旦分配就不再变动。文档作废时**加废弃横幅并指向新文档**，不删除、不重排 ——
   历史记录本身有价值，而且重排会让已有的交叉引用全部失效。
@@ -43,6 +43,7 @@
 | `0015` | [CLAUDE_CODE_NEOVIDE_WORKFLOW](0015_CLAUDE_CODE_NEOVIDE_WORKFLOW.md) | Neovide 里用 Claude Code 的完整教程：会话的新开/切换/分叉/改名/删除、三层模式、面板跳转与调宽、Enter 换行、剪贴板统一；`Space a r` 参数被静默丢弃的根因 | 📖 常读 |
 | `0016` | [GROK_BUILD_VERSION_PINNING](0016_GROK_BUILD_VERSION_PINNING.md) | 装 xAI 的 Grok Build：发布分支停在 0.2.93，`overrideAttrs` 换版本号 + 哈希；用 `GROK_DISABLE_AUTOUPDATER` 挡住自更新另装一份 | ✅ 有效 |
 | `0017` | [ASUS_DUAL_BOOT_INSTALL](0017_ASUS_DUAL_BOOT_INSTALL.md) | asus 真机装机总结：Windows + NixOS 双 ESP 双 rEFInd、NVIDIA offload、钉 6.18 内核、状态与会话迁移；验证命令本身写错的坑、跟着人还是跟着机器走 | ✅ 有效 |
+| `0018` | [KIMPANEL_CANDIDATE_WINDOW](0018_KIMPANEL_CANDIDATE_WINDOW.md) | GNOME 候选词由 kimpanel 画，不读 fcitx5 classic UI；字号在 dconf，颜色接在 gnome-shell.css 末尾 | ✅ 有效 |
 
 ## 按主题快速定位
 
@@ -51,6 +52,7 @@
 - **其它 AI agent（Grok Build）** —— `0016`
 - **Claude Code** —— `000C`、`000D`、`0010`、`0012`、`0014`、`0015`（日常用法）
 - **字体** —— `0002`、`0004`、`000A`
+- **输入法候选窗** —— `0018`
 - **NixOS / home-manager 机制** —— `0003`、`000A`、`000B`、`000C`、`000F`、`0012`
 - **git 与仓库状态** —— `0011`
 - **Shell / CLI 环境** —— `000F`

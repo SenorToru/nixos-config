@@ -555,8 +555,10 @@ let
         fi
       fi
 
-      # 候选窗的 theme.conf 已经由这次 activate 换成这套主题的颜色，
-      # 但正在跑的 fcitx5 不会自己重读。只在这条命令里重启，
+      # classic UI 的 theme.conf 已经换成这套主题的颜色，
+      # 正在跑的 fcitx5 不会自己重读。GNOME 上看得见的候选框是 kimpanel，
+      # 它不读这份文件；颜色在 gnome-shell.css 里，activate 改了那个
+      # 文件就会重载 user-theme。这里仍重启 fcitx5，留给没画 kimpanel 的场合。
       # 不放进 home.activation：nrb 不该为了配色把输入法打掉。
       if command -v fcitx5-remote >/dev/null 2>&1; then
         fcitx5-remote -r >/dev/null 2>&1 || true
@@ -566,7 +568,8 @@ let
       echo "已切到主题: $target"
       echo "GTK 程序已强制重载样式。Electron 程序（VSCode 等）和终端"
       echo "仍然要重开才会跟上 —— 它们的配色是启动时读的文件。"
-      echo "候选词窗口已让 fcitx5 重新加载。正在输入的框要重新点一下才会用上新配色。"
+      echo "候选词的颜色写在 GNOME Shell 主题里，这次切换会重载它。"
+      echo "正在输入的框要重新点一下才会用上新配色。"
 
       # 选择记在 ~/.local/state，重建和重启都保留，但重装系统会丢。
       # 和这台机器声明的默认值不同时提醒一句，免得以为「记住了」其实重装后会变回去。
@@ -1384,19 +1387,19 @@ in
     # 只剩 programs.dconf.enable，单一真相。
     "org/gnome/desktop/wm/preferences".button-layout = "close,minimize,maximize:";
 
-    # 输入法面板。
+    # 输入法面板（kimpanel）。中文和日文候选词都画在这里。
     #
-    # font 的值是 **Pango 字体描述**，不是 fontconfig 族名 ——
-    # Pango 会把它拆成 族名「Sarasa Fixed CL」+ 权重 ultralight + 字号 11。
-    # 所以**不要拿 `fc-match "Sarasa Fixed CL Ultra-Light"` 去验证它**，
-    # 那样整串会被当成族名，必然匹配失败、让人以为踩了坑 1。
-    # 正确的验证是分开查：`fc-match "Sarasa Fixed CL"` 和
-    # `fc-match "Sarasa Fixed CL:weight=extralight"`，两个都命中才对。
+    # font 的值是 **Pango 字体描述**，不是 fontconfig 族名。
+    # 扩展把它拆开后写成 inline style（lib.js getTextStyle），
+    # 所以字号必须写在这里，写进 gnome-shell.css 会被盖掉。
+    # **不要拿整串去 `fc-match`**：空格后面的字号会被当成族名的一部分。
+    # 族名单独查：`fc-match "Sarasa Gothic J"`。
     #
-    # 这里用 CL（中文）而系统等宽用 J（日文），是有意的：
-    # 这个面板显示的是拼音候选词。
+    # 原先是 Sarasa Fixed CL Ultra-Light 11。极细、11 号，主题一染
+    # 字就糊在底色里。这里改成圆体、常规字重、14 号。颜色在
+    # home/fcitx-candidate.nix，按当前主题接到 gnome-shell.css 末尾。
     "org/gnome/shell/extensions/kimpanel" = {
-      font = "Sarasa Fixed CL Ultra-Light 11";
+      font = "Sarasa Gothic J 14";
       vertical = true;
     };
 
