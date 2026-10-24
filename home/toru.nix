@@ -721,6 +721,10 @@ in
       "x-scheme-handler/https" = [ "firefox.desktop" ];
       "x-scheme-handler/about" = [ "firefox.desktop" ];
       "x-scheme-handler/unknown" = [ "firefox.desktop" ];
+      # Clash Verge 启动时会改 mimeapps.list。这份文件是指向 store 的链接，
+      # 写进去得到 EROFS。关联已经在这里，它检测到不用改就返回。
+      "x-scheme-handler/clash" = [ "clash-verge.desktop" ];
+      "x-scheme-handler/clash-verge" = [ "clash-verge.desktop" ];
     };
   };
 

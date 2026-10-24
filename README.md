@@ -91,6 +91,7 @@
 | `development.nix` | 编辑器与工具链、claude-code、grok-build 与 dbeaver-bin 的版本覆写 overlay。Rust 不装在系统里，各项目自带 devShell（direnv 加载） |
 | `browsers.nix` | Zen / Brave / Google Chrome；chromium 扩展策略；**Firefox 与 Zen 共用的扩展清单**（`custom.firefoxPolicies`，`home/toru.nix` 的 Firefox 经 `osConfig` 读它，所以每台机器都必须 import 这个模块） |
 | `apps.nix` | 桌面应用（含 Telegram） |
+| `clash-verge.nix` | Clash Verge Rev：官方 deb 钉版本。图形界面进系统包。服务单元和认可的内核都由模块放好，不要用应用里的 Repair |
 | `steam.nix` | Steam 客户端（`programs.steam`，不用 Flatpak 版）。**可选模块**：只有想装的主机才在自己的 `default.nix` 里引入，目前是 asus |
 | `flatpak.nix` | Flatpak 与 Flathub 自动安装 |
 | `stylix.nix` | 全局配色的单一真相：base16 方案、polarity、壁纸、NixOS 级 target |
@@ -98,6 +99,7 @@
 | `claude-code-manifest.json` | 数据文件，供 `development.nix` 的 overlay 读取 |
 | `grok-build-version.json` | 数据文件：grok-build 的版本号与哈希，供同一个 overlay 读取 |
 | `dbeaver-version.json` | 数据文件：dbeaver-bin 的版本号与哈希，供同一个 overlay 读取 |
+| `clash-verge-version.json` | 数据文件：Clash Verge Rev 的版本号与官方 deb 哈希，供 `clash-verge.nix` 读取 |
 
 ### `home/` 各文件职责
 
@@ -270,6 +272,13 @@ grok 的哈希只写入当前平台那一格。
 
 dbeaver-bin 也是发布分支跟不上的，但仍是手改 `modules/dbeaver-version.json`，
 不在这条命令里。做法见 `modules/development.nix` 里那段注释。
+
+Clash Verge Rev 同样手改 `modules/clash-verge-version.json`，装的是官方 deb，
+不在这条命令里。做法见 `modules/clash-verge.nix` 开头的注释。
+应用里的 Repair 会去写 `/etc/systemd/system`，在 NixOS 上写不进去，
+还会把已经在跑的服务停掉。内核由 `clash-verge-cores` 在服务启动前复制到
+`/var/lib/clash-verge-service/cores`。看到 Repair 弹窗时不要点。
+应用里的「检查更新」下的包装不进 Nix store，关掉，改 json 再重建。
 
 ### 3. Agent Skills
 

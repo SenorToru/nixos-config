@@ -519,6 +519,14 @@ asus 的 `boot.kernelPackages = pkgs.linuxPackages_6_18`，thinkpad 跟 `linuxPa
 - claude 只拉 `manifest.json`。不要拉 `manifest.zst.json`。
 - 不要跑 `claude update` 或 `grok update`。那两份会装进家目录，脱离 Nix。
 - dbeaver-bin 是同一类钉法，但不在 `agents-update` 里，手改 `dbeaver-version.json`。
+- Clash Verge Rev 也是手改钉版本，数据在 `modules/clash-verge-version.json`，
+  装的是官方 deb，刷新步骤在 `modules/clash-verge.nix` 开头。
+  `agents-update` 不动它。服务和 mihomo 保持官方字节，只给图形界面做 patchelf。
+  界面认的内核在 `/var/lib/clash-verge-service/cores`，必须是 root 拥有的
+  普通文件，整条路径到 `/` 都不能组可写，所以不能用指向 `/nix/store` 的符号链接。
+  `clash-verge-cores` 在服务启动前复制这两份。应用里的 Repair 会先
+  `systemctl stop`，再写 `/etc/systemd/system`（指向 store 的符号链接，EROFS）。
+  安装器和卸载器已换成脚本，不要改回 deb 里的那两个。
 
 ## 不要自动提交
 

@@ -20,6 +20,7 @@
     ../../modules/development.nix
     ../../modules/flatpak.nix
     ../../modules/apps.nix
+    ../../modules/clash-verge.nix
     ../../modules/browsers.nix
     ../../modules/shell.nix
     ../../modules/dns.nix

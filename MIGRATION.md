@@ -87,6 +87,7 @@ neovim 配置、VS Code 的 `userSettings`、Agent Skill（mattpocock 的 22 个
 | `~/.grok/` 里的凭据（Grok Build） | `grok login`。`~/.grok/` 里只有 `config.toml` 收进 B 类，会话、memory、缓存不搬 |
 | `~/.config/.wrangler/`（Cloudflare 的 OAuth 令牌） | 在用到的项目目录里 `pnpm exec wrangler login`。wrangler 是项目的 devDependency，不是全局命令 |
 | `~/.local/share/DBeaverData` | DBeaver 的连接、密码和 JDBC 驱动。整目录不搬，新机器重新建连接；驱动会自己重新下载 |
+| `~/.config/io.github.clash-verge-rev.clash-verge-rev` 和 `~/.local/share/io.github.clash-verge-rev.clash-verge-rev` | Clash Verge 的订阅、节点和本地配置。不搬，新机器上重新导入订阅。应用内更新提示关掉，版本在 `modules/clash-verge-version.json` |
 | `~/.local/state/syncthing/`（旧布局可能在 `~/.config/syncthing/`） | 设备身份证（`cert.pem`、`key.pem`）和文件夹列表。**不要拷**。拷过去两台会变成同一台，同步直接坏掉。新机器生成新 ID，在网页里重新配对 |
 | GNOME keyring（`~/.local/share/keyrings/`） | 重新解锁各服务 |
 | WiFi 密码 | 重新输 |
@@ -1213,6 +1214,12 @@ git -C ~/nixos-config log --show-signature -1   # 应该看到 Good "git" signat
 - **DBeaver**：连接和密码在 `~/.local/share/DBeaverData`，不搬，重新建。
   应用里弹出的更新提示会下载安装包，那个包装不进 Nix store，关掉即可。
   版本在 `modules/dbeaver-version.json`。
+- **Clash Verge**：订阅和节点在 `~/.config/io.github.clash-verge-rev.clash-verge-rev`
+  和 `~/.local/share/` 下的同名目录，不搬，重新导入订阅。
+  应用里的更新提示同样关掉。版本在 `modules/clash-verge-version.json`。
+  服务 `clash-verge-service` 跟着系统起来，程序在应用列表里叫 Clash Verge。
+  启动时如果弹出 Repair，不要点。内核由系统复制到
+  `/var/lib/clash-verge-service/cores`，应用里的安装器在 NixOS 上写不进单元文件。
 - **Bruno**：Flatpak，状态在 `~/.var`，不搬。集合放在项目目录里。
   要新版：`sudo flatpak update com.usebruno.Bruno`。
 - **Syncthing**：服务跟着 `home/syncthing.nix` 装上。设备 ID 是新的，
@@ -1504,6 +1511,7 @@ sudo refind-sync
 | 新的 Flatpak | 加进 `modules/flatpak.nix`，**别只装不声明** |
 | 新硬件类别（独显、无线网卡） | 第 5.2 节的 `tuning.nix` 要点里补一条。NVIDIA 的着色器缓存 `~/.nv` 是可重建的，已在 `ignoredHome` |
 | Telegram、Google Chrome、Steam（asus 上加的） | 登录态都是 C 类，不搬，新机器上重新登录。`~/.config/google-chrome`、`~/.local/share/TelegramDesktop`、Chrome 建的 `~/.local/share/pki` 都已加进 `home/migration.nix` 的 `ignored`。Chrome 的 profile（约 3.5G）和 Steam 游戏库都**不搬**，这是有意的决定 |
+| Clash Verge（`modules/clash-verge.nix`，两台机器都装） | 订阅和节点在 `~/.config/io.github.clash-verge-rev.clash-verge-rev` 与 `~/.local/share/` 下的同名目录，C 类，已进 `ignored`。不进 `dotfiles-state`。版本钉在 `modules/clash-verge-version.json` |
 | **新机器本身** | 公钥加进 `home/toru.nix` 的 `signingKeys`，否则别的机器验不了它签的提交 |
 
 **判据永远是第 0 节那三类。** 能进 Nix 就进 Nix（A 类），

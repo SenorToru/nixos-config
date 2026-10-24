@@ -233,6 +233,8 @@ let
     # ~/.local/share 下的
     "Trash"
     "DBeaverData" # C 类：连接、密码和 JDBC 驱动，整目录不搬，新机器重新建连接
+    # C 类：订阅和节点。~/.config 与 ~/.local/share 同名，这一条两边都跳过
+    "io.github.clash-verge-rev.clash-verge-rev"
     "direnv" # 「哪些 .envrc 被允许执行」的记录。**故意不搬**：那是安全决定，新机器上每个项目重新 direnv allow
     "grove" # Grok 的一个空状态文件
     "pnpm" # pnpm 的包缓存（近 1 GB），项目里 pnpm install 会自己重建
