@@ -27,6 +27,7 @@
     ../../modules/syncthing.nix
     ../../modules/stylix.nix
     ../../modules/refind.nix
+    ../../modules/kernel-hardening.nix
     # 只有这台机器要装的可选模块
     ../../modules/steam.nix
 
@@ -63,11 +64,11 @@
   # 也不用不带版本号的 linuxPackages（那个是「nixpkgs 当前的默认内核」，
   # nixpkgs 一换默认，内核就跟着跨大版本）。
   #
-  # 原因是 NVIDIA 开源内核模块：thinkpad 用的 linuxPackages_latest（7.2.6）
-  # 上，nixpkgs 里的驱动 595.71.05 编译不过
-  # （nvidia/os-interface.c: implicit declaration of function 'strncpy'，
-  # 是驱动和新内核头文件不兼容），整个系统构建失败。
-  # 这台机器有独显，要以驱动能编译为先。
+  # 原因是 NVIDIA 开源内核模块。这份 nixos-26.05 lock 里
+  # linuxPackages_latest 是 7.3，驱动仍是 595.71.05，和当初在 7.2.6 上
+  # 编译失败的是同一份（nvidia/os-interface.c: implicit declaration of
+  # function 'strncpy'）。没有新驱动补丁，跟 latest 会让整机构建失败。
+  # 这台机器有独显，要以驱动能编译为先。6.18.57 是这条 LTS 在本 lock 里的最新补丁。
   #
   # 6.18 对 Ryzen AI 350（Krackan Point）和 RTL8852CE 都够新。
   #

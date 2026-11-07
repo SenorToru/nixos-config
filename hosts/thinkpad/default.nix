@@ -27,6 +27,7 @@
     ../../modules/syncthing.nix
     ../../modules/stylix.nix
     ../../modules/refind.nix
+    ../../modules/kernel-hardening.nix
 
     inputs.home-manager.nixosModules.home-manager
 
@@ -82,6 +83,7 @@
   # `nixos-rebuild switch --rollback` 仍然可用，
   # 只是没法再从开机菜单里直接选中它们了。
   boot.loader.systemd-boot.configurationLimit = 20;
+  # nixos-26.05 这份 lock 里的最新内核（当前是 7.3）。不另加 unstable。
   boot.kernelPackages = pkgs.linuxPackages_latest;
 
   # ============================================

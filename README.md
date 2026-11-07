@@ -7,7 +7,7 @@
 | 主机 | `thinkpad`（ThinkPad X1 Yoga 1st Gen，Skylake i7-6500U / 7.6 GiB，单系统） |
 | | `asus`（ASUS TX Air，Ryzen AI 7 H 350 + RTX 5060，32 GiB，**Windows + NixOS 双系统**，2026-10 装成） |
 | 频道 | `nixos-26.05`（home-manager `release-26.05`） |
-| 内核 | thinkpad 跟 `linuxPackages_latest`；asus **钉在 6.18 LTS**（NVIDIA 开源模块在 7.2 上编译不过，退役预案见 ASUS_INSTALL.md 附录 D） |
+| 内核 | thinkpad 跟 `linuxPackages_latest`（本 lock 为 7.3）；asus **钉在 6.18 LTS**（同一份 NVIDIA 开源模块 595.71.05 在 7.2 上编译不过，7.3 仍是这份驱动，退役预案见 ASUS_INSTALL.md 附录 D）。攻击面收紧在 `modules/kernel-hardening.nix` |
 | 桌面 | GNOME on Wayland |
 | 登录 shell | zsh（starship / atuin / direnv / fzf / zoxide） |
 | 输入法 | fcitx5（rime 白霜拼音 + mozc UT 词典版） |
@@ -96,6 +96,7 @@
 | `flatpak.nix` | Flatpak 与 Flathub 自动安装 |
 | `stylix.nix` | 全局配色的单一真相：base16 方案、polarity、壁纸、NixOS 级 target |
 | `refind.nix` | rEFInd 顶层引导入口：主题 derivation、`refind.conf`、`refind-sync`、`refind-hwinfo`（见下面「引导」一节） |
+| `kernel-hardening.nix` | 两台机器共用的内核 sysctl：限制非特权 io_uring、perf、kexec、ptrace。用户命名空间保持打开（Nix 沙箱、Flatpak、rootless 容器） |
 | `claude-code-manifest.json` | 数据文件，供 `development.nix` 的 overlay 读取 |
 | `grok-build-version.json` | 数据文件：grok-build 的版本号与哈希，供同一个 overlay 读取 |
 | `dbeaver-version.json` | 数据文件：dbeaver-bin 的版本号与哈希，供同一个 overlay 读取 |
@@ -386,6 +387,7 @@ done
 | `environment.sessionVariables`（写进 `/etc/pam/environment`） | **重新登录** |
 | GNOME 扩展、dconf | **注销重登**（Wayland 下不能 `Alt+F2` → `r`） |
 | 显卡驱动 / VAAPI | 至少**重启用到它的应用**，稳妥是注销重登 |
+| `boot.kernel.sysctl` | **不用重启**。`switch` 时 systemd-sysctl 会写进正在跑的内核 |
 | `boot.kernelPackages`、内核参数、initrd、内核模块 | **重启** |
 | systemd 本体升级 | **重启** |
 | CPU 微码（`hardware.cpu.*.updateMicrocode`） | **重启** |

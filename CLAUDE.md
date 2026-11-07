@@ -504,7 +504,8 @@ bash 保持完全可用，两者配的是同一套基线。
 ## 内核版本：asus 钉在 6.18
 
 asus 的 `boot.kernelPackages = pkgs.linuxPackages_6_18`，thinkpad 跟 `linuxPackages_latest`。
-原因是 NVIDIA 开源模块在 7.2 内核上编译不过。**换内核之前先确认
+原因是 NVIDIA 开源模块 595.71.05 在 7.2 上编译不过；本 lock 的 latest 已是 7.3，
+驱动仍是那一版，所以 asus 继续留在 6.18。**换内核之前先确认
 `nixosConfigurations.asus` 能构建**，别只看 nixpkgs 有没有更新的驱动。
 6.18 到期时 nixpkgs 会删掉那个属性，构建在 `switch` 之前就报错，当前系统不受影响；
 退役预案在 ASUS_INSTALL.md 附录 D。
