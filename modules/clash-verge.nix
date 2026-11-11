@@ -10,7 +10,7 @@ let
   #
   # 刷新（看 github.com/clash-verge-rev/clash-verge-rev/releases）：
   #
-  #   V=2.5.8
+  #   V=2.5.10
   #   H=$(nix hash convert --hash-algo sha256 \
   #     "$(nix-prefetch-url \
   #       "https://github.com/clash-verge-rev/clash-verge-rev/releases/download/v$V/Clash.Verge_${V}_amd64.deb")")
