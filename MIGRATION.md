@@ -51,7 +51,7 @@
 系统与桌面、GNOME 扩展、20 套 stylix 主题（每台机器的默认主题由 `custom.defaultTheme` 声明，各写各的，不同步）、字体、
 fcitx5 的插件组合（白霜拼音含那个 lua 补丁、mozc-ut 的 8 套词典）、
 候选窗配色（`home/fcitx-candidate.nix`，跟着当前主题生成，不进 `dotfiles-state`；GNOME 上由 kimpanel 画，字号在 dconf）、
-neovim 配置、VS Code 的 `userSettings`、Agent Skill（mattpocock 的 22 个加上 ui-ux-pro-max 的 7 个）、zsh/tmux/starship
+neovim 配置、VS Code 的 `userSettings`、Agent Skill（mattpocock 的 22 个、ui-ux-pro-max 的 7 个，加上 marketingskills 的 53 个）、zsh/tmux/starship
 那一整套交互环境。
 
 **这一类不需要你做任何事**，跑一遍构建就有了。

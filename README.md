@@ -86,7 +86,7 @@
 | `desktop-gnome.nix` | GNOME 扩展包；**只开 `programs.dconf`，不声明任何设置** —— dconf 的单一真相在 `home/toru.nix` |
 | `localization.nix` | 字体（全系统唯一的 `fonts` 声明处，含 `stylix.fonts`）与 fcitx5 输入法 |
 | `shell.nix` | 系统层 zsh、`PAGER`（**不含**用户名指派） |
-| `dns.nix` | 加密 DNS：systemd-resolved + DNS-over-TLS（严格模式）、`dns-plain` / `dns-dot` 逃生舱（见下面「DNS」一节） |
+| `dns.nix` | 加密 DNS：systemd-resolved + DNS-over-TLS（严格模式）。运行时一条命令 `dns`，模式是 `clash` / `plain` / `dot`（见下面「DNS」一节） |
 | `syncthing.nix` | Syncthing 的防火墙端口（22000、21027）。服务在 `home/syncthing.nix`，网页只听本机 8384 |
 | `development.nix` | 编辑器与工具链、claude-code、grok-build 与 dbeaver-bin 的版本覆写 overlay。Rust 不装在系统里，各项目自带 devShell（direnv 加载） |
 | `browsers.nix` | Zen / Brave / Google Chrome；chromium 扩展策略；**Firefox 与 Zen 共用的扩展清单**（`custom.firefoxPolicies`，`home/toru.nix` 的 Firefox 经 `osConfig` 读它，所以每台机器都必须 import 这个模块） |
@@ -245,7 +245,8 @@ git diff flake.lock              # 看哪些 input 动了
 ```
 
 input 的名字就是 `flake.nix` 里的那些：`nixpkgs`、`home-manager`、`stylix`、
-`zen-browser`、`nix-flatpak`、`matt-skills`、`refind-finn-term`。
+`zen-browser`、`nix-flatpak`、`matt-skills`、`ui-ux-pro-max-skill`、
+`marketing-skills`、`refind-finn-term`。
 
 `nixpkgs` 跟的是 `nixos-26.05` **发布分支**，只收安全修复和小版本，
 **不会跳大版本**。要大版本得等 26.11 出来改分支，那是另一件事。
@@ -571,16 +572,18 @@ NetworkManager 那边要关**两个独立的开关**：`dns=none`（不写 `reso
 代价是**内网域名解析不了** —— 公司内网、某些 VPN 靠 DHCP 下发的 DNS
 解析主机名，那些名字会失败。
 
-**三、captive portal 要手动降级。**
-酒店 / 机场 / 咖啡馆的认证页面会拦掉 853 端口，这时候 DNS 全挂、
-连认证页都打不开。两条命令：
+**三、853 出不去时，用 `dns` 临时切换。**
+不带参数就打印帮助。三个模式都要 root，只改这一次连接，不改配置文件。
+忘了切回来的话，重连网络或重启就回到加密 DNS。命令不负责打开或关闭 Clash。
 
 ```bash
-sudo dns-plain    # 临时切回网关的明文 DNS，去过认证
-sudo dns-dot      # 认证完切回加密
+dns                   # 看哪个场景用哪个模式
+sudo dns clash        # 随身 WiFi 上已经开了 Clash 网关模式，浏览器要走节点
+sudo dns plain        # 酒店 / 机场门户，或关掉 Clash 后只用随身 WiFi 的中国网络
+sudo dns dot          # iPhone 热点这类境外出口，或门户页过完之后
 ```
 
-只改运行时状态，不动配置文件 —— 忘了切回来的话，重连网络或重启就自动回到 DoT。
+`clash` 把解析交给 Clash 的 tun（通常叫 Meta）上的假地址，并清掉物理网卡上的网关 DNS，避免查询绕过 tun。中国移动、联通、电信是同一条命令，认的是当前网关，不是运营商。目前只在中国移动上验证过。`plain` 和 `dot` 在 tun 还在时会拒绝，避免你以为已经直连、流量仍进代理。网卡名和假地址都是现查的。
 
 ### 验证
 
@@ -877,11 +880,12 @@ STATE_SYNC_BIN=$(command -v state-sync) bash home/migration-tests.sh   # 手动�
 
 ## Agent Skills
 
-两份源，全局安装，Claude Code、GitHub Copilot、Zed、Gemini CLI 共用同一份。
-配置在 [`home/agent-skills.nix`](home/agent-skills.nix)。
+三份源，全局安装。Claude Code、GitHub Copilot、Zed、Gemini CLI、Grok 共用同一份。
+Grok 读 `~/.agents/skills/`，不另开目录。配置在 [`home/agent-skills.nix`](home/agent-skills.nix)。
 
 - [mattpocock/skills](https://github.com/mattpocock/skills)：目前 22 个。源里另有 5 个用不上，在 `exclude` 里排除。
 - [ui-ux-pro-max-skill](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill)：7 个，从仓库的 `.claude/skills/` 点名安装，不是按类别扫的。`design` 改名为 `uupm-design`，避开 Grok 自带的 design。
+- [marketingskills](https://github.com/coreyhaines31/marketingskills)：53 个，从 `skills/<名字>/` 整层装入，没有改名，也没有排除。仓库根上的 `tools/` 不进池子。
 
 搜索脚本用系统里的 `python3`（`modules/development.nix`）。出图要自己的 `GEMINI_API_KEY` 或 `MUAPI_API_KEY`，以及 `google-genai` / `pillow`，这两样没有装，不跑出图就不会向供应商计费。
 
@@ -900,8 +904,8 @@ STATE_SYNC_BIN=$(command -v state-sync) bash home/migration-tests.sh   # 手动�
   ~/.copilot/skills/<名>  -> 同上
 ```
 
-三个目录覆盖所有工具：Claude Code 只读 `~/.claude/skills/`，
-Zed 和 Gemini CLI 读 `~/.agents/skills/`，Copilot 三个都读。
+三个目录覆盖这些工具：Claude Code 只读 `~/.claude/skills/`，
+Zed、Gemini CLI 和 Grok 读 `~/.agents/skills/`，Copilot 三个都读。
 
 **为什么分两层：** 如果让 home-manager 直接管第二层那些链接，
 `skills off tdd` 之后下一次 `nrb` 会把它悄悄装回来。拆开之后，
@@ -970,10 +974,10 @@ SKILLS_BIN=$(command -v skills) bash home/skills-tests.sh   # 手动跑
 两处都要改：
 
 1. `flake.nix` 加一个 `flake = false` 的 input；
-2. `home/agent-skills.nix` 的 `skillSources` 表加一条。按类别放的写 `categories`；像 ui-ux-pro-max 这样放在 `.claude/skills/<名字>/` 的，写 `root` 和 `names`。
+2. `home/agent-skills.nix` 的 `skillSources` 表加一条。按类别放的写 `categories`；像 ui-ux-pro-max 这样放在 `.claude/skills/<名字>/` 的，写 `root` 和 `names`；像 marketingskills 这样 `skills/<名字>/` 下一级就是 skill 的，写 `flat = "skills"`，不要再套一层类别。
 
 `skills-update` 会自动把表里所有源一起更新。skill 名字撞车时构建会直接失败
-并报出是哪两个源撞了 —— 四家工具都只按目录名认 skill，悄悄覆盖比构建失败难查。
+并报出是哪两个源撞了 —— 这些工具都只按目录名认 skill，悄悄覆盖比构建失败难查。
 
 ### 实机验证
 

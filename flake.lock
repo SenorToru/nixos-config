@@ -159,14 +159,30 @@
         "type": "github"
       }
     },
+    "marketing-skills": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1794419349,
+        "narHash": "sha256-fapZdamdz/lK1W71Xnya7s6JN7IGiX1hu5Acx5PyE5A=",
+        "owner": "coreyhaines31",
+        "repo": "marketingskills",
+        "rev": "1f837447b20bb6f0e72d87b80ece1c221c362c7d",
+        "type": "github"
+      },
+      "original": {
+        "owner": "coreyhaines31",
+        "repo": "marketingskills",
+        "type": "github"
+      }
+    },
     "matt-skills": {
       "flake": false,
       "locked": {
-        "lastModified": 1793456610,
-        "narHash": "sha256-3vhd77xfZjKUYJsIwPFevIZPUAzUgZXr0RYj5NQrBwk=",
+        "lastModified": 1794472958,
+        "narHash": "sha256-AYSRCvBL8TDDdW3rgKu2T7gl4YYDoDId0jYbabEFyfs=",
         "owner": "mattpocock",
         "repo": "skills",
-        "rev": "4ae2317ddb22b046e26455e4f9c9b3aaaf62212d",
+        "rev": "5863806dd4e15c63174bee4e7515a4256792ecfa",
         "type": "github"
       },
       "original": {
@@ -250,6 +266,7 @@
     "root": {
       "inputs": {
         "home-manager": "home-manager",
+        "marketing-skills": "marketing-skills",
         "matt-skills": "matt-skills",
         "nix-flatpak": "nix-flatpak",
         "nixpkgs": "nixpkgs",
@@ -375,11 +392,11 @@
     "ui-ux-pro-max-skill": {
       "flake": false,
       "locked": {
-        "lastModified": 1794067451,
-        "narHash": "sha256-A42mQFF74gEbw2sTp8/3WuoXOV8kt/oCC2/xmpuwBeQ=",
+        "lastModified": 1794672282,
+        "narHash": "sha256-TFW/qGF0s9gRWHngRJMAlpVzgabPJPsftlc4J4xhOH4=",
         "owner": "nextlevelbuilder",
         "repo": "ui-ux-pro-max-skill",
-        "rev": "0da327f37b436c173ce51177678b65ca92e6f3f7",
+        "rev": "d643997c82e94742dd3bee43210b0198e8bbba3d",
         "type": "github"
       },
       "original": {

@@ -22,67 +22,159 @@
 
 let
   # ============================================
-  # 逃生舱：dns-plain / dns-dot
+  # 运行时切换：dns clash / dns plain / dns dot
   # ============================================
-  # 严格 DoT 有一个**真实**的代价：酒店、机场、咖啡馆的 captive portal
-  # 会拦掉一切外发流量（包括 853 端口），而你必须先访问它的认证页面
-  # 才能上网。这时候 DoT 连不出去，DNS 全挂，连认证页面都打不开。
+  # 严格 DoT 有一个真实的代价：酒店门户、以及境内随身 WiFi，
+  # 都会让 853 出不去。没有明文后备时，连认证页都打不开。
   #
-  # 所以配一对命令，而不是把这个坑留给将来的自己在机场现场排查：
+  # 一个命令三个模式，空打打印帮助。只改当前连接的运行时状态，
+  # 不动配置文件。重连或重启回到加密 DNS。
   #
-  #   sudo dns-plain   临时切回网关的明文 DNS，过 captive portal 用
-  #   sudo dns-dot     认证完切回来
+  #   sudo dns clash   Clash 网关模式已开，解析交给 tun 上的假地址
+  #   sudo dns plain   问当前网关的明文 DNS（门户页，或关掉 Clash 后的随身 WiFi）
+  #   sudo dns dot     回到 1.1.1.1 / 8.8.8.8 的 853（iPhone 热点这类境外出口）
   #
-  # 只改当前链路的运行时状态，不动配置文件，重启网络或重启机器就回到 DoT。
-  #
-  # 为什么指向网关而不是别的：captive portal 的认证页面一定要靠它自己的
-  # DNS 才解析得出来（它会把所有域名劫持到认证页），而那个 DNS 永远在网关上。
+  # 网卡名和假地址都现查。tun 认内核里的 tun 设备，假地址认
+  # 198.18.0.0/15（Clash 已经写在那块网卡上的优先）。
+  # 物理网卡认主路由表里「default via … dev …」，跳过 tun。
+  # 随身 WiFi 的三大运营商不用分开：命令认的是网关，不是运营商。
 
-  # 取默认路由的网卡名和网关。`ip route show default` 的输出形如
-  #   default via 192.168.9.1 dev wlp0s20f3 proto dhcp metric 600
-  # 所以第 3 列是网关、第 5 列是网卡。
-  linkOf = "${pkgs.iproute2}/bin/ip route show default | ${pkgs.gawk}/bin/awk '{print $5; exit}'";
-  gwOf = "${pkgs.iproute2}/bin/ip route show default | ${pkgs.gawk}/bin/awk '{print $3; exit}'";
-
+  ip = "${pkgs.iproute2}/bin/ip";
+  awk = "${pkgs.gawk}/bin/awk";
   resolvectl = "${pkgs.systemd}/bin/resolvectl";
 
   # 用 writeShellScriptBin 而不是 writeShellApplication：后者构建期跑
   # shellcheck，而 shellcheck 在沙箱的 C locale 下打印不出中文，
   # 一有 warning 就崩在 commitBuffer: invalid argument 上。见 CLAUDE.md。
-  dnsPlain = pkgs.writeShellScriptBin "dns-plain" ''
-    set -eu
-    if [ "$(id -u)" -ne 0 ]; then
-      echo "需要 root：sudo dns-plain" >&2
-      exit 1
-    fi
-    link=$(${linkOf})
-    gw=$(${gwOf})
-    if [ -z "$link" ] || [ -z "$gw" ]; then
-      echo "找不到默认路由，先确认网络连上了" >&2
-      exit 1
-    fi
-    ${resolvectl} dns "$link" "$gw"
-    ${resolvectl} dnsovertls "$link" no
-    ${resolvectl} flush-caches
-    echo "链路 $link 已切到明文 DNS $gw。"
-    echo "过完 captive portal 请跑：sudo dns-dot"
+  # 帮助文本放 store 文件，不在脚本里写 heredoc。
+  dnsHelp = pkgs.writeText "dns-help.txt" ''
+    dns — 切换这一次连接的 DNS
+
+    不改配置文件。重连网络或重启后，回到加密 DNS。
+    三个模式都要 root。不带参数时打印这份说明。
+
+    sudo dns clash
+      随身 WiFi 上已经打开 Clash 的网关模式，要让浏览器走代理节点。
+      中国移动、联通、电信是同一条命令：解析交给 Clash 的 tun
+      （通常叫 Meta）上的假地址，并关掉这条链路的加密 DNS。
+      物理网卡上的网关 DNS 会清掉，避免查询绕过 tun。
+      先打开网关模式再跑。找不到 tun 就拒绝。
+      成功时 google.com 应落在 198.18.0.0/15。
+
+    sudo dns plain
+      问当前网关的明文 DNS。两种场景都用它：
+        酒店、机场、咖啡馆的认证页。853 被拦住时，先跑这个才能打开门户。
+        关掉 Clash 网关模式之后，只用随身 WiFi 自己的中国网络。
+      Clash 的 tun 还在就拒绝，避免你以为已经直连、流量仍进代理。
+
+    sudo dns dot
+      回到加密 DNS（1.1.1.1 和 8.8.8.8 的 853 端口）。
+      用于 iPhone 热点这类境外出口。认证页过完之后也用它。
+      Clash 的 tun 还在就拒绝。先退出网关模式，再跑。
   '';
 
-  dnsDot = pkgs.writeShellScriptBin "dns-dot" ''
+  dnsCmd = pkgs.writeShellScriptBin "dns" ''
     set -eu
+    mode=''${1:-}
+    case "$mode" in
+      "" | -h | --help | help)
+        cat ${dnsHelp}
+        exit 0
+        ;;
+      clash | plain | dot) ;;
+      *)
+        cat ${dnsHelp} >&2
+        exit 1
+        ;;
+    esac
     if [ "$(id -u)" -ne 0 ]; then
-      echo "需要 root：sudo dns-dot" >&2
+      echo "需要 root：sudo dns $mode" >&2
       exit 1
     fi
-    link=$(${linkOf})
-    if [ -z "$link" ]; then
-      echo "找不到默认路由" >&2
-      exit 1
-    fi
-    ${resolvectl} revert "$link"
-    ${resolvectl} flush-caches
-    echo "链路 $link 已恢复，DNS 走回加密的全局设置。"
-    ${resolvectl} status "$link" | ${pkgs.gnugrep}/bin/grep -E 'DNS Servers|DNSOverTLS' || true
+
+    tun=$(${ip} -d link show | ${awk} '
+      /^[0-9]+:/ { name = $2; sub(/:$/, "", name) }
+      $1 == "tun" && name == "Meta" { meta = name }
+      $1 == "tun" && first == "" { first = name }
+      END { if (meta != "") print meta; else if (first != "") print first }
+    ')
+
+    phys=$(${ip} -4 route show default | ${awk} -v tun="$tun" '
+      $1 == "default" && $2 == "via" && $4 == "dev" && $5 != tun {
+        print $5, $3
+        exit
+      }
+    ')
+    phys_link=''${phys%% *}
+    phys_gw=''${phys#* }
+
+    fake_of() {
+      ${resolvectl} dns "$1" 2>/dev/null | ${awk} '
+        {
+          for (i = 1; i <= NF; i++) {
+            split($i, a, ".")
+            if (a[1] == "198" && (a[2] == "18" || a[2] == "19")) {
+              print $i
+              exit
+            }
+          }
+        }
+      '
+    }
+
+    case "$mode" in
+      clash)
+        if [ -z "$tun" ]; then
+          echo "找不到 Clash 的 tun。先打开网关模式，再跑 sudo dns clash。" >&2
+          exit 1
+        fi
+        fake=$(fake_of "$tun")
+        if [ -z "$fake" ]; then
+          fake=198.18.0.2
+          echo "tun $tun 上还没有 198.18.0.0/15 的地址，用 Clash 的默认假地址 $fake。"
+        fi
+        if [ -n "$phys_link" ]; then
+          ${resolvectl} revert "$phys_link"
+        fi
+        ${resolvectl} dns "$tun" "$fake"
+        ${resolvectl} domain "$tun" '~.'
+        ${resolvectl} dnsovertls "$tun" no
+        ${resolvectl} flush-caches
+        echo "解析交给 $tun 的 $fake，加密 DNS 在这条链路上已关掉。"
+        ${resolvectl} query google.com || true
+        ;;
+      plain)
+        if [ -n "$tun" ]; then
+          echo "Clash 的 tun（$tun）还在。先关掉网关模式或退出 Clash，再跑 sudo dns plain。" >&2
+          echo "现在切过去的话，你会以为已经在用随身 WiFi 的直连，流量仍可能进代理。" >&2
+          exit 1
+        fi
+        if [ -z "$phys_link" ] || [ -z "$phys_gw" ] || [ "$phys_link" = "$phys_gw" ]; then
+          echo "找不到默认网关。先确认网络连上了。" >&2
+          exit 1
+        fi
+        ${resolvectl} dns "$phys_link" "$phys_gw"
+        ${resolvectl} domain "$phys_link" '~.'
+        ${resolvectl} dnsovertls "$phys_link" no
+        ${resolvectl} flush-caches
+        echo "链路 $phys_link 改问网关 $phys_gw 的明文 DNS。"
+        echo "门户页过完，或回到境外网络后，跑：sudo dns dot"
+        ;;
+      dot)
+        if [ -n "$tun" ]; then
+          echo "Clash 的 tun（$tun）还在。先退出网关模式，再跑 sudo dns dot。" >&2
+          echo "tun 还在时，Clash 会把解析指回假地址，加密 DNS 不会生效。" >&2
+          exit 1
+        fi
+        ${ip} -o link show | ${awk} '{ name = $2; sub(/:$/, "", name); if (name != "lo") print name; }' |
+          while read -r link; do
+            ${resolvectl} revert "$link" || true
+          done
+        ${resolvectl} flush-caches
+        echo "已回到全局加密 DNS。"
+        ${resolvectl} status | ${pkgs.gnugrep}/bin/grep -E 'DNS Servers|DNSOverTLS|Current DNS' || true
+        ;;
+    esac
   '';
 in
 {
@@ -117,7 +209,7 @@ in
       # 留着的话，一旦上面的 DNS 全部连不上，resolved 会**悄悄**用明文
       # 去问后备服务器 —— 于是「我开了加密 DNS」这句话在最需要它的时候
       # 恰好不成立，而且没有任何提示。宁可 fail closed：没有加密就没有解析，
-      # 至少你会立刻发现，然后 `sudo dns-plain` 显式地降级。
+      # 至少你会立刻发现，然后 `sudo dns plain` 显式地降级。
       FallbackDNS = "";
 
       # resolved 自己缓存。这一条是纯收益：本仓库这轮排查里
@@ -177,7 +269,7 @@ in
   #
   # 代价说清楚：**DHCP 下发的内网域名也一并不要了。** 接入靠内网 DNS
   # 解析主机名的网络（公司内网、某些 VPN）时那些名字会失败，
-  # 用 `sudo dns-plain` 临时切回去。对「笔记本 + 家用网络」划算，
+  # 用 `sudo dns plain` 临时切回去。对「笔记本 + 家用网络」划算，
   # 换成办公环境就未必。
   #
   # 验证只有一个地方作数：`resolvectl status` 里**每个 Link 段的
@@ -188,8 +280,5 @@ in
     settings.main.systemd-resolved = false;
   };
 
-  environment.systemPackages = [
-    dnsPlain
-    dnsDot
-  ];
+  environment.systemPackages = [ dnsCmd ];
 }

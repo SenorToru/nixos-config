@@ -9,10 +9,11 @@
 #   Copilot CLI            ~/.copilot/skills/
 #   Zed（v1.4.2+）         ~/.agents/skills/
 #   Gemini CLI             ~/.gemini/skills/ 或 ~/.agents/skills/（后者优先）
+#   Grok                   ~/.agents/skills/   （自带的在 ~/.grok/bundled/skills/，不在这里）
 #
 # 所以只要把同一份 skill 同时链到下面 TARGETS 里那三个目录，
-# 上面所有工具就都能看见。~/.agents/skills 是新工具的汇合点，
-# 将来再出编辑器大概率也读它。
+# 上面所有工具就都能看见。Grok 和 Zed、Gemini 共用 ~/.agents/skills。
+# 不另开第四个链接目录。
 #
 # 分两层，理由见 README「Agent Skills」一节：
 #
@@ -56,14 +57,19 @@ let
   # 再在这张表里加一条，两处都要改。skills-update 会把表里所有源
   # 一起 nix flake update。
   #
-  # 两种布局，一套拷贝逻辑：
+  # 三种布局，一套拷贝逻辑：
   #
   # categories：源仓库按 skills/<类别>/<名字>/SKILL.md 分目录放。
-  #   装的时候拍平成 <名字>/SKILL.md —— 四家工具都只认
+  #   装的时候拍平成 <名字>/SKILL.md —— 这些工具都只认
   #   「skills 目录下一级就是 skill 名」，不递归。
   # names + root：源仓库把 skill 直接放在 root/<名字>/SKILL.md
   #   （ui-ux-pro-max 在 .claude/skills/ 下，不是按类别分的）。
   #   names 写死要装哪几个，缺一个构建就失败。
+  # flat：源仓库按 <flat>/<名字>/SKILL.md 放，下一级就是 skill，
+  #   没有类别那一层（marketingskills 是 skills/<名字>/）。
+  #   不写 names，上游新增的 skill 下次更新会自动进来。
+  #   这一层一个目录都没有，或者一个 SKILL.md 都没装上，构建失败。
+  #   不要拿 categories 去扫这种仓库：skills/<名字>/ 下面没有再一层。
   # exclude：个别不要的，写源仓库里的原名。
   # rename：装进去的时候换个名字，**目录名和 frontmatter 的 `name:` 一起改**。
   #   只改目录名不够 —— 各家工具认 skill 的依据不完全一样，Claude Code 按
@@ -149,6 +155,15 @@ let
             -e 's/__PY3__/python3/g'
       '';
     };
+
+    # skills/<名字>/SKILL.md，全装。兄弟 skill 用 ../<名字> 互相引用，
+    # 少装一个那些相对路径就断，所以这里不写 exclude。
+    # 不装仓库根上的 tools/，也不装要登录的合作方集成。
+    marketing-skills = {
+      input = "marketing-skills";
+      src = inputs.marketing-skills;
+      flat = "skills";
+    };
   };
 
   updateInputs = lib.unique (lib.mapAttrsToList (_: s: s.input) skillSources);
@@ -231,6 +246,29 @@ let
             exit 1
           ''}
         '') (s.names or [ ])
+        + lib.optionalString (s ? flat) ''
+          before=$(awk -F '\t' -v src=${lib.escapeShellArg sname} '$2 == src { c++ } END { print c + 0 }' "$out/.manifest")
+          seen=0
+          for d in ${s.src}/${s.flat}/*/; do
+            if [ ! -d "$d" ]; then
+              echo "agent-skills: ${sname} 的 ${s.flat}/ 下没有目录" >&2
+              exit 1
+            fi
+            seen=1
+            ${installOne sname s.flat s ''
+              :
+            ''}
+          done
+          if [ "$seen" -eq 0 ]; then
+            echo "agent-skills: ${sname} 的 ${s.flat}/ 下没有目录" >&2
+            exit 1
+          fi
+          after=$(awk -F '\t' -v src=${lib.escapeShellArg sname} '$2 == src { c++ } END { print c + 0 }' "$out/.manifest")
+          if [ "$after" -le "$before" ]; then
+            echo "agent-skills: ${sname} 一个 skill 都没装上" >&2
+            exit 1
+          fi
+        ''
       ) skillSources
     )
     + ''

@@ -223,9 +223,11 @@ find . ! -user toru -printf '%u  %p\n'
 
 ## Agent Skills
 
-`home/agent-skills.nix` 把 skill 装成**全局**的，Claude Code / Copilot / Zed / Gemini 共用一份。
-目前两份源：mattpocock 的 22 个，加上 ui-ux-pro-max 的 7 个
-（`design` 改名为 `uupm-design`，避开 Grok 自带的 design）。
+`home/agent-skills.nix` 把 skill 装成**全局**的，Claude Code / Copilot / Zed / Gemini / Grok 共用一份。
+Grok 读 `~/.agents/skills/`，和 Zed、Gemini 同一层链接。
+目前三份源：mattpocock 的 22 个，ui-ux-pro-max 的 7 个
+（`design` 改名为 `uupm-design`，避开 Grok 自带的 design），
+再加上 marketingskills 的 53 个（`skills/<名字>/` 整层装入，没有改名）。
 长期不要的 skill 写进 `skillSources.<源>.exclude`（构建时就不装），**不用 `skills off`** ——
 后者是 `~/.local/state` 里的可变状态，换机器要搬，只适合临时关一下。
 完整说明见 [Lesson-Learn/0012_AGENT_SKILLS.md](Lesson-Learn/0012_AGENT_SKILLS.md)
@@ -265,8 +267,9 @@ find . ! -user toru -printf '%u  %p\n'
 
 加新 skill 源要同时改 `flake.nix`（加 `flake = false` 的 input）和
 `skillSources` 表，两处缺一不可。按类别放的写 `categories`；
-放在 `root/<名字>/SKILL.md` 的（ui-ux-pro-max 是 `.claude/skills/`）写 `root` 和 `names`。
-第二种布局不是「类别」，别再扫 `skills/<类别>/`。
+放在 `root/<名字>/SKILL.md` 的（ui-ux-pro-max 是 `.claude/skills/`）写 `root` 和 `names`；
+`skills/<名字>/SKILL.md` 下一级就是 skill 的（marketingskills）写 `flat`。
+后两种都不是「类别」，别再扫 `skills/<类别>/`。
 上游如果写死了 `${CLAUDE_PLUGIN_ROOT}` 或 `python`，改写放在该源的 `postCopy`，
 这样 `skills-update` 重新拉源之后还会再改一遍。
 
@@ -320,7 +323,7 @@ Windows 侧还要用 `bcdedit` 把 `{bootmgr}` 指向 rEFInd 兜底。
 `modules/dns.nix`，systemd-resolved + DNS-over-TLS 严格模式。
 来龙去脉见 [Lesson-Learn/0014](Lesson-Learn/0014_DNS_HIJACK_AND_DOT.md)。
 
-改这块之前必须知道的四件事：
+改这块之前必须知道的五件事：
 
 1. **挡住 DHCP 下发的 DNS 要关两个开关，缺一个就静默失效。**
 
@@ -385,6 +388,21 @@ Windows 侧还要用 `bcdedit` 把 `{bootmgr}` 指向 rEFInd 兜底。
    能拿到应答就是有中间设备在截 UDP/53。
    排查 DNS 问题时**先跑这一条**，它十秒就能排除掉一整类原因 ——
    0014 那次就是因为没先跑它，绕了四个错误假设。
+
+5. **运行时切换是一条命令 `dns`，空打打印帮助，不要再造 `dns-plain` / `dns-dot`。**
+   那两个名字不是系统自带的，是这个模块里曾经的逃生舱，已经删掉。
+
+   - `sudo dns clash`：Clash 网关模式已经开着。解析交给 tun 上现有的
+     `198.18.0.0/15` 地址（没有才回退 `198.18.0.2`），域名 `~.`，这条链路
+     `DNSOverTLS=no`，并 revert 物理网卡，避免网关 DNS 绕过 tun。
+   - `sudo dns plain`：问当前默认网关的明文 DNS。酒店 / 机场门户，以及关掉
+     Clash 之后的随身 WiFi 直连，都是这一条。
+   - `sudo dns dot`：revert 每块非 lo 网卡，回到全局严格 DoT。iPhone 热点
+     这类境外出口，以及门户页过完，都用它。
+
+   命令不启停 Clash。`plain` 和 `dot` 在 tun 还在时拒绝；`clash` 在没有 tun
+   时拒绝。网卡名现查，不写死 `wlp99s0`。中国移动、联通、电信同一条命令，
+   认的是网关，不是运营商；目前只在中国移动上验证过。重连或重启回到 DoT。
 
 
 ## 用户状态：state-sync 与 migration-check

@@ -408,7 +408,7 @@ systemd 编译进去了一组后备 DNS 服务器的**明文**地址。
 「我开了加密 DNS」这句话恰好在最需要它的时候不成立。
 
 宁可 fail closed：没有加密就没有解析。至少你会**立刻发现**，
-然后用 `sudo dns-plain` 显式地降级，而不是被蒙在鼓里。
+然后用 `sudo dns plain` 显式地降级，而不是被蒙在鼓里。
 
 ### 为什么关掉客户端的 DNSSEC 校验
 
@@ -566,15 +566,17 @@ nix shell nixpkgs#dnsutils -c dig +time=3 +tries=1 A example.org @192.0.2.1
 ### captive portal 要手动降级
 
 酒店 / 机场 / 咖啡馆的认证页面会拦掉 853 端口。这时候 DNS 全挂、
-连认证页面都打不开。两条命令（定义在 `modules/dns.nix`）：
+连认证页面都打不开。命令在 `modules/dns.nix`，不带参数打印帮助：
 
 ```bash
-sudo dns-plain    # 临时切回网关的明文 DNS，去过认证
-sudo dns-dot      # 认证完切回加密
+sudo dns plain    # 问当前网关的明文 DNS，去过认证
+sudo dns dot      # 认证完切回加密
 ```
 
-只改运行时状态，不动配置文件 —— 忘了切回来的话，
-重连网络或重启就自动回到 DoT。
+关掉 Clash 之后只用随身 WiFi 的中国网络，也是 `sudo dns plain`。
+随身 WiFi 上已经开了网关模式、要让浏览器走节点，用 `sudo dns clash`。
+三条都只改运行时状态。忘了切回来的话，重连网络或重启就自动回到 DoT。
+`dns-plain` 和 `dns-dot` 这两个旧名字已经删掉。
 
 ### 改 `modules/dns.nix` 之前先确认 853 端口通
 
@@ -668,7 +670,7 @@ Global 段就认定配置生效，而解析实际走的是 Link 段 —— 验�
 
 - [`modules/dns.nix`](../modules/dns.nix) —— 最终配置，注释里写了每个选项的取舍
 - [README.md](../README.md) 的「DNS」一节 —— 日常用法与验证
-- [CLAUDE.md](../CLAUDE.md) 的「DNS」一节 —— 改这块之前必须知道的四件事
+- [CLAUDE.md](../CLAUDE.md) 的「DNS」一节 —— 改这块之前必须知道的五件事
 - [MIGRATION.md](../MIGRATION.md) 第 8 节 —— 新机器的 DNS 验证清单
 - [`0013`](0013_REFIND_BOOT.md) —— 同样是「构建通过 ≠ 实机可用」的一轮
 - iKuai 官方 DNS 设置文档：<https://www.ikuai8.com/support/ymgn/lyym/wlsz/dns.html>

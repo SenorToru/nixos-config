@@ -32,6 +32,12 @@
     ui-ux-pro-max-skill.url = "github:nextlevelbuilder/ui-ux-pro-max-skill";
     ui-ux-pro-max-skill.flake = false;
 
+    # Marketing Skills。同样不是 flake。布局是 skills/<名字>/SKILL.md：
+    # 下一级就是 skill，不是上面那种类别，也不是 .claude/skills/。
+    # 拷贝规则是 skillSources 的 flat，见 home/agent-skills.nix。
+    marketing-skills.url = "github:coreyhaines31/marketingskills";
+    marketing-skills.flake = false;
+
     # rEFInd 主题 finn-term。和上面的 skill 源同一个机制：不是 flake，
     # 只是一棵源码树，版本由 flake.lock 钉死。
     #
