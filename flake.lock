@@ -247,6 +247,23 @@
         "type": "github"
       }
     },
+    "promo-video-kit": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1794900904,
+        "narHash": "sha256-dlp2Q2JEjkgDHo6f5E96+8vf5Pgfj8CLFTVDWsjT/7c=",
+        "ref": "master",
+        "rev": "22774be36040f0b908fd269ddab3b92c2f8ffe6e",
+        "revCount": 4,
+        "type": "git",
+        "url": "ssh://git@github.com/SenorToru/promo-video-kit"
+      },
+      "original": {
+        "ref": "master",
+        "type": "git",
+        "url": "ssh://git@github.com/SenorToru/promo-video-kit"
+      }
+    },
     "refind-finn-term": {
       "flake": false,
       "locked": {
@@ -270,6 +287,7 @@
         "matt-skills": "matt-skills",
         "nix-flatpak": "nix-flatpak",
         "nixpkgs": "nixpkgs",
+        "promo-video-kit": "promo-video-kit",
         "refind-finn-term": "refind-finn-term",
         "stylix": "stylix",
         "ui-ux-pro-max-skill": "ui-ux-pro-max-skill",

@@ -38,6 +38,15 @@
     marketing-skills.url = "github:coreyhaines31/marketingskills";
     marketing-skills.flake = false;
 
+    # promo-video-kit（Toru 自己的私有仓库，宣传视频的工具链）里的 3 个 skill：
+    # promo-video / promo-narration / promo-bgm。布局同 marketingskills（skills/<名字>/）。
+    # 私有仓库所以走 git+ssh，用的是当前用户的 ssh key：
+    # skills-update（不带 sudo）先把它取进 /nix/store，之后 sudo nixos-rebuild 按
+    # flake.lock 的 narHash 直接用 store 里那份，root 不需要能访问 GitHub。
+    # 新机器第一次 rebuild 之前，先以用户身份跑一次 `nix flake archive` 把它取下来。
+    promo-video-kit.url = "git+ssh://git@github.com/SenorToru/promo-video-kit?ref=master";
+    promo-video-kit.flake = false;
+
     # rEFInd 主题 finn-term。和上面的 skill 源同一个机制：不是 flake，
     # 只是一棵源码树，版本由 flake.lock 钉死。
     #

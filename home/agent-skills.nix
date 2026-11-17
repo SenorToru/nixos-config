@@ -164,6 +164,15 @@ let
       src = inputs.marketing-skills;
       flat = "skills";
     };
+
+    # Toru 自己的宣传视频工具链（私有仓库，取法见 flake.nix 的注释）。
+    # skill 只写流程和规矩，真正干活的脚本在 ~/Projects/dev/promo-video-kit
+    # 的工作副本里，skill 里写的就是那个路径（可用 PROMO_VIDEO_KIT 改）。
+    promo-video-kit = {
+      input = "promo-video-kit";
+      src = inputs.promo-video-kit;
+      flat = "skills";
+    };
   };
 
   updateInputs = lib.unique (lib.mapAttrsToList (_: s: s.input) skillSources);

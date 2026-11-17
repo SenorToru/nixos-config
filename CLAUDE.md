@@ -225,9 +225,10 @@ find . ! -user toru -printf '%u  %p\n'
 
 `home/agent-skills.nix` 把 skill 装成**全局**的，Claude Code / Copilot / Zed / Gemini / Grok 共用一份。
 Grok 读 `~/.agents/skills/`，和 Zed、Gemini 同一层链接。
-目前三份源：mattpocock 的 22 个，ui-ux-pro-max 的 7 个
+目前四份源：mattpocock 的 22 个，ui-ux-pro-max 的 7 个
 （`design` 改名为 `uupm-design`，避开 Grok 自带的 design），
-再加上 marketingskills 的 53 个（`skills/<名字>/` 整层装入，没有改名）。
+再加上 marketingskills 的 53 个（`skills/<名字>/` 整层装入，没有改名），
+以及 Toru 私有仓库 promo-video-kit 的 3 个（`git+ssh` 取，新机器首次 rebuild 前先以用户身份 `nix flake archive`）。
 长期不要的 skill 写进 `skillSources.<源>.exclude`（构建时就不装），**不用 `skills off`** ——
 后者是 `~/.local/state` 里的可变状态，换机器要搬，只适合临时关一下。
 完整说明见 [Lesson-Learn/0012_AGENT_SKILLS.md](Lesson-Learn/0012_AGENT_SKILLS.md)

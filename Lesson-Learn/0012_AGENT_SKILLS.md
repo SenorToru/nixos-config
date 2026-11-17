@@ -2,7 +2,7 @@
 
 全局安装，**Claude Code、GitHub Copilot、Zed、Gemini CLI、Grok 共用同一份**。
 Grok 读 `~/.agents/skills/`，自带 skill 仍在 `~/.grok/bundled/skills/`。
-三份源：
+四份源：
 
 - [mattpocock/skills](https://github.com/mattpocock/skills) 的 22 个
   （源里另有 5 个在 `exclude` 里，不装）
@@ -13,6 +13,10 @@ Grok 读 `~/.agents/skills/`，自带 skill 仍在 `~/.grok/bundled/skills/`。
   的 53 个，从 `skills/<名字>/` 整层装入。没有改名，没有排除。
   仓库根上的 `tools/` 不进池子；技能正文里指向它的相对链接在池子里对不上，
   那些集成是可选的，技能本身不靠它们才能加载。
+- promo-video-kit（Toru 的私有仓库 `SenorToru/promo-video-kit`）的 3 个：
+  `promo-video`（做宣传视频）、`promo-narration`（配音）、`promo-bgm`（BGM），
+  布局同 marketingskills。用 `git+ssh` 取，新机器首次 rebuild 前先以用户身份
+  `nix flake archive`。skill 调用的脚本在 `~/Projects/dev/promo-video-kit` 工作副本里。
 
 下面那张表要等下一次 `nrb` 跑过 `skills doc` 才会列出这 53 个。
 在那之前它还是上一版池子的 29 个。别手改生成段。
@@ -266,7 +270,7 @@ find . ! -user toru -printf '%u  %p\n'    # 应该没有任何输出（坑 5）
 > **别手改**，改动会被下一次生成覆盖；要改就去改生成逻辑
 > （`home/agent-skills.nix` 里的 `cmd_doc`）。
 >
-> 对应的 skill 池：`/nix/store/p9x6xlkjzyxqccin9adwk4ykkzcrlcxq-agent-skills`
+> 对应的 skill 池：`/nix/store/yw55lw2vjh346wxgylpy2lgljv4qy42m-agent-skills`
 
 | Skill | 调用方式 | 常驻 tok | 调用 tok | 附属 tok | 用途（作者原文 description，这也是模型看到的触发条件） |
 |---|---|---:|---:|---:|---|
@@ -326,6 +330,9 @@ find . ! -user toru -printf '%u  %p\n'    # 应该没有任何输出（坑 5）
 | `pricing` | 模型自动 / 也可手打 | 87 | 3115 | 9284 | "When the user wants to set pricing and packaging, or asks what to charge, whether to raise prices, or how to move existing customers: tiers, value metrics, per-seat vs usage, freemium and trials, willingness to pay, pricing pages. For in-app upgrade screens, see paywalls. For offers on services, courses, and high-ticket B2B, see offers." |
 | `product-marketing` | 模型自动 / 也可手打 | 98 | 3270 | 3894 | "When the user wants to create or update the product marketing context doc (.agents/product-marketing.md), or asks what belongs in it or whether positioning or ICP is clear enough: product, ICP, positioning, competitors, customer language, brand voice. Use it before other marketing skills on a new project, when the audience or positioning changes, and to log learnings." |
 | `programmatic-seo` | 模型自动 / 也可手打 | 77 | 1746 | 5538 | "When the user wants SEO pages at scale from templates and data, or asks whether a page set will rank or look thin: location, integration, comparison, directory, and '[X] for [Y]' pages, each useful rather than thin. For SEO audits, see seo-audit. For content planning, see content-strategy." |
+| `promo-bgm` | 模型自动 / 也可手打 | 32 | 234 | 0 | 为宣传片作 BGM 并让人试听选定：promo-video-kit 的 synth.py（代码合成）与 score.py（写谱后用采样音源渲染）、新曲目、换风格。用于给片子选曲或作曲、用户嫌 BGM 不好听，或用户说「BGM」「配乐」。 |
+| `promo-narration` | 模型自动 / 也可手打 | 37 | 463 | 0 | 用 promo-video-kit 在本机合成宣传片的讲解语音（Qwen3-TTS，日中英，克隆固定声线）：写讲稿和 say 读法、合成、语音识别查读音、多版试听挑选、定稿存档、定新声音。用于给视频配音、改某句读音或语气，或用户说「配音」「旁白」「ナレーション」。 |
+| `promo-video` | 模型自动 / 也可手打 | 25 | 465 | 0 | 用 promo-video-kit 给产品做宣传短片：分镜、录屏脚本、字幕外框、合成成片。用于新做一部片子、重做或加语言版本、给已有片子加讲解，或用户说「做视频」「宣传片」。 |
 | `prospecting` | 模型自动 / 也可手打 | 112 | 4788 | 25491 | "When the user wants to find and qualify prospects for outbound, or asks who to target first, which signal to prioritize, or where to spot buyers with the problem: buying signals, enrichment, verification, account research. Verify emails before a sequence, never scrape LinkedIn: define audiences in Sales Navigator and pull contacts from licensed data. For outreach, see cold-email. For competitor research, see competitor-profiling." |
 | `prototype` | 模型自动 / 也可手打 | 47 | 677 | 3263 | Build a throwaway prototype to answer a design question. Use when the user wants to sanity-check whether a state model or logic feels right, or explore what a UI should look like. |
 | `public-relations` | 模型自动 / 也可手打 | 100 | 2189 | 16521 | "When the user wants press and media coverage, or asks what to say to a reporter, whether a story is newsworthy, or how to handle a crisis: pitches, press releases, media lists, HARO, op-eds, podcast guest prep, newsjacking (public relations, not pull requests). For directories, see directory-submissions. For launches, see launch. For cold outreach to prospects, see cold-email." |
@@ -353,7 +360,7 @@ find . ! -user toru -printf '%u  %p\n'    # 应该没有任何输出（坑 5）
 | `wizard` | 模型自动 / 也可手打 | 80 | 942 | 2399 | Generate an interactive bash wizard that walks a human through steps only they can perform. Use when provisioning infrastructure, setting up credentials or CI secrets, walking an unfamiliar third-party dashboard, or running a one-off migration or cutover. Don't invoke this for steps the agent can perform itself. |
 | `writing-for-agents` | 模型自动 / 也可手打 | 31 | 2683 | 683 | Writing documents for agents. Use when creating or editing skills, or modifying AGENTS.md or CLAUDE.md. |
 
-合计 **82** 个 skill：常驻 ≈ **6358 tokens**（每个会话都付），正文全加起来 ≈ 239179 tokens，附属文件另计 ≈ 3423987 tokens。
+合计 **85** 个 skill：常驻 ≈ **6451 tokens**（每个会话都付），正文全加起来 ≈ 240340 tokens，附属文件另计 ≈ 3423987 tokens。
 
 token 数是字符数 ÷ 4 的英文经验估算，误差约 ±15%。
 

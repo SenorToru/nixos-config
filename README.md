@@ -246,7 +246,7 @@ git diff flake.lock              # 看哪些 input 动了
 
 input 的名字就是 `flake.nix` 里的那些：`nixpkgs`、`home-manager`、`stylix`、
 `zen-browser`、`nix-flatpak`、`matt-skills`、`ui-ux-pro-max-skill`、
-`marketing-skills`、`refind-finn-term`。
+`marketing-skills`、`promo-video-kit`、`refind-finn-term`。
 
 `nixpkgs` 跟的是 `nixos-26.05` **发布分支**，只收安全修复和小版本，
 **不会跳大版本**。要大版本得等 26.11 出来改分支，那是另一件事。
@@ -880,12 +880,13 @@ STATE_SYNC_BIN=$(command -v state-sync) bash home/migration-tests.sh   # 手动�
 
 ## Agent Skills
 
-三份源，全局安装。Claude Code、GitHub Copilot、Zed、Gemini CLI、Grok 共用同一份。
+四份源，全局安装。Claude Code、GitHub Copilot、Zed、Gemini CLI、Grok 共用同一份。
 Grok 读 `~/.agents/skills/`，不另开目录。配置在 [`home/agent-skills.nix`](home/agent-skills.nix)。
 
 - [mattpocock/skills](https://github.com/mattpocock/skills)：目前 22 个。源里另有 5 个用不上，在 `exclude` 里排除。
 - [ui-ux-pro-max-skill](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill)：7 个，从仓库的 `.claude/skills/` 点名安装，不是按类别扫的。`design` 改名为 `uupm-design`，避开 Grok 自带的 design。
 - [marketingskills](https://github.com/coreyhaines31/marketingskills)：53 个，从 `skills/<名字>/` 整层装入，没有改名，也没有排除。仓库根上的 `tools/` 不进池子。
+- promo-video-kit（Toru 自己的私有仓库 `SenorToru/promo-video-kit`）：3 个，`promo-video`（做宣传视频）、`promo-narration`（配音）、`promo-bgm`（BGM），同样从 `skills/<名字>/` 整层装入。私有仓库用 `git+ssh` 取，靠的是用户自己的 ssh key：`skills-update` 不带 sudo 先把它取进 store，`sudo nixos-rebuild` 再直接用 store 里那份。**新机器第一次 rebuild 前**，先在仓库里以用户身份跑 `nix flake archive`，否则 root 取不到私有仓库会失败。skill 调用的脚本在 `~/Projects/dev/promo-video-kit` 的工作副本里，要另外 clone。
 
 搜索脚本用系统里的 `python3`（`modules/development.nix`）。出图要自己的 `GEMINI_API_KEY` 或 `MUAPI_API_KEY`，以及 `google-genai` / `pillow`，这两样没有装，不跑出图就不会向供应商计费。
 
