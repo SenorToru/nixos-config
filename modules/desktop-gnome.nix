@@ -23,7 +23,8 @@
     gnomeExtensions.burn-my-windows
     gnomeExtensions.gtile
     gnomeExtensions.draw-on-gnome
-    gnomeExtensions.vitals-widget
+    # 底栏上的占用。具体显示哪些、钉哪块盘，在 home/toru.nix。
+    gnomeExtensions.astra-monitor
     gnomeExtensions.kimpanel
     gnomeExtensions.color-picker
   ];
