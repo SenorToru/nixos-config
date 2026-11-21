@@ -46,6 +46,8 @@ Windows 双系统；`hosts/asus/default.nix` 末尾多一组只有它要装的�
 | 本文件 | **给 AI 的协作约定**：分层判据、提交格式、踩过的坑 |
 | [MIGRATION.md](MIGRATION.md) | **一次性的事**：装新机器、搬 Nix 管不到的用户状态 |
 
+语音输入已在 asus 上实现（2026-11-21）。原始规格是 [VOICE_DICTATION.md](VOICE_DICTATION.md)，实际做法和改动的理由在 [Lesson-Learn/0019](Lesson-Learn/0019_VOICE_DICTATION.md)，两者冲突时以 0019 和代码为准。改这块之前读下文「语音输入」一节，并保留 `custom.voiceDictation.enable = false` 整份撤回的能力。
+
 README 和本文件有意重叠。
 
 **改动下列任何一项时，必须同步更新 README.md：**
@@ -405,6 +407,57 @@ Windows 侧还要用 `bcdedit` 把 `{bootmgr}` 指向 rEFInd 兜底。
    时拒绝。网卡名现查，不写死 `wlp99s0`。中国移动、联通、电信同一条命令，
    认的是网关，不是运营商；目前只在中国移动上验证过。重连或重启回到 DoT。
 
+
+## 语音输入：F8 / F9
+
+`modules/voice-dictation.nix`（选项、llama.cpp、ydotool）+ `home/voice-dictation.nix`
+（模型清单、提示词、快捷键）+ `home/voice-dictation.py`（主程序）。
+只在 asus 打开。完整记录见 [Lesson-Learn/0019](Lesson-Learn/0019_VOICE_DICTATION.md)。
+
+改这块之前必须知道的八件事：
+
+1. **识别用 Qwen3-ASR-1.7B，不用 Whisper，别换回去。**
+   原规格写的是 Whisper large-v3。实测同一段中日英混说，Whisper 把英语整句丢了、
+   把中文**译成了日语**，另一段把日语译成了中文，全程不报错。
+   Qwen3-ASR 由 llama.cpp 的 mtmd 原生支持，识别和整理共用一份 llama.cpp。
+
+2. **识别必须按停顿切段，每段单独送。别「简化」成整段一次送。**
+   Qwen3-ASR 开口先给整段判一个语言，后面跟着它走。整段送的话，
+   中、日、英各一句会被判成英语，中文被译成英语、日语丢掉。
+   `vad_groups` 用 Silero VAD 在 ≥ 0.8 秒的停顿处切开。
+
+3. **识别上下文（`vocabulary`）只放拉丁字母的专有名词。**
+   放进中文词时，实测会把日语句子往中文拉。
+
+4. **整理提示词里每一条后加的规则都对应一次实测出过的错，不要删。**
+   改之前先用 `voice-dictation clean "<口述>"` 对着 0019 里的例句试，
+   口述要用 `voice-dictation transcribe <wav>` 的真实输出，别用手打的文本
+   （第 9 条示范就是因为这个才补的）。示范句（`cleanupShots`）别和测试句重复。
+   llama.cpp 在温度 0 下也不逐字可复现，每版至少跑两遍再比。**不要开思考模式**：
+   实测两段都在推理里打转，写满 4096 个 token 也没出结果。
+
+5. **模型 URL 钉在 Hugging Face 的提交上，配 sha256。不要改成 `main`。**
+   ggml-org 在 2026-11-21 重新上传过 Qwen3-ASR 的 GGUF，同名文件的 sha256 变了。
+   换模型要同时改提交、文件名、大小、sha256 四项，再跑 `voice-dictation-models`。
+
+6. **粘贴发 Shift+Insert，剪贴板和 primary 两个选区都写。不要改成按窗口区分键。**
+   GNOME Wayland 上普通程序查不到焦点窗口（`Shell.Eval` 关着，没有扩展就拿不到 wm class）。
+   Shift+Insert 在浏览器 / VS Code / GTK 里读剪贴板，在 Ghostty 里读 primary，
+   两边写成同一段文字就都对。ydotool **只送键码**，测试里有断言守着。
+
+7. **模型每次现加载、用完就退出。不要改成常驻。**
+   听的时候不占显存。Qwen3-TTS（promo-video-kit）也要用这块 8 GB 的卡，
+   常驻的话 TTS 会分配失败。独显也只有在空闲时才睡得下去。
+   一段话从第二次 F8 到贴出，实测约 4.5 到 6 秒，大半花在加载模型上；Toru 定的是「慢一点没关系」。
+
+8. **CUDA 架构写在 `hosts/<主机>/tuning.nix`，不写在模块里。**
+   `custom.voiceDictation.cudaArchitectures = [ "120" ]` 绑在 RTX 5060 上。
+   CUDA 版 llama.cpp 不在二进制缓存里（unfree），只编一个架构在本机约 6 分钟。
+   nixpkgs 里 llama-cpp 或它的依赖变了才重编。
+
+另外：开关打开后 `ydotool` 组要**注销重登**才生效；`home/voice-dictation-tests.sh`
+在构建期跑，改状态机之前先确认测试能变红（0019 有做法）。
+加任何新东西都要挂在 `custom.voiceDictation.enable` 上，撤回才是完整的。
 
 ## 用户状态：state-sync 与 migration-check
 

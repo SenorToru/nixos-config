@@ -28,6 +28,9 @@
     ../../modules/stylix.nix
     ../../modules/refind.nix
     ../../modules/kernel-hardening.nix
+    # 语音输入。这台不开（enable 默认 false），import 只是为了让选项存在：
+    # home/ 里的文件读 osConfig.custom.voiceDictation.enable。
+    ../../modules/voice-dictation.nix
 
     inputs.home-manager.nixosModules.home-manager
 

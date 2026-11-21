@@ -100,13 +100,14 @@ Bruno 是 Flatpak（`com.usebruno.Bruno`）。运行时数据在
 `modules/flatpak.nix` 重装后再登录。集合是项目目录里的普通文件，
 跟着项目走，不进 `dotfiles-state`。
 
-### 不属于任何一类的三样东西
+### 不属于任何一类的四样东西
 
 | 路径 | 为什么 |
 |------|--------|
 | `~/.local/share/fcitx5/rime/*.userdb/` | LevelDB，**没法合并**。用 Rime 内建同步，见 7.2 |
 | `~/.local/share/fcitx5/rime/build/` | **绝对不要拷**，里面固化着旧机器的 store 路径 |
 | `~/.local/share/fcitx5/rime/installation.yaml` | **绝对不要拷**，里面的 UUID 是 Rime 同步的分机标识 |
+| `~/.cache/voice-dictation/` | 语音输入的模型权重（约 8.5 GB）和最近 20 段录音。**不搬**：权重可以重新下载，`voice-dictation-models` 按 `home/voice-dictation.nix` 里钉住的 URL 和 sha256 取回同一份；录音只是缓存。不进 `stateFiles`，不进 Nix store。`~/.cache` 已在 `ignoredHome`，`migration-check` 不会报 |
 
 ---
 
@@ -1511,6 +1512,7 @@ sudo refind-sync
 | 新的 Flatpak | 加进 `modules/flatpak.nix`，**别只装不声明** |
 | 新硬件类别（独显、无线网卡） | 第 5.2 节的 `tuning.nix` 要点里补一条。NVIDIA 的着色器缓存 `~/.nv` 是可重建的，已在 `ignoredHome` |
 | Telegram、Google Chrome、Steam（asus 上加的） | 登录态都是 C 类，不搬，新机器上重新登录。`~/.config/google-chrome`、`~/.local/share/TelegramDesktop`、Chrome 建的 `~/.local/share/pki` 都已加进 `home/migration.nix` 的 `ignored`。Chrome 的 profile（约 3.5G）和 Steam 游戏库都**不搬**，这是有意的决定 |
+| 语音输入（`modules/voice-dictation.nix` + `home/voice-dictation.nix`，只在 asus 开） | 模型和录音在 `~/.cache/voice-dictation/`，属第 0 节「不属于任何一类」：不搬，新机器上打开开关后跑一次 `voice-dictation-models` 重新下载。没有凭据，没有要进 `dotfiles-state` 的东西。新机器的显卡不同就改 `hosts/<主机>/tuning.nix` 的 `custom.voiceDictation.cudaArchitectures`。打开后要注销重登一次（`ydotool` 组） |
 | Clash Verge（`modules/clash-verge.nix`，两台机器都装） | 订阅和节点在 `~/.config/io.github.clash-verge-rev.clash-verge-rev` 与 `~/.local/share/` 下的同名目录，C 类，已进 `ignored`。不进 `dotfiles-state`。版本钉在 `modules/clash-verge-version.json` |
 | **新机器本身** | 公钥加进 `home/toru.nix` 的 `signingKeys`，否则别的机器验不了它签的提交 |
 

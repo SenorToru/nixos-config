@@ -604,6 +604,10 @@ in
 
     # 候选窗配色跟着 stylix 走，所以必须在这个模块里，specialisation 才会重算。
     ./fcitx-candidate.nix
+
+    # 语音输入（F8 / F9）。整份挂在 osConfig.custom.voiceDictation.enable 上，
+    # 关掉时这个文件什么也不产生。脚本本体是 voice-dictation.py。
+    ./voice-dictation.nix
   ];
 
   home.username = "toru";

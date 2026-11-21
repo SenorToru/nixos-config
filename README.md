@@ -41,9 +41,13 @@
 │   ├── agents-update.nix     claude-code 与 grok-build 的版本刷新命令
 │   ├── skills-tests.sh       skills 命令的回归测试（构建期执行）
 │   ├── migration.nix         state-sync + migration-check
-│   └── migration-tests.sh    state-sync 的回归测试（构建期执行）
+│   ├── migration-tests.sh    state-sync 的回归测试（构建期执行）
+│   ├── voice-dictation.nix   语音输入：模型清单、提示词、F8 / F9 快捷键
+│   ├── voice-dictation.py    语音输入的主程序（录音、识别、整理、粘贴）
+│   └── voice-dictation-tests.sh  语音输入状态机的回归测试（构建期执行）
 ├── Lesson-Learn/             知识库（按时间顺序编号）
 ├── MIGRATION.md              装新机器 + 搬 Nix 管不到的用户状态
+├── VOICE_DICTATION.md        语音输入的原始规格（Grok 写）。实际实现和改动见 Lesson-Learn/0019
 ├── ASUS_INSTALL.md           asus 重装指南：Windows + NixOS 双系统，从分区到 rEFInd 的完整步骤，
 │                             附录 E 是装机当天的 29 条实测记录（总结见 Lesson-Learn/0017）
 └── CLAUDE.md                 AI 协作约定
@@ -97,6 +101,7 @@
 | `stylix.nix` | 全局配色的单一真相：base16 方案、polarity、壁纸、NixOS 级 target |
 | `refind.nix` | rEFInd 顶层引导入口：主题 derivation、`refind.conf`、`refind-sync`、`refind-hwinfo`（见下面「引导」一节） |
 | `kernel-hardening.nix` | 两台机器共用的内核 sysctl：限制非特权 io_uring、perf、kexec、ptrace。用户命名空间保持打开（Nix 沙箱、Flatpak、rootless 容器） |
+| `voice-dictation.nix` | 语音输入的选项 `custom.voiceDictation.*`、按主机 CUDA 架构编的 llama.cpp、`programs.ydotool`。**两台都 import**（选项要存在），只有 asus 打开（见下面「语音输入」一节） |
 | `claude-code-manifest.json` | 数据文件，供 `development.nix` 的 overlay 读取 |
 | `grok-build-version.json` | 数据文件：grok-build 的版本号与哈希，供同一个 overlay 读取 |
 | `dbeaver-version.json` | 数据文件：dbeaver-bin 的版本号与哈希，供同一个 overlay 读取 |
@@ -115,6 +120,9 @@
 | `syncthing.nix` | Syncthing 用户服务，声明六个同步文件夹（笔记、档案、保险箱、照片、音乐、视频）。界面是本机网页，不装托盘；另装 Cryptomator |
 | `desktop-prefs.nix` | GNOME 输入与电源偏好：鼠标、开终端快捷键（共用）；内置触摸板禁用、电源与息屏（**只在 asus 生效**，按 `custom.flakeHost` 判断） |
 | `migration-tests.sh` | `state-sync` 的回归测试，由 `migration.nix` 在构建期执行 |
+| `voice-dictation.nix` | 语音输入的用户侧：专有名词表、模型清单（钉到 Hugging Face 提交 + sha256）、整理提示词与示范、F8 / F9 两条快捷键、Neovide 的 Shift+Insert。整份挂在 `custom.voiceDictation.enable` 上 |
+| `voice-dictation.py` | 语音输入主程序，只用 Python 标准库：录音、按停顿切段、识别、整理、经剪贴板粘贴 |
+| `voice-dictation-tests.sh` | 语音输入状态机的回归测试，由 `voice-dictation.nix` 在构建期执行（外部程序全换成假的，不碰 GPU 和麦克风） |
 
 `hosts/thinkpad/default.nix` 的 `imports` 按
 **「本机专属在前、共用模块在后」**分两组写，加新机器时照抄这个骨架即可
@@ -387,6 +395,7 @@ done
 | `users.users.*.shell`（登录 shell） | **重新登录** |
 | `environment.sessionVariables`（写进 `/etc/pam/environment`） | **重新登录** |
 | GNOME 扩展、dconf | **注销重登**（Wayland 下不能 `Alt+F2` → `r`） |
+| `users.users.*.extraGroups`（例如语音输入加的 `ydotool` 组） | **注销重登**。`id` 里看得到新组才算生效 |
 | 显卡驱动 / VAAPI | 至少**重启用到它的应用**，稳妥是注销重登 |
 | `boot.kernel.sysctl` | **不用重启**。`switch` 时 systemd-sysctl 会写进正在跑的内核 |
 | `boot.kernelPackages`、内核参数、initrd、内核模块 | **重启** |
@@ -797,6 +806,65 @@ sudo nixos-rebuild switch --flake ~/nixos-config#<新主机>
 - **不同步**：整个 `Documents`（除上面两个）、`Downloads`、`Pictures/Screenshots`、
   `~/.config`、`~/.local`。
 - 新机器上的配对步骤见 ASUS_INSTALL.md 12.6 节。
+
+## 语音输入
+
+只在 asus 上开着（`custom.voiceDictation.enable = true`，在
+`hosts/asus/default.nix`）。全部在本机跑，声音不出门。
+为什么这样选、实测数据、和原规格 [VOICE_DICTATION.md](VOICE_DICTATION.md) 的差异，见
+[Lesson-Learn/0019](Lesson-Learn/0019_VOICE_DICTATION.md)。
+
+| 键 | 什么时候按 | 结果 |
+|----|------------|------|
+| **F8** | 空闲 | 开始听。屏幕上方出现「正在听」，看到它再开口 |
+| **F8** | 正在听 | 结束。识别 → 整理（去口头禅、重复，按改口覆盖，补标点）→ 贴进焦点窗口 |
+| **F9** | 正在听 | 结束，**只识别不整理**，直接贴原文。准备好的短指令走这条最快 |
+| **F9** | 正在识别 / 整理 | 不整理了：识别中按就等识别完贴原文，整理中按就马上贴原文 |
+| **F9** | 空闲 | 再贴一次上一段的原文（整理改坏了的时候用） |
+
+- 停顿、静音都不会结束，想多久都行。中文、日语、英语随便换，不用选语言。
+- 说「……整理成清单」「……箇条書きにまとめて」时才会重排，否则只删不改。
+- 贴进去的字不会自动回车，看一眼再发。
+- 第二次 F8 之后要等几秒：识别和整理的模型**现加载、用完就退出**，
+  听的时候和空闲时不占显存。Qwen3-TTS 这类程序同时在跑时，会慢一些或者报「显存不够」，
+  原文一样留着，按 F9 拿。
+
+### 第一次用
+
+```bash
+voice-dictation-models     # 下载约 8.5 GB 模型到 ~/.cache/voice-dictation/models 并核对 sha256
+```
+
+然后**注销再登录一次**：粘贴键靠 ydotool 发，它要求用户在 `ydotool` 组里，
+加组要重新登录才生效。没登录的话按 F8 也能识别，只是会提示「没能自动粘贴」，
+文字留在剪贴板里。
+
+### 出问题时
+
+```bash
+voice-dictation status     # 状态、模型、上一段的原文 / 整理稿和日志
+voice-dictation retry      # 识别失败后重新处理上一段录音
+voice-dictation transcribe some.wav   # 只识别一个文件
+voice-dictation clean "嗯，那个，帮我看一下这个这个报错"   # 只试整理
+```
+
+每段录音和日志在 `~/.cache/voice-dictation/takes/<时间>/`，只留最近 20 段。
+专有名词老是听错：加进 `home/voice-dictation.nix` 开头的 `vocabulary`，`nrb` 即可。
+
+### 不喜欢就撤回
+
+`hosts/asus/default.nix` 里改成 `custom.voiceDictation.enable = false;`，再 `nrb`。
+F8 / F9、`voice-dictation` 命令、`ydotoold` 服务和 `ydotool` 组一起消失，
+快捷键列表回到只有两条开终端的样子。模型还在磁盘上，没有任何东西会读它。
+要腾出这 8.5 GB：
+
+```bash
+rm -rf ~/.cache/voice-dictation
+```
+
+代码也不要了：删掉 `modules/voice-dictation.nix`、`home/voice-dictation*`，
+以及两台主机的 import、asus 上的 `enable` / `extraGroups` / `cudaArchitectures`、
+`home/toru.nix` 的 import 和 `home/desktop-prefs.nix` 里的 `voiceDictationBindings`。
 
 ## 搬用户状态：state-sync 与 migration-check
 

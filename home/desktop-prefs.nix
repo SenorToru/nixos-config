@@ -7,8 +7,25 @@
 let
   flakeHost = osConfig.custom.flakeHost;
   mediaKeys = "org/gnome/settings-daemon/plugins/media-keys";
+
+  # 语音输入的两条快捷键（F8 / F9）要追加的路径。内容在 home/voice-dictation.nix。
+  # 开关关着时是空列表，custom-keybindings 回到只有两条开终端的样子。
+  voiceDictationBindings =
+    enabled:
+    lib.optionals enabled [
+      "/${mediaKeys}/custom-keybindings/voice-dictation-toggle/"
+      "/${mediaKeys}/custom-keybindings/voice-dictation-raw/"
+    ];
 in
 {
+  # 撤回语音输入时快捷键必须一条不剩。这里在构建期钉死这一点。
+  assertions = [
+    {
+      assertion = voiceDictationBindings false == [ ];
+      message = "home/desktop-prefs.nix: 关掉语音输入时，追加的快捷键必须是空列表";
+    }
+  ];
+
   # 输入设备、快捷键、电源这几项 GNOME 偏好。由 home/toru.nix 的 imports 拼装。
   #
   # 分两块，判据是「换一台机器还成立吗」：
@@ -43,10 +60,12 @@ in
       #
       # 注意 custom-keybindings 是**整个列表被覆盖**：要再加一个自定义快捷键，
       # 得同时把路径加进这里，不能只另写一个子节。
+      # 语音输入的 F8 / F9 就是这样按开关追加的（见文件开头 voiceDictationBindings）。
       ${mediaKeys}.custom-keybindings = [
         "/${mediaKeys}/custom-keybindings/terminal-t/"
         "/${mediaKeys}/custom-keybindings/terminal-return/"
-      ];
+      ]
+      ++ voiceDictationBindings osConfig.custom.voiceDictation.enable;
 
       "${mediaKeys}/custom-keybindings/terminal-t" = {
         name = "Terminal";

@@ -1,4 +1,6 @@
 {
+  config,
+  lib,
   pkgs,
   inputs,
   ...
@@ -28,6 +30,8 @@
     ../../modules/stylix.nix
     ../../modules/refind.nix
     ../../modules/kernel-hardening.nix
+    # 语音输入。开关在下面的 custom.voiceDictation.enable。
+    ../../modules/voice-dictation.nix
     # 只有这台机器要装的可选模块
     ../../modules/steam.nix
 
@@ -121,6 +125,18 @@
     '';
   };
 
+  # 语音输入：F8 开始听 / 结束（识别 + 整理后贴进焦点窗口），F9 贴原文。
+  # 模块在 modules/voice-dictation.nix，CUDA 架构在 tuning.nix，
+  # 设计与实测见 Lesson-Learn/0019_VOICE_DICTATION.md。
+  #
+  # 不喜欢就改成 false 再 nrb：快捷键、包、ydotoold、ydotool 组一起撤掉。
+  # 模型在 ~/.cache/voice-dictation，要腾磁盘就 rm -rf 那个目录。
+  #
+  # 第一次打开之后：
+  #   1. voice-dictation-models   下载约 8.5 GB 模型并核对 sha256
+  #   2. 注销再登录一次             ydotool 组要重新登录才生效，否则贴不进去
+  custom.voiceDictation.enable = true;
+
   # 键盘布局。Bluefin 上的输入源只有 xkb us，先按 US 写。
   # 装好后如果这台的物理键盘其实是 JIS，改成 jp106 / jp。
   console.keyMap = "us";
@@ -137,7 +153,9 @@
     extraGroups = [
       "networkmanager"
       "wheel"
-    ];
+    ]
+    # 语音输入要用 ydotool 发粘贴键。组名取自 programs.ydotool，开关关掉时这一项也消失。
+    ++ lib.optionals config.custom.voiceDictation.enable [ config.programs.ydotool.group ];
   };
 
   home-manager.useGlobalPkgs = true;

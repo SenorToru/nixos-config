@@ -66,6 +66,12 @@ in
     };
   };
 
+  # 语音输入的 llama.cpp 只编这块卡的 CUDA 架构（modules/voice-dictation.nix）。
+  # RTX 5060 Laptop 是 Blackwell（GB206），compute capability 12.0。
+  # 只编一个架构实测 6 分钟；不写的话 nixpkgs 会给所有架构各编一遍。
+  # 换显卡要改：nvidia-smi --query-gpu=compute_cap --format=csv
+  custom.voiceDictation.cudaArchitectures = [ "120" ];
+
   # 没有加 NVreg_EnableS0ixPowerManagement=1。那是 Bluefin 镜像的默认值，
   # 没有实测过它对这台的续航有没有帮助，先不加，以后需要再补。
 
